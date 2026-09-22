@@ -1,0 +1,1058 @@
+{
+ "simple": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Шарнирно-неподвижная опора <span class=\"v\">A</span>, опорная поверхность снизу → реакции <span class=\"v\">X</span><sub>A</sub>, <span class=\"v\">Y</span><sub>A</sub></li><li>Шарнирно-подвижная опора <span class=\"v\">E</span>, опорная поверхность снизу → реакция <span class=\"v\">R</span><sub>E</sub> по нормали к поверхности, угол 90° к оси <span class=\"v\">x</span></li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Заменяем распределённую нагрузку равнодействующей</h3><div class=\"eq\"><span class=\"ln\"><span class=\"v\">Q</span> = <span class=\"v\">q</span>·<span class=\"v\">l</span> = 2·3 = <b>6 кН</b></span><span class=\"ln num\"><span class=\"v\">l</span> = 3 м (участок <span class=\"v\">C</span>–<span class=\"v\">E</span>); в середине: на расстоянии 1,5 м от точки <span class=\"v\">C</span>, направлена вниз</span></div></div><div class=\"step\"><h3><span class=\"n\">3</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>3</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-ok\">Система статически определима</span></div><div class=\"step\"><h3><span class=\"n\">4</span>Составляем и решаем уравнения равновесия</h3><p>Выбираем уравнения так, чтобы в каждом было одно неизвестное. Моменты берём относительно точек, через которые проходят другие реакции.</p><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>A</sub> = <span class=\"v\">R</span><sub>E</sub>·6 − <span class=\"v\">F</span>·sin 60°·2 − <span class=\"v\">M</span> − <span class=\"v\">Q</span>·4,5 = 0</span><span class=\"ln num\">6·<span class=\"v\">R</span><sub>E</sub> − 17,321 − 6 − 27 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">R</span><sub>E</sub> = 8,387 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>E</sub> = −<span class=\"v\">Y</span><sub>A</sub>·6 + <span class=\"v\">F</span>·sin 60°·4 − <span class=\"v\">M</span> + <span class=\"v\">Q</span>·1,5 = 0</span><span class=\"ln num\">−6·<span class=\"v\">Y</span><sub>A</sub> + 34,641 − 6 + 9 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">Y</span><sub>A</sub> = 6,274 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>kx</sub> = <span class=\"v\">X</span><sub>A</sub> − <span class=\"v\">F</span>·cos 60° = 0</span><span class=\"ln num\"><span class=\"v\">X</span><sub>A</sub> − 5 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">X</span><sub>A</sub> = 5 кН</b></span></div></div><div class=\"step\"><h3><span class=\"n\">5</span>Проверка</h3><p>Подставляем найденные значения в уравнение, которое не использовали при решении:</p>\n      <div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>B</sub> = −<span class=\"v\">Y</span><sub>A</sub>·2 + <span class=\"v\">R</span><sub>E</sub>·4 − <span class=\"v\">M</span> − <span class=\"v\">Q</span>·2,5 = 0</span><span class=\"ln num\">−12,547 + 33,547 − 6 − 15 = 0</span></div>\n      <span class=\"badge b-ok\">Верно: сумма равна нулю</span></div><div class=\"step\"><h3><span class=\"n\">6</span>Ответ</h3><div class=\"tablewrap\"><table class=\"ans\"><tbody><tr class=\"\"><td class=\"val\"><span class=\"v\">X</span><sub>A</sub> = 5 кН</td><td class=\"note\"></td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">Y</span><sub>A</sub> = 6,274 кН</td><td class=\"note\"></td></tr><tr class=\"total\"><td class=\"val\"><span class=\"v\">R</span><sub>A</sub> = √(<span class=\"v\">X</span><sub>A</sub>² + <span class=\"v\">Y</span><sub>A</sub>²) = 8,022 кН</td><td class=\"note\">полная реакция</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">R</span><sub>E</sub> = 8,387 кН</td><td class=\"note\"></td></tr></tbody></table></div></div>",
+  "status": "ok",
+  "n": 3,
+  "rank": 3,
+  "vals": {
+   "R_E": 8.386751345948127,
+   "Y_A": 6.2735026918962555,
+   "X_A": 5.000000000000004
+  },
+  "steps": [
+   [
+    "mA",
+    "R_E"
+   ],
+   [
+    "mE",
+    "Y_A"
+   ],
+   [
+    "x",
+    "X_A"
+   ]
+  ],
+  "joint": null,
+  "check": {
+   "e": "mB",
+   "r": 0
+  },
+  "cands": [
+   {
+    "id": "mA",
+    "coeffs": {
+     "R_E": 6
+    },
+    "cst": -50.320508075688764
+   },
+   {
+    "id": "mE",
+    "coeffs": {
+     "Y_A": -6
+    },
+    "cst": 37.641016151377535
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_A": 1
+    },
+    "cst": -5.000000000000004
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_A": 1,
+     "R_E": 1
+    },
+    "cst": -14.660254037844384
+   },
+   {
+    "id": "mB",
+    "coeffs": {
+     "Y_A": -2,
+     "R_E": 4
+    },
+    "cst": -21
+   },
+   {
+    "id": "mC",
+    "coeffs": {
+     "Y_A": -3,
+     "R_E": 3
+    },
+    "cst": -6.339745962155616
+   },
+   {
+    "id": "mD",
+    "coeffs": {
+     "Y_A": -4,
+     "R_E": 2
+    },
+    "cst": 8.320508075688767
+   }
+  ],
+  "titles": {
+   "e6": "Шарнирно-неподвижная опора <span class=\"v\">A</span>",
+   "e7": "Шарнирно-подвижная опора <span class=\"v\">E</span>",
+   "e8": "Сила <span class=\"v\">F</span> в точке <span class=\"v\">B</span>",
+   "e9": "Пара сил <span class=\"v\">M</span> в точке <span class=\"v\">D</span>",
+   "e10": "Распределённая нагрузка <span class=\"v\">q</span>"
+  },
+  "total": "общая длина 6 м",
+  "normItems": [
+   {
+    "id": "e6",
+    "type": "pin",
+    "at": "n6",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e7",
+    "type": "roller",
+    "at": "n10",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e8",
+    "type": "force",
+    "at": "n7",
+    "F": 10,
+    "ref": "left",
+    "rot": "ccw",
+    "alpha": 60,
+    "unknown": false
+   },
+   {
+    "id": "e9",
+    "type": "moment",
+    "at": "n9",
+    "M": 6,
+    "dir": "cw",
+    "unknown": false
+   },
+   {
+    "id": "e10",
+    "type": "dist",
+    "from": "n8",
+    "to": "n10",
+    "q1": 2,
+    "q2": 2,
+    "dir": "down"
+   }
+  ]
+ },
+ "cantilever": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Жёсткая заделка <span class=\"v\">A</span>, опорная поверхность слева → реакции <span class=\"v\">X</span><sub>A</sub>, <span class=\"v\">Y</span><sub>A</sub>, <span class=\"v\">M</span><sub>A</sub></li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Заменяем распределённую нагрузку равнодействующей</h3><div class=\"eq\"><span class=\"ln\"><span class=\"v\">Q</span> = ½·<span class=\"v\">q</span>·<span class=\"v\">l</span> = ½·4·2 = <b>4 кН</b></span><span class=\"ln num\"><span class=\"v\">l</span> = 2 м (участок <span class=\"v\">A</span>–<span class=\"v\">B</span>); <span class=\"v\">l</span>/3 от большего края: на расстоянии 0,667 м от точки <span class=\"v\">A</span>, направлена вниз</span></div></div><div class=\"step\"><h3><span class=\"n\">3</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>3</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-ok\">Система статически определима</span></div><div class=\"step\"><h3><span class=\"n\">4</span>Составляем и решаем уравнения равновесия</h3><p>Выбираем уравнения так, чтобы в каждом было одно неизвестное. Моменты берём относительно точек, через которые проходят другие реакции.</p><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>A</sub> = <span class=\"v\">M</span><sub>A</sub> − <span class=\"v\">Q</span>·0,667 + <span class=\"v\">M</span> − <span class=\"v\">F</span>·4 = 0</span><span class=\"ln num\"><span class=\"v\">M</span><sub>A</sub> − 2,667 + 5 − 32 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">M</span><sub>A</sub> = 29,667 кН·м</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>kx</sub> = <span class=\"v\">X</span><sub>A</sub> = 0</span><span class=\"ln num\"><span class=\"v\">X</span><sub>A</sub> = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">X</span><sub>A</sub> = 0 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>ky</sub> = <span class=\"v\">Y</span><sub>A</sub> − <span class=\"v\">Q</span> − <span class=\"v\">F</span> = 0</span><span class=\"ln num\"><span class=\"v\">Y</span><sub>A</sub> − 4 − 8 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">Y</span><sub>A</sub> = 12 кН</b></span></div></div><div class=\"step\"><h3><span class=\"n\">5</span>Проверка</h3><p>Подставляем найденные значения в уравнение, которое не использовали при решении:</p>\n      <div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>B</sub> = −<span class=\"v\">Y</span><sub>A</sub>·2 + <span class=\"v\">M</span><sub>A</sub> + <span class=\"v\">Q</span>·1,333 + <span class=\"v\">M</span> − <span class=\"v\">F</span>·2 = 0</span><span class=\"ln num\">−24 + 29,667 + 5,333 + 5 − 16 = 0</span></div>\n      <span class=\"badge b-ok\">Верно: сумма равна нулю</span></div><div class=\"step\"><h3><span class=\"n\">6</span>Ответ</h3><div class=\"tablewrap\"><table class=\"ans\"><tbody><tr class=\"\"><td class=\"val\"><span class=\"v\">X</span><sub>A</sub> = 0 кН</td><td class=\"note\"></td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">Y</span><sub>A</sub> = 12 кН</td><td class=\"note\"></td></tr><tr class=\"total\"><td class=\"val\"><span class=\"v\">R</span><sub>A</sub> = √(<span class=\"v\">X</span><sub>A</sub>² + <span class=\"v\">Y</span><sub>A</sub>²) = 12 кН</td><td class=\"note\">полная реакция</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">M</span><sub>A</sub> = 29,667 кН·м</td><td class=\"note\"></td></tr></tbody></table></div></div>",
+  "status": "ok",
+  "n": 3,
+  "rank": 3,
+  "vals": {
+   "M_A": 29.666666666666668,
+   "X_A": 0,
+   "Y_A": 12
+  },
+  "steps": [
+   [
+    "mA",
+    "M_A"
+   ],
+   [
+    "x",
+    "X_A"
+   ],
+   [
+    "y",
+    "Y_A"
+   ]
+  ],
+  "joint": null,
+  "check": {
+   "e": "mB",
+   "r": 3.552713678800501e-15
+  },
+  "cands": [
+   {
+    "id": "mA",
+    "coeffs": {
+     "M_A": 1
+    },
+    "cst": -29.666666666666668
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_A": 1
+    },
+    "cst": 0
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_A": 1
+    },
+    "cst": -12
+   },
+   {
+    "id": "mB",
+    "coeffs": {
+     "Y_A": -2,
+     "M_A": 1
+    },
+    "cst": -5.666666666666666
+   },
+   {
+    "id": "mC",
+    "coeffs": {
+     "Y_A": -3,
+     "M_A": 1
+    },
+    "cst": 6.333333333333334
+   },
+   {
+    "id": "mD",
+    "coeffs": {
+     "Y_A": -4,
+     "M_A": 1
+    },
+    "cst": 18.333333333333336
+   }
+  ],
+  "titles": {
+   "e11": "Жёсткая заделка <span class=\"v\">A</span>",
+   "e12": "Распределённая нагрузка <span class=\"v\">q</span>",
+   "e13": "Пара сил <span class=\"v\">M</span> в точке <span class=\"v\">C</span>",
+   "e14": "Сила <span class=\"v\">F</span> в точке <span class=\"v\">D</span>"
+  },
+  "total": "общая длина 4 м",
+  "normItems": [
+   {
+    "id": "e11",
+    "type": "fixed",
+    "at": "n11",
+    "side": "left",
+    "angle": 0
+   },
+   {
+    "id": "e12",
+    "type": "dist",
+    "from": "n11",
+    "to": "n12",
+    "q1": 4,
+    "q2": 0,
+    "dir": "down"
+   },
+   {
+    "id": "e13",
+    "type": "moment",
+    "at": "n13",
+    "M": 5,
+    "dir": "ccw",
+    "unknown": false
+   },
+   {
+    "id": "e14",
+    "type": "force",
+    "at": "n14",
+    "F": 8,
+    "ref": "down",
+    "rot": "cw",
+    "alpha": 0,
+    "unknown": false
+   }
+  ]
+ },
+ "rod": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Шарнирно-неподвижная опора <span class=\"v\">A</span>, опорная поверхность снизу → реакции <span class=\"v\">X</span><sub>A</sub>, <span class=\"v\">Y</span><sub>A</sub></li><li>Опорный стержень <span class=\"v\">D</span> → усилие <span class=\"v\">S</span><sub>D</sub> вдоль стержня, угол 120° к оси <span class=\"v\">x</span></li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>3</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-ok\">Система статически определима</span></div><div class=\"step\"><h3><span class=\"n\">3</span>Составляем и решаем уравнения равновесия</h3><p>Выбираем уравнения так, чтобы в каждом было одно неизвестное. Моменты берём относительно точек, через которые проходят другие реакции.</p><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>A</sub> = <span class=\"v\">S</span><sub>D</sub>·sin 60°·5 − <span class=\"v\">G</span>·3 − <span class=\"v\">F</span>·sin 60°·1,5 = 0</span><span class=\"ln num\">4,33·<span class=\"v\">S</span><sub>D</sub> − 36 − 7,794 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">S</span><sub>D</sub> = 10,114 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>D</sub> = −<span class=\"v\">Y</span><sub>A</sub>·5 + <span class=\"v\">G</span>·2 + <span class=\"v\">F</span>·sin 60°·3,5 = 0</span><span class=\"ln num\">−5·<span class=\"v\">Y</span><sub>A</sub> + 24 + 18,187 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">Y</span><sub>A</sub> = 8,437 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>kx</sub> = <span class=\"v\">X</span><sub>A</sub> − <span class=\"v\">S</span><sub>D</sub>·cos 60° + <span class=\"v\">F</span>·cos 60° = 0</span><span class=\"ln num\"><span class=\"v\">X</span><sub>A</sub> − 5,057 + 3 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">X</span><sub>A</sub> = 2,057 кН</b></span></div></div><div class=\"step\"><h3><span class=\"n\">4</span>Проверка</h3><p>Подставляем найденные значения в уравнение, которое не использовали при решении:</p>\n      <div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>B</sub> = −<span class=\"v\">Y</span><sub>A</sub>·1,5 + <span class=\"v\">S</span><sub>D</sub>·sin 60°·3,5 − <span class=\"v\">G</span>·1,5 = 0</span><span class=\"ln num\">−12,656 + 30,656 − 18 = 0</span></div>\n      <span class=\"badge b-ok\">Верно: сумма равна нулю</span></div><div class=\"step\"><h3><span class=\"n\">5</span>Ответ</h3><div class=\"tablewrap\"><table class=\"ans\"><tbody><tr class=\"\"><td class=\"val\"><span class=\"v\">X</span><sub>A</sub> = 2,057 кН</td><td class=\"note\"></td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">Y</span><sub>A</sub> = 8,437 кН</td><td class=\"note\"></td></tr><tr class=\"total\"><td class=\"val\"><span class=\"v\">R</span><sub>A</sub> = √(<span class=\"v\">X</span><sub>A</sub>² + <span class=\"v\">Y</span><sub>A</sub>²) = 8,684 кН</td><td class=\"note\">полная реакция</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">S</span><sub>D</sub> = 10,114 кН</td><td class=\"note\"></td></tr></tbody></table></div></div>",
+  "status": "ok",
+  "n": 3,
+  "rank": 3,
+  "vals": {
+   "S_D": 10.11384387633061,
+   "Y_A": 8.437306695894643,
+   "X_A": 2.056921938165302
+  },
+  "steps": [
+   [
+    "mA",
+    "S_D"
+   ],
+   [
+    "mD",
+    "Y_A"
+   ],
+   [
+    "x",
+    "X_A"
+   ]
+  ],
+  "joint": null,
+  "check": {
+   "e": "mB",
+   "r": 3.552713678800501e-15
+  },
+  "cands": [
+   {
+    "id": "mA",
+    "coeffs": {
+     "S_D": 4.330127018922194
+    },
+    "cst": -43.79422863405995
+   },
+   {
+    "id": "mD",
+    "coeffs": {
+     "Y_A": -5
+    },
+    "cst": 42.18653347947321
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_A": 1,
+     "S_D": -0.4999999999999998
+    },
+    "cst": 3.000000000000001
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_A": 1,
+     "S_D": 0.8660254037844387
+    },
+    "cst": -17.196152422706632
+   },
+   {
+    "id": "mB",
+    "coeffs": {
+     "Y_A": -1.5,
+     "S_D": 3.0310889132455356
+    },
+    "cst": -18
+   },
+   {
+    "id": "mC",
+    "coeffs": {
+     "Y_A": -3,
+     "S_D": 1.7320508075688774
+    },
+    "cst": 7.794228634059948
+   }
+  ],
+  "titles": {
+   "e15": "Шарнирно-неподвижная опора <span class=\"v\">A</span>",
+   "e16": "Опорный стержень <span class=\"v\">D</span>",
+   "e17": "Груз <span class=\"v\">G</span> в точке <span class=\"v\">C</span>",
+   "e18": "Сила <span class=\"v\">F</span> в точке <span class=\"v\">B</span>"
+  },
+  "total": "общая длина 5 м",
+  "normItems": [
+   {
+    "id": "e15",
+    "type": "pin",
+    "at": "n15",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e16",
+    "type": "rod",
+    "at": "n18",
+    "angle": 120
+   },
+   {
+    "id": "e17",
+    "type": "weight",
+    "at": "n17",
+    "G": 12
+   },
+   {
+    "id": "e18",
+    "type": "force",
+    "at": "n16",
+    "F": 6,
+    "ref": "right",
+    "rot": "cw",
+    "alpha": 60,
+    "unknown": false
+   }
+  ]
+ },
+ "lever": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Шарнирно-неподвижная опора <span class=\"v\">B</span>, опорная поверхность снизу → реакции <span class=\"v\">X</span><sub>B</sub>, <span class=\"v\">Y</span><sub>B</sub></li><li>Сила <span class=\"v\">F</span>: направлена вниз; модуль ищем</li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>3</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-ok\">Система статически определима</span></div><div class=\"step\"><h3><span class=\"n\">3</span>Составляем и решаем уравнения равновесия</h3><p>Выбираем уравнения так, чтобы в каждом было одно неизвестное. Моменты берём относительно точек, через которые проходят другие реакции.</p><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>B</sub> = −<span class=\"v\">F</span>·3 + <span class=\"v\">G</span>·1 = 0</span><span class=\"ln num\">−3·<span class=\"v\">F</span> + 20 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">F</span> = 6,667 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>kx</sub> = <span class=\"v\">X</span><sub>B</sub> = 0</span><span class=\"ln num\"><span class=\"v\">X</span><sub>B</sub> = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">X</span><sub>B</sub> = 0 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>ky</sub> = <span class=\"v\">Y</span><sub>B</sub> − <span class=\"v\">F</span> − <span class=\"v\">G</span> = 0</span><span class=\"ln num\"><span class=\"v\">Y</span><sub>B</sub> − 6,667 − 20 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">Y</span><sub>B</sub> = 26,667 кН</b></span></div></div><div class=\"step\"><h3><span class=\"n\">4</span>Проверка</h3><p>Подставляем найденные значения в уравнение, которое не использовали при решении:</p>\n      <div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>A</sub> = <span class=\"v\">Y</span><sub>B</sub>·1 − <span class=\"v\">F</span>·4 = 0</span><span class=\"ln num\">26,667 − 26,667 = 0</span></div>\n      <span class=\"badge b-ok\">Верно: сумма равна нулю</span></div><div class=\"step\"><h3><span class=\"n\">5</span>Ответ</h3><div class=\"tablewrap\"><table class=\"ans\"><tbody><tr class=\"\"><td class=\"val\"><span class=\"v\">X</span><sub>B</sub> = 0 кН</td><td class=\"note\"></td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">Y</span><sub>B</sub> = 26,667 кН</td><td class=\"note\"></td></tr><tr class=\"total\"><td class=\"val\"><span class=\"v\">R</span><sub>B</sub> = √(<span class=\"v\">X</span><sub>B</sub>² + <span class=\"v\">Y</span><sub>B</sub>²) = 26,667 кН</td><td class=\"note\">полная реакция</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">F</span> = 6,667 кН</td><td class=\"note\"></td></tr></tbody></table></div></div>",
+  "status": "ok",
+  "n": 3,
+  "rank": 3,
+  "vals": {
+   "F": 6.666666666666667,
+   "X_B": 0,
+   "Y_B": 26.666666666666668
+  },
+  "steps": [
+   [
+    "mB",
+    "F"
+   ],
+   [
+    "x",
+    "X_B"
+   ],
+   [
+    "y",
+    "Y_B"
+   ]
+  ],
+  "joint": null,
+  "check": {
+   "e": "mA",
+   "r": 0
+  },
+  "cands": [
+   {
+    "id": "mB",
+    "coeffs": {
+     "F": -3
+    },
+    "cst": 20
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_B": 1
+    },
+    "cst": 0
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_B": 1,
+     "F": -1
+    },
+    "cst": -20
+   },
+   {
+    "id": "mA",
+    "coeffs": {
+     "Y_B": 1,
+     "F": -4
+    },
+    "cst": 0
+   },
+   {
+    "id": "mC",
+    "coeffs": {
+     "Y_B": -3
+    },
+    "cst": 80
+   }
+  ],
+  "titles": {
+   "e19": "Шарнирно-неподвижная опора <span class=\"v\">B</span>",
+   "e20": "Груз <span class=\"v\">G</span> в точке <span class=\"v\">A</span>",
+   "e21": "Сила <span class=\"v\">F</span> в точке <span class=\"v\">C</span>"
+  },
+  "total": "общая длина 4 м",
+  "normItems": [
+   {
+    "id": "e19",
+    "type": "pin",
+    "at": "n20",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e20",
+    "type": "weight",
+    "at": "n19",
+    "G": 20
+   },
+   {
+    "id": "e21",
+    "type": "force",
+    "at": "n21",
+    "F": 10,
+    "ref": "down",
+    "rot": "cw",
+    "alpha": 0,
+    "unknown": true
+   }
+  ]
+ },
+ "gframe": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Жёсткая заделка <span class=\"v\">A</span>, опорная поверхность снизу → реакции <span class=\"v\">X</span><sub>A</sub>, <span class=\"v\">Y</span><sub>A</sub>, <span class=\"v\">M</span><sub>A</sub></li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки. Плечо силы относительно точки — сумма вкладов горизонтальной и вертикальной составляющих.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Заменяем распределённую нагрузку равнодействующей</h3><div class=\"eq\"><span class=\"ln\"><span class=\"v\">Q</span> = <span class=\"v\">q</span>·<span class=\"v\">l</span> = 2·4 = <b>8 кН</b></span><span class=\"ln num\"><span class=\"v\">l</span> = 4 м (участок <span class=\"v\">A</span>–<span class=\"v\">C</span>); в середине: на расстоянии 2 м от точки <span class=\"v\">A</span>, направлена вправо</span></div></div><div class=\"step\"><h3><span class=\"n\">3</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>3</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-ok\">Система статически определима</span></div><div class=\"step\"><h3><span class=\"n\">4</span>Составляем и решаем уравнения равновесия</h3><p>Выбираем уравнения так, чтобы в каждом было одно неизвестное. Моменты берём относительно точек, через которые проходят другие реакции.</p><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>A</sub> = <span class=\"v\">M</span><sub>A</sub> − <span class=\"v\">Q</span>·2 − <span class=\"v\">F</span>·3 − <span class=\"v\">M</span> = 0</span><span class=\"ln num\"><span class=\"v\">M</span><sub>A</sub> − 16 − 30 − 4 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">M</span><sub>A</sub> = 50 кН·м</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>kx</sub> = <span class=\"v\">X</span><sub>A</sub> + <span class=\"v\">Q</span> = 0</span><span class=\"ln num\"><span class=\"v\">X</span><sub>A</sub> + 8 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">X</span><sub>A</sub> = −8 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>ky</sub> = <span class=\"v\">Y</span><sub>A</sub> − <span class=\"v\">F</span> = 0</span><span class=\"ln num\"><span class=\"v\">Y</span><sub>A</sub> − 10 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">Y</span><sub>A</sub> = 10 кН</b></span></div></div><div class=\"step\"><h3><span class=\"n\">5</span>Проверка</h3><p>Подставляем найденные значения в уравнение, которое не использовали при решении:</p>\n      <div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>D</sub> = <span class=\"v\">X</span><sub>A</sub>·4 − <span class=\"v\">Y</span><sub>A</sub>·3 + <span class=\"v\">M</span><sub>A</sub> + <span class=\"v\">Q</span>·2 − <span class=\"v\">M</span> = 0</span><span class=\"ln num\">−32 − 30 + 50 + 16 − 4 = 0</span></div>\n      <span class=\"badge b-ok\">Верно: сумма равна нулю</span></div><div class=\"step\"><h3><span class=\"n\">6</span>Ответ</h3><div class=\"tablewrap\"><table class=\"ans\"><tbody><tr class=\"\"><td class=\"val\"><span class=\"v\">X</span><sub>A</sub> = −8 кН</td><td class=\"note\">направлена противоположно принятой на схеме</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">Y</span><sub>A</sub> = 10 кН</td><td class=\"note\"></td></tr><tr class=\"total\"><td class=\"val\"><span class=\"v\">R</span><sub>A</sub> = √(<span class=\"v\">X</span><sub>A</sub>² + <span class=\"v\">Y</span><sub>A</sub>²) = 12,806 кН</td><td class=\"note\">полная реакция</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">M</span><sub>A</sub> = 50 кН·м</td><td class=\"note\"></td></tr></tbody></table></div></div>",
+  "status": "ok",
+  "n": 3,
+  "rank": 3,
+  "vals": {
+   "M_A": 50,
+   "X_A": -8,
+   "Y_A": 10
+  },
+  "steps": [
+   [
+    "mA",
+    "M_A"
+   ],
+   [
+    "x",
+    "X_A"
+   ],
+   [
+    "y",
+    "Y_A"
+   ]
+  ],
+  "joint": null,
+  "check": {
+   "e": "mD",
+   "r": 0
+  },
+  "cands": [
+   {
+    "id": "mA",
+    "coeffs": {
+     "M_A": 1
+    },
+    "cst": -50
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_A": 1
+    },
+    "cst": 8
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_A": 1
+    },
+    "cst": -10
+   },
+   {
+    "id": "mB",
+    "coeffs": {
+     "X_A": 2,
+     "M_A": 1
+    },
+    "cst": -34
+   },
+   {
+    "id": "mC",
+    "coeffs": {
+     "X_A": 4,
+     "M_A": 1
+    },
+    "cst": -18
+   },
+   {
+    "id": "mD",
+    "coeffs": {
+     "X_A": 4,
+     "Y_A": -3,
+     "M_A": 1
+    },
+    "cst": 12
+   }
+  ],
+  "titles": {
+   "e22": "Жёсткая заделка <span class=\"v\">A</span>",
+   "e23": "Распределённая нагрузка <span class=\"v\">q</span>",
+   "e24": "Сила <span class=\"v\">F</span> в точке <span class=\"v\">D</span>",
+   "e25": "Пара сил <span class=\"v\">M</span> в точке <span class=\"v\">C</span>"
+  },
+  "total": "габарит 3 × 4 м",
+  "normItems": [
+   {
+    "id": "e22",
+    "type": "fixed",
+    "at": "n22",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e23",
+    "type": "dist",
+    "from": "n22",
+    "to": "n24",
+    "q1": 2,
+    "q2": 2,
+    "dir": "right"
+   },
+   {
+    "id": "e24",
+    "type": "force",
+    "at": "n25",
+    "F": 10,
+    "ref": "down",
+    "rot": "cw",
+    "alpha": 0,
+    "unknown": false
+   },
+   {
+    "id": "e25",
+    "type": "moment",
+    "at": "n24",
+    "M": 4,
+    "dir": "cw",
+    "unknown": false
+   }
+  ]
+ },
+ "pframe": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Шарнирно-неподвижная опора <span class=\"v\">A</span>, опорная поверхность снизу → реакции <span class=\"v\">X</span><sub>A</sub>, <span class=\"v\">Y</span><sub>A</sub></li><li>Шарнирно-подвижная опора <span class=\"v\">E</span>, опорная поверхность снизу → реакция <span class=\"v\">R</span><sub>E</sub> по нормали к поверхности, угол 90° к оси <span class=\"v\">x</span></li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки. Плечо силы относительно точки — сумма вкладов горизонтальной и вертикальной составляющих.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Заменяем распределённую нагрузку равнодействующей</h3><div class=\"eq\"><span class=\"ln\"><span class=\"v\">Q</span> = <span class=\"v\">q</span>·<span class=\"v\">l</span> = 2·6 = <b>12 кН</b></span><span class=\"ln num\"><span class=\"v\">l</span> = 6 м (участок <span class=\"v\">B</span>–<span class=\"v\">D</span>); в середине: на расстоянии 3 м от точки <span class=\"v\">B</span>, направлена вниз</span></div></div><div class=\"step\"><h3><span class=\"n\">3</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>3</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-ok\">Система статически определима</span></div><div class=\"step\"><h3><span class=\"n\">4</span>Составляем и решаем уравнения равновесия</h3><p>Выбираем уравнения так, чтобы в каждом было одно неизвестное. Моменты берём относительно точек, через которые проходят другие реакции.</p><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>A</sub> = <span class=\"v\">R</span><sub>E</sub>·6 − <span class=\"v\">F</span><sub>1</sub>·4 − <span class=\"v\">Q</span>·3 − <span class=\"v\">F</span><sub>2</sub>·cos 30°·3 − <span class=\"v\">F</span><sub>2</sub>·sin 30°·4 = 0</span><span class=\"ln num\">6·<span class=\"v\">R</span><sub>E</sub> − 20 − 36 − 20,785 − 16 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">R</span><sub>E</sub> = 15,464 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>E</sub> = −<span class=\"v\">Y</span><sub>A</sub>·6 − <span class=\"v\">F</span><sub>1</sub>·4 + <span class=\"v\">Q</span>·3 + <span class=\"v\">F</span><sub>2</sub>·cos 30°·3 − <span class=\"v\">F</span><sub>2</sub>·sin 30°·4 = 0</span><span class=\"ln num\">−6·<span class=\"v\">Y</span><sub>A</sub> − 20 + 36 + 20,785 − 16 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">Y</span><sub>A</sub> = 3,464 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>kx</sub> = <span class=\"v\">X</span><sub>A</sub> + <span class=\"v\">F</span><sub>1</sub> + <span class=\"v\">F</span><sub>2</sub>·sin 30° = 0</span><span class=\"ln num\"><span class=\"v\">X</span><sub>A</sub> + 5 + 4 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">X</span><sub>A</sub> = −9 кН</b></span></div></div><div class=\"step\"><h3><span class=\"n\">5</span>Проверка</h3><p>Подставляем найденные значения в уравнение, которое не использовали при решении:</p>\n      <div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>C</sub> = <span class=\"v\">X</span><sub>A</sub>·4 − <span class=\"v\">Y</span><sub>A</sub>·3 + <span class=\"v\">R</span><sub>E</sub>·3 = 0</span><span class=\"ln num\">−36 − 10,392 + 46,392 = 0</span></div>\n      <span class=\"badge b-ok\">Верно: сумма равна нулю</span></div><div class=\"step\"><h3><span class=\"n\">6</span>Ответ</h3><div class=\"tablewrap\"><table class=\"ans\"><tbody><tr class=\"\"><td class=\"val\"><span class=\"v\">X</span><sub>A</sub> = −9 кН</td><td class=\"note\">направлена противоположно принятой на схеме</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">Y</span><sub>A</sub> = 3,464 кН</td><td class=\"note\"></td></tr><tr class=\"total\"><td class=\"val\"><span class=\"v\">R</span><sub>A</sub> = √(<span class=\"v\">X</span><sub>A</sub>² + <span class=\"v\">Y</span><sub>A</sub>²) = 9,644 кН</td><td class=\"note\">полная реакция</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">R</span><sub>E</sub> = 15,464 кН</td><td class=\"note\"></td></tr></tbody></table></div></div>",
+  "status": "ok",
+  "n": 3,
+  "rank": 3,
+  "vals": {
+   "R_E": 15.464101615137755,
+   "Y_A": 3.464101615137754,
+   "X_A": -9
+  },
+  "steps": [
+   [
+    "mA",
+    "R_E"
+   ],
+   [
+    "mE",
+    "Y_A"
+   ],
+   [
+    "x",
+    "X_A"
+   ]
+  ],
+  "joint": null,
+  "check": {
+   "e": "mC",
+   "r": 0
+  },
+  "cands": [
+   {
+    "id": "mA",
+    "coeffs": {
+     "R_E": 6
+    },
+    "cst": -92.78460969082653
+   },
+   {
+    "id": "mE",
+    "coeffs": {
+     "Y_A": -6
+    },
+    "cst": 20.784609690826525
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_A": 1
+    },
+    "cst": 9
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_A": 1,
+     "R_E": 1
+    },
+    "cst": -18.928203230275507
+   },
+   {
+    "id": "mB",
+    "coeffs": {
+     "X_A": 4,
+     "R_E": 6
+    },
+    "cst": -56.78460969082653
+   },
+   {
+    "id": "mC",
+    "coeffs": {
+     "X_A": 4,
+     "Y_A": -3,
+     "R_E": 3
+    },
+    "cst": 0
+   },
+   {
+    "id": "mD",
+    "coeffs": {
+     "X_A": 4,
+     "Y_A": -6
+    },
+    "cst": 56.78460969082653
+   }
+  ],
+  "titles": {
+   "e26": "Шарнирно-неподвижная опора <span class=\"v\">A</span>",
+   "e27": "Шарнирно-подвижная опора <span class=\"v\">E</span>",
+   "e28": "Сила <span class=\"v\">F</span><sub>1</sub> в точке <span class=\"v\">B</span>",
+   "e29": "Распределённая нагрузка <span class=\"v\">q</span>",
+   "e30": "Сила <span class=\"v\">F</span><sub>2</sub> в точке <span class=\"v\">C</span>"
+  },
+  "total": "габарит 6 × 4 м",
+  "normItems": [
+   {
+    "id": "e26",
+    "type": "pin",
+    "at": "n26",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e27",
+    "type": "roller",
+    "at": "n30",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e28",
+    "type": "force",
+    "at": "n27",
+    "F": 5,
+    "ref": "right",
+    "rot": "ccw",
+    "alpha": 0,
+    "unknown": false
+   },
+   {
+    "id": "e29",
+    "type": "dist",
+    "from": "n27",
+    "to": "n29",
+    "q1": 2,
+    "q2": 2,
+    "dir": "down"
+   },
+   {
+    "id": "e30",
+    "type": "force",
+    "at": "n28",
+    "F": 8,
+    "ref": "down",
+    "rot": "ccw",
+    "alpha": 30,
+    "unknown": false
+   }
+  ]
+ },
+ "post": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Шарнирно-неподвижная опора <span class=\"v\">A</span>, опорная поверхность снизу → реакции <span class=\"v\">X</span><sub>A</sub>, <span class=\"v\">Y</span><sub>A</sub></li><li>Шарнирно-подвижная опора <span class=\"v\">C</span>, опорная поверхность слева → реакция <span class=\"v\">R</span><sub>C</sub> по нормали к поверхности, угол 0° к оси <span class=\"v\">x</span></li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки. Плечо силы относительно точки — сумма вкладов горизонтальной и вертикальной составляющих.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>3</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-ok\">Система статически определима</span></div><div class=\"step\"><h3><span class=\"n\">3</span>Составляем и решаем уравнения равновесия</h3><p>Выбираем уравнения так, чтобы в каждом было одно неизвестное. Моменты берём относительно точек, через которые проходят другие реакции.</p><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>A</sub> = −<span class=\"v\">R</span><sub>C</sub>·5 + <span class=\"v\">F</span>·3 = 0</span><span class=\"ln num\">−5·<span class=\"v\">R</span><sub>C</sub> + 18 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">R</span><sub>C</sub> = 3,6 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>C</sub> = <span class=\"v\">X</span><sub>A</sub>·5 − <span class=\"v\">F</span>·2 = 0</span><span class=\"ln num\">5·<span class=\"v\">X</span><sub>A</sub> − 12 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">X</span><sub>A</sub> = 2,4 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>ky</sub> = <span class=\"v\">Y</span><sub>A</sub> − <span class=\"v\">G</span> = 0</span><span class=\"ln num\"><span class=\"v\">Y</span><sub>A</sub> − 4 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">Y</span><sub>A</sub> = 4 кН</b></span></div></div><div class=\"step\"><h3><span class=\"n\">4</span>Проверка</h3><p>Подставляем найденные значения в уравнение, которое не использовали при решении:</p>\n      <div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>B</sub> = <span class=\"v\">X</span><sub>A</sub>·3 − <span class=\"v\">R</span><sub>C</sub>·2 = 0</span><span class=\"ln num\">7,2 − 7,2 = 0</span></div>\n      <span class=\"badge b-ok\">Верно: сумма равна нулю</span></div><div class=\"step\"><h3><span class=\"n\">5</span>Ответ</h3><div class=\"tablewrap\"><table class=\"ans\"><tbody><tr class=\"\"><td class=\"val\"><span class=\"v\">X</span><sub>A</sub> = 2,4 кН</td><td class=\"note\"></td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">Y</span><sub>A</sub> = 4 кН</td><td class=\"note\"></td></tr><tr class=\"total\"><td class=\"val\"><span class=\"v\">R</span><sub>A</sub> = √(<span class=\"v\">X</span><sub>A</sub>² + <span class=\"v\">Y</span><sub>A</sub>²) = 4,665 кН</td><td class=\"note\">полная реакция</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">R</span><sub>C</sub> = 3,6 кН</td><td class=\"note\"></td></tr></tbody></table></div></div>",
+  "status": "ok",
+  "n": 3,
+  "rank": 3,
+  "vals": {
+   "R_C": 3.6,
+   "X_A": 2.4,
+   "Y_A": 4
+  },
+  "steps": [
+   [
+    "mA",
+    "R_C"
+   ],
+   [
+    "mC",
+    "X_A"
+   ],
+   [
+    "y",
+    "Y_A"
+   ]
+  ],
+  "joint": null,
+  "check": {
+   "e": "mB",
+   "r": -8.881784197001252e-16
+  },
+  "cands": [
+   {
+    "id": "mA",
+    "coeffs": {
+     "R_C": -5
+    },
+    "cst": 18
+   },
+   {
+    "id": "mC",
+    "coeffs": {
+     "X_A": 5
+    },
+    "cst": -12
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_A": 1,
+     "R_C": 1
+    },
+    "cst": -6
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_A": 1
+    },
+    "cst": -4
+   },
+   {
+    "id": "mB",
+    "coeffs": {
+     "X_A": 3,
+     "R_C": -2
+    },
+    "cst": 0
+   }
+  ],
+  "titles": {
+   "e31": "Шарнирно-неподвижная опора <span class=\"v\">A</span>",
+   "e32": "Шарнирно-подвижная опора <span class=\"v\">C</span>",
+   "e33": "Сила <span class=\"v\">F</span> в точке <span class=\"v\">B</span>",
+   "e34": "Груз <span class=\"v\">G</span> в точке <span class=\"v\">C</span>"
+  },
+  "total": "габарит 0 × 5 м",
+  "normItems": [
+   {
+    "id": "e31",
+    "type": "pin",
+    "at": "n31",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e32",
+    "type": "roller",
+    "at": "n33",
+    "side": "left",
+    "angle": 0
+   },
+   {
+    "id": "e33",
+    "type": "force",
+    "at": "n32",
+    "F": 6,
+    "ref": "left",
+    "rot": "cw",
+    "alpha": 0,
+    "unknown": false
+   },
+   {
+    "id": "e34",
+    "type": "weight",
+    "at": "n33",
+    "G": 4
+   }
+  ]
+ },
+ "bracket": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Шарнирно-неподвижная опора <span class=\"v\">A</span>, опорная поверхность слева → реакции <span class=\"v\">X</span><sub>A</sub>, <span class=\"v\">Y</span><sub>A</sub></li><li>Опорный стержень <span class=\"v\">C</span> → усилие <span class=\"v\">S</span><sub>C</sub> вдоль стержня, угол 45° к оси <span class=\"v\">x</span></li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>3</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-ok\">Система статически определима</span></div><div class=\"step\"><h3><span class=\"n\">3</span>Составляем и решаем уравнения равновесия</h3><p>Выбираем уравнения так, чтобы в каждом было одно неизвестное. Моменты берём относительно точек, через которые проходят другие реакции.</p><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>A</sub> = <span class=\"v\">S</span><sub>C</sub>·sin 45°·3 − <span class=\"v\">G</span>·1,5 = 0</span><span class=\"ln num\">2,121·<span class=\"v\">S</span><sub>C</sub> − 15 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">S</span><sub>C</sub> = 7,071 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>C</sub> = −<span class=\"v\">Y</span><sub>A</sub>·3 + <span class=\"v\">G</span>·1,5 = 0</span><span class=\"ln num\">−3·<span class=\"v\">Y</span><sub>A</sub> + 15 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">Y</span><sub>A</sub> = 5 кН</b></span></div><div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">F</span><sub>kx</sub> = <span class=\"v\">X</span><sub>A</sub> + <span class=\"v\">S</span><sub>C</sub>·cos 45° = 0</span><span class=\"ln num\"><span class=\"v\">X</span><sub>A</sub> + 5 = 0 &nbsp;⇒&nbsp; <b><span class=\"v\">X</span><sub>A</sub> = −5 кН</b></span></div></div><div class=\"step\"><h3><span class=\"n\">4</span>Проверка</h3><p>Подставляем найденные значения в уравнение, которое не использовали при решении:</p>\n      <div class=\"eq\"><span class=\"ln\">Σ<span class=\"v\">M</span><sub>B</sub> = −<span class=\"v\">Y</span><sub>A</sub>·1,5 + <span class=\"v\">S</span><sub>C</sub>·sin 45°·1,5 = 0</span><span class=\"ln num\">−7,5 + 7,5 = 0</span></div>\n      <span class=\"badge b-ok\">Верно: сумма равна нулю</span></div><div class=\"step\"><h3><span class=\"n\">5</span>Ответ</h3><div class=\"tablewrap\"><table class=\"ans\"><tbody><tr class=\"\"><td class=\"val\"><span class=\"v\">X</span><sub>A</sub> = −5 кН</td><td class=\"note\">направлена противоположно принятой на схеме</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">Y</span><sub>A</sub> = 5 кН</td><td class=\"note\"></td></tr><tr class=\"total\"><td class=\"val\"><span class=\"v\">R</span><sub>A</sub> = √(<span class=\"v\">X</span><sub>A</sub>² + <span class=\"v\">Y</span><sub>A</sub>²) = 7,071 кН</td><td class=\"note\">полная реакция</td></tr><tr class=\"\"><td class=\"val\"><span class=\"v\">S</span><sub>C</sub> = 7,071 кН</td><td class=\"note\"></td></tr></tbody></table></div></div>",
+  "status": "ok",
+  "n": 3,
+  "rank": 3,
+  "vals": {
+   "S_C": 7.0710678118654755,
+   "Y_A": 5,
+   "X_A": -5.000000000000001
+  },
+  "steps": [
+   [
+    "mA",
+    "S_C"
+   ],
+   [
+    "mC",
+    "Y_A"
+   ],
+   [
+    "x",
+    "X_A"
+   ]
+  ],
+  "joint": null,
+  "check": {
+   "e": "mB",
+   "r": 0
+  },
+  "cands": [
+   {
+    "id": "mA",
+    "coeffs": {
+     "S_C": 2.1213203435596424
+    },
+    "cst": -15
+   },
+   {
+    "id": "mC",
+    "coeffs": {
+     "Y_A": -3
+    },
+    "cst": 15
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_A": 1,
+     "S_C": 0.7071067811865476
+    },
+    "cst": 0
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_A": 1,
+     "S_C": 0.7071067811865475
+    },
+    "cst": -10
+   },
+   {
+    "id": "mB",
+    "coeffs": {
+     "Y_A": -1.5,
+     "S_C": 1.0606601717798212
+    },
+    "cst": 0
+   }
+  ],
+  "titles": {
+   "e35": "Шарнирно-неподвижная опора <span class=\"v\">A</span>",
+   "e36": "Опорный стержень <span class=\"v\">C</span>",
+   "e37": "Груз <span class=\"v\">G</span> в точке <span class=\"v\">B</span>"
+  },
+  "total": "общая длина 3 м",
+  "normItems": [
+   {
+    "id": "e35",
+    "type": "pin",
+    "at": "n34",
+    "side": "left",
+    "angle": 0
+   },
+   {
+    "id": "e36",
+    "type": "rod",
+    "at": "n36",
+    "angle": 45
+   },
+   {
+    "id": "e37",
+    "type": "weight",
+    "at": "n35",
+    "G": 10
+   }
+  ]
+ },
+ "indet": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Освобождаемся от связей</h3><p>Отбрасываем опоры и заменяем их действие реакциями:</p><ul><li>Жёсткая заделка <span class=\"v\">A</span>, опорная поверхность слева → реакции <span class=\"v\">X</span><sub>A</sub>, <span class=\"v\">Y</span><sub>A</sub>, <span class=\"v\">M</span><sub>A</sub></li><li>Шарнирно-подвижная опора <span class=\"v\">B</span>, опорная поверхность снизу → реакция <span class=\"v\">R</span><sub>B</sub> по нормали к поверхности, угол 90° к оси <span class=\"v\">x</span></li></ul>\n     <p>Положительные направления: <span class=\"v\">X</span> — вправо, <span class=\"v\">Y</span> — вверх, моменты — против часовой стрелки.</p></div><div class=\"step\"><h3><span class=\"n\">2</span>Заменяем распределённую нагрузку равнодействующей</h3><div class=\"eq\"><span class=\"ln\"><span class=\"v\">Q</span> = <span class=\"v\">q</span>·<span class=\"v\">l</span> = 3·6 = <b>18 кН</b></span><span class=\"ln num\"><span class=\"v\">l</span> = 6 м (участок <span class=\"v\">A</span>–<span class=\"v\">B</span>); в середине: на расстоянии 3 м от точки <span class=\"v\">A</span>, направлена вниз</span></div></div><div class=\"step\"><h3><span class=\"n\">3</span>Проверяем статическую определимость</h3><p>Неизвестных: <b>4</b>. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.</p><span class=\"badge b-warn\">Система статически неопределима</span><p>Степень статической неопределимости: 1. Одних уравнений статики не хватает — нужны уравнения совместности деформаций (метод сил, сопротивление материалов). Уберите лишнюю связь, чтобы решить задачу статикой.</p></div>",
+  "status": "indeterminate",
+  "n": 4,
+  "rank": 3,
+  "vals": {},
+  "steps": [],
+  "joint": null,
+  "check": null,
+  "cands": [
+   {
+    "id": "mA",
+    "coeffs": {
+     "M_A": 1,
+     "R_B": 6
+    },
+    "cst": -54
+   },
+   {
+    "id": "mB",
+    "coeffs": {
+     "Y_A": -6,
+     "M_A": 1
+    },
+    "cst": 54
+   },
+   {
+    "id": "x",
+    "coeffs": {
+     "X_A": 1
+    },
+    "cst": 0
+   },
+   {
+    "id": "y",
+    "coeffs": {
+     "Y_A": 1,
+     "R_B": 1
+    },
+    "cst": -18
+   }
+  ],
+  "titles": {
+   "e38": "Жёсткая заделка <span class=\"v\">A</span>",
+   "e39": "Шарнирно-подвижная опора <span class=\"v\">B</span>",
+   "e40": "Распределённая нагрузка <span class=\"v\">q</span>"
+  },
+  "total": "общая длина 6 м",
+  "normItems": [
+   {
+    "id": "e38",
+    "type": "fixed",
+    "at": "n37",
+    "side": "left",
+    "angle": 0
+   },
+   {
+    "id": "e39",
+    "type": "roller",
+    "at": "n38",
+    "side": "below",
+    "angle": 90
+   },
+   {
+    "id": "e40",
+    "type": "dist",
+    "from": "n37",
+    "to": "n38",
+    "q1": 3,
+    "q2": 3,
+    "dir": "down"
+   }
+  ]
+ },
+ "blank": {
+  "input": null,
+  "html": "<div class=\"step\"><h3><span class=\"n\">1</span>Опоры</h3><p>Добавьте хотя бы одну опору или отметьте искомую нагрузку — без связей конструкция ничем не удерживается.</p></div>",
+  "status": "nosupport",
+  "n": 0,
+  "rank": null,
+  "vals": {},
+  "steps": [],
+  "joint": null,
+  "check": null,
+  "cands": [
+   {
+    "id": "x",
+    "coeffs": {},
+    "cst": 0
+   },
+   {
+    "id": "y",
+    "coeffs": {},
+    "cst": 0
+   },
+   {
+    "id": "mA",
+    "coeffs": {},
+    "cst": 0
+   },
+   {
+    "id": "mB",
+    "coeffs": {},
+    "cst": 0
+   }
+  ],
+  "titles": {},
+  "total": "общая длина 4 м",
+  "normItems": []
+ }
+}
