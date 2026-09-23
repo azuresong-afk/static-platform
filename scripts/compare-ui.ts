@@ -141,7 +141,7 @@ step('отменить', (p) => p.click('#undo'));
 step('отменить', (p) => p.click('#undo'));
 step('повторить', (p) => p.click('#redo'));
 step('Ctrl+Z', async (p) => {
-  await p.locator('h1').click();
+  await p.locator('.wrap h1').click();
   await p.keyboard.press('Control+z');
 });
 step('Ctrl+Y', (p) => p.keyboard.press('Control+y'));

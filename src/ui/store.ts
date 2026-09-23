@@ -8,7 +8,8 @@
 import { addItem, addSeg, removeSeg, setSegDir, setSegLen, splitSeg, type EditResult } from '../model/edit';
 import { resolve } from '../model/geometry';
 import { createIdGen, type IdGen } from '../model/ids';
-import { loadPreset, type PresetKey } from '../model/presets';
+import { loadPreset, PRESET_TITLES, type PresetKey } from '../model/presets';
+import { parseProject, projectFileName, remapIds, serializeProject } from '../model/project';
 import type { Dir, Item, ItemType, RefDir, Structure } from '../model/types';
 import type { View } from '../draw/drawing';
 import { clamp } from '../model/format';
@@ -27,6 +28,10 @@ export interface AppState {
   canRedo: boolean;
   /** Сообщение под участками; seq меняется при каждом показе. */
   msg: { text: string; seq: number };
+  /** Уведомление над чертежом (открытие и сохранение файлов). */
+  notice: { text: string; tone: 'ok' | 'bad'; seq: number } | null;
+  /** Название проекта: готовая задача, имя открытого файла или «Своя схема». */
+  title: string;
   explain: boolean;
 }
 
@@ -39,6 +44,7 @@ interface Snap {
   items: Structure['items'];
   nt: string[];
   preset: PresetValue;
+  title: string;
 }
 
 export class Store {
@@ -62,6 +68,8 @@ export class Store {
       canUndo: false,
       canRedo: false,
       msg: { text: '', seq: 0 },
+      notice: null,
+      title: PRESET_TITLES[preset],
       explain: opts.explain ?? true,
     };
   }
@@ -86,8 +94,8 @@ export class Store {
 
   /* ---------- история ---------- */
   private snap(): string {
-    const { s, nt, preset } = this.st;
-    const o: Snap = { nodes: s.nodes, segs: s.segs, items: s.items, nt, preset };
+    const { s, nt, preset, title } = this.st;
+    const o: Snap = { nodes: s.nodes, segs: s.segs, items: s.items, nt, preset, title };
     return JSON.stringify(o);
   }
   /** Запомнить текущее состояние перед изменением; схема становится «своей». */
@@ -95,7 +103,7 @@ export class Store {
     this.hist.u.push(this.snap());
     if (this.hist.u.length > HIST_MAX) this.hist.u.shift();
     this.hist.r = [];
-    this.st = { ...this.st, preset: 'custom' };
+    this.st = { ...this.st, preset: 'custom', title: this.st.preset === 'custom' ? this.st.title : 'Своя схема' };
   }
   /** Начало правки поля: первая правка в поле — одна запись истории. */
   private touch(key: string) {
@@ -111,7 +119,7 @@ export class Store {
   private restore(str: string) {
     const o = JSON.parse(str) as Snap;
     this.session = null;
-    this.set({ s: { nodes: o.nodes, segs: o.segs, items: o.items }, nt: o.nt, preset: o.preset });
+    this.set({ s: { nodes: o.nodes, segs: o.segs, items: o.items }, nt: o.nt, preset: o.preset, title: o.title });
   }
   undo = () => {
     const prev = this.hist.u.pop();
@@ -137,8 +145,32 @@ export class Store {
   loadPreset = (k: PresetKey) => {
     this.commit();
     const wiz = k === 'blank' ? { on: true, step: 1 } : { on: false, step: this.st.wiz.step };
-    this.set({ s: loadPreset(k, this.ids), nt: [], preset: k, sel: null, wiz });
+    this.set({ s: loadPreset(k, this.ids), nt: [], preset: k, title: PRESET_TITLES[k], sel: null, wiz });
   };
+
+  /* ---------- файлы проекта ---------- */
+  /** Содержимое файла проекта и предлагаемое имя. */
+  exportProject = (now = new Date()): { name: string; text: string } => {
+    const { s, nt, title } = this.st;
+    return { name: projectFileName(title, now), text: serializeProject({ title, structure: s, notTarget: nt }, now) };
+  };
+  /** Открыть проект из текста файла. Открытие отменяется, как любое изменение. */
+  importProject = (text: string, fileName?: string): boolean => {
+    const r = parseProject(text);
+    if (!r.ok) {
+      const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
+      this.notify(head + r.errors.slice(0, 5).join(' ') + (r.errors.length > 5 ? ` …и ещё ${r.errors.length - 5}.` : ''), 'bad');
+      return false;
+    }
+    this.commit();
+    const p = r.project;
+    this.set({ s: remapIds(p.structure, this.ids), nt: p.notTarget, preset: 'custom', title: p.title, sel: null, wiz: { on: false, step: 1 } });
+    this.notify(`Открыт проект «${p.title}».`, 'ok');
+    return true;
+  };
+  setTitle = (title: string) => this.set({ title });
+  notify = (text: string, tone: 'ok' | 'bad' = 'ok') => this.set({ notice: { text, tone, seq: (this.st.notice?.seq ?? 0) + 1 } });
+  closeNotice = () => this.set({ notice: null });
   setView = (view: View) => this.set({ view });
   setExplain = (explain: boolean) => this.set({ explain });
   select = (sel: string | null) => {

@@ -192,3 +192,40 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 /* Пояснения к ходу решения: отличаются от основного текста, но не спорят с формулами. */
 .step p.explain{font-size:14px;line-height:1.55;color:var(--ink-2);background:var(--sel-bg);
   border-left:2px solid var(--react);padding:6px 10px;margin:8px 0}
+/* Файлы проекта */
+.topright{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.filebar{display:flex;gap:6px;flex-wrap:wrap}
+.filebar button{font:inherit;font-size:13.5px;padding:5px 11px;border:1px solid var(--rule);border-radius:6px;background:transparent;color:var(--ink);cursor:pointer}
+.filebar button:hover{background:var(--sheet)}
+.notice{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 16px;padding:8px 8px 8px 14px;border-radius:6px;font-size:14px;background:var(--sheet)}
+.n-ok{border:1px solid var(--ok);color:var(--ok)}
+.n-bad{border:1.5px solid var(--bad);color:var(--bad)}
+.print-report{display:none}
+
+/* Печать и PDF: вместо интерфейса — отчёт, всегда в светлой теме */
+@media print{
+  :root,:root[data-theme="dark"]{
+    --paper:#FFFFFF; --sheet:#FFFFFF; --ink:#1C2733; --ink-2:#333D48; --ink-3:#6B7682; --rule:#C9D0D5;
+    --grid:#E0935A; --load:#C4302B; --react:#2257B8; --ok:#2E7D4F; --warn:#A35F00; --bad:#B3261E;
+    --sel-bg:#F1F4F9; --eq-bg:#F6F8F7;
+  }
+  @page{size:A4;margin:14mm 14mm 16mm}
+  body{background:#fff;font-size:11pt}
+  .wrap,#errbar{display:none !important}
+  .print-report{display:block;color:var(--ink)}
+  .pr-head h1{font-size:18pt;margin:0 0 2mm}
+  .pr-head p{margin:0 0 5mm;color:var(--ink-2);font-size:10pt}
+  .pr-sec h2{font-size:13pt;margin:5mm 0 2mm;break-after:avoid}
+  .pr-sec p,.pr-sec li{margin:1mm 0}
+  .pr-sec ul{margin:1mm 0;padding-left:6mm}
+  .pr-figs figure{margin:0 0 3mm;break-inside:avoid}
+  .pr-figs svg{display:block;width:100%;height:auto;max-height:78mm}
+  .pr-figs .t-dimed{fill:var(--ink-2);text-decoration:none;font-weight:400}
+  .pr-figs .frame{stroke:none}
+  .pr-figs figcaption{font-size:9.5pt;color:var(--ink-3);text-align:center}
+  .print-report .step{break-inside:avoid-page;margin-bottom:4mm}
+  .print-report .eq{white-space:normal;overflow:visible;break-inside:avoid}
+  .print-report .step p,.print-report .step ul{max-width:none}
+  .print-report .step p.explain{background:none;border-left:1.5pt solid var(--react)}
+  .print-report .ans tr{break-inside:avoid}
+}

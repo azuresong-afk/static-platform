@@ -109,3 +109,41 @@ describe('готовые задачи и мастер', () => {
     expect(st.get().nt).toEqual([]);
   });
 });
+
+describe('файлы проекта', () => {
+  it('сохранить → открыть: та же конструкция, отменяется одним шагом', () => {
+    const a = new Store({ preset: 'pframe' });
+    a.setTarget('X_A', false);
+    const { name, text } = a.exportProject(new Date('2026-09-23T10:00:00Z'));
+    expect(name).toBe('Своя схема 2026-09-23.statika.json');
+    const b = new Store();
+    const before = b.get().s;
+    expect(b.importProject(text, name)).toBe(true);
+    expect(b.get().nt).toEqual(['X_A']);
+    expect(b.get().title).toBe('Своя схема');
+    expect(b.get().preset).toBe('custom');
+    expect(b.get().notice).toMatchObject({ tone: 'ok', text: 'Открыт проект «Своя схема».' });
+    // Та же геометрия и элементы (идентификаторы новые).
+    const strip = (s: typeof before) => JSON.stringify({ segs: s.segs.map((q) => [q.dir, q.len]), items: s.items.map(({ id: _, ...r }) => ({ ...r, at: undefined, from: undefined, to: undefined })) });
+    expect(strip(b.get().s)).toBe(strip(a.get().s));
+    b.undo();
+    expect(b.get().s).toEqual(before);
+    expect(b.get().title).toBe('Балка на двух опорах');
+  });
+
+  it('название готовой задачи сохраняется в файле', () => {
+    const st = new Store({ preset: 'lever' });
+    expect(st.exportProject().name).toMatch(/^Рычаг найти силу F \d{4}-\d{2}-\d{2}\.statika\.json$/);
+    expect(JSON.parse(st.exportProject().text).title).toBe('Рычаг: найти силу F');
+  });
+
+  it('испорченный файл: уведомление, состояние не меняется', () => {
+    const st = new Store();
+    const s0 = st.get().s;
+    expect(st.importProject('{"format":"statika-project","version":1}', 'x.json')).toBe(false);
+    expect(st.get().s).toBe(s0);
+    expect(st.get().canUndo).toBe(false);
+    expect(st.get().notice?.tone).toBe('bad');
+    expect(st.get().notice?.text).toMatch(/^Не удалось открыть «x\.json»: В файле нет конструкции/);
+  });
+});
