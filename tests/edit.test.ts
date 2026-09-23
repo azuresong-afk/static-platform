@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addItem, addSeg, defaults, removeSeg, setSegDir, setSegLen, splitSeg } from '../src/model/edit';
-import { geom, resolve } from '../src/model/geometry';
+import { geom, geomOK, resolve } from '../src/model/geometry';
 import { createIdGen, idGenAfter, type IdGen } from '../src/model/ids';
 import { loadPreset, presetStructure } from '../src/model/presets';
 import type { Structure } from '../src/model/types';
@@ -33,10 +33,23 @@ describe('golden: убрать и разделить участок', () => {
     it(`seed ${g.seed}`, () => {
       const inp = g.input!;
       const s = resolve({ nodes: inp.nodes, segs: inp.segs, items: inp.items }).structure;
+      // Баг №7 исправлен: прототип отказывал всегда. Отказ с тем же сообщением остаётся для наложения соседей;
+      // «пересекутся» теперь — только при настоящем пересечении, и результат должен быть корректным.
       const rm = removeSeg(s, g.remove!.seg);
-      expect(rm.ok).toBe(g.remove!.ok);
-      if (!rm.ok) expect(rm.msg ?? '').toBe(g.remove!.msg);
-      else expect(rm.s).toEqual(stripForceAngle(g.remove!.result!));
+      if (!rm.ok) {
+        if (g.remove!.msg.includes('наложатся')) expect(rm.msg).toBe(g.remove!.msg);
+        else if (s.segs.length >= 2) expect(rm.msg).toBe('Этот участок нельзя убрать: участки пересекутся.');
+      } else {
+        expect(g.remove!.msg).not.toContain('наложатся');
+        const seg = s.segs.find((q) => q.id === g.remove!.seg)!;
+        expect(geomOK(rm.s)).toBe(true);
+        expect(rm.s.nodes.map((n) => n.id)).toEqual(s.nodes.map((n) => n.id).filter((id) => id !== seg.b));
+        expect(rm.s.segs.length).toBe(s.segs.length - 1);
+        for (const it of rm.s.items) {
+          if (it.type === 'dist') expect([it.from, it.to]).not.toContain(seg.b);
+          else expect(it.at).not.toBe(seg.b);
+        }
+      }
 
       const sp = g.split!;
       const r = splitSeg(s, sp.seg, sp.t, sp.ok ? idsLike(s, sp.result!) : createIdGen());
@@ -79,6 +92,25 @@ describe('операции редактирования', () => {
     expect(setSegLen(hook, tip.id, 3)).toMatchObject({ ok: false, msg: 'При такой длине участки пересекаются.' });
     expect(setSegLen(s, last.id, 0)).toMatchObject({ ok: false, reason: 'invalid' });
     expect(setSegLen(s, last.id, last.len)).toMatchObject({ ok: false, reason: 'noop' });
+  });
+
+  it('убрать участок: точка сливается с соседней, элементы переезжают (баг №7 исправлен)', () => {
+    const s = loadPreset('simple');
+    // Участок B–C: точка C сливается с B, правая часть сдвигается на 1 м; распределённая нагрузка C–E становится B–E.
+    const bc = s.segs[1];
+    const r = removeSeg(s, bc.id);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const g = geom(r.s);
+    expect(g.order.map((id) => g.pos[id])).toEqual([[0, 0], [2, 0], [3, 0], [5, 0]]);
+    const dist = r.s.items.find((it) => it.type === 'dist')!;
+    expect(dist).toMatchObject({ from: bc.a });
+    // Последний участок убрать нельзя.
+    const one = loadPreset('indet');
+    expect(removeSeg(one, one.segs[0].id).ok).toBe(false);
+    // Π-образный контур A→B→C→D: без стойки B–C верхний ригель лёг бы на нижний.
+    const t = presetStructure({ pts: [[0, 0], [2, 0], [2, 2], [0, 2]], items: [] });
+    expect(removeSeg(t, t.segs[1].id)).toMatchObject({ ok: false, msg: 'Этот участок нельзя убрать: соседние участки наложатся друг на друга.' });
   });
 
   it('разделить участок посередине: длины и имена точек', () => {

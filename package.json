@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "golden": "tsx scripts/capture-golden.ts"
+    "golden": "tsx scripts/capture-golden.ts",
+    "compare:ui": "tsx scripts/compare-ui.ts"
   },
   "dependencies": {
     "react": "^19.3.0",

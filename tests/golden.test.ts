@@ -15,7 +15,7 @@ import { resolve } from '../src/model/geometry';
 import { loadPreset, type PresetKey } from '../src/model/presets';
 import type { Structure } from '../src/model/types';
 import { itemTitleHTML, sizeText } from '../src/text/labels';
-import { goldenPresets, goldenRandom, normHTML, type GoldenCase } from './helpers/golden';
+import { goldenPresets, goldenRandom, modeOf, normHTML, type GoldenCase, type Mode } from './helpers/golden';
 
 /**
  * Числа сравниваются с относительным допуском 1e-12: Math.sin/cos в Chromium (где снят эталон)
@@ -33,18 +33,6 @@ function expectClose(a: unknown, b: unknown, path = '', tol = 1e-12): void {
     return;
   }
   expect(a, path).toEqual(b);
-}
-
-type Mode = 'strict' | 'rank' | 'split' | 'cancel';
-
-/** Какое намеренное отличие от прототипа затрагивает этот случай. */
-function modeOf(s: Structure, g: GoldenCase): Mode {
-  const { model } = analyze(s);
-  const split = model.dists.filter((d) => d.split);
-  if (split.some((d) => Math.abs(d.q1 + d.q2) < 1e-12)) return 'cancel';
-  if (g.status === 'indeterminate' && (g.rank ?? 3) < 3) return 'rank';
-  if (split.length) return 'split';
-  return 'strict';
 }
 
 function compare(s: Structure, notTarget: string[], g: GoldenCase, mode: Mode = 'strict') {

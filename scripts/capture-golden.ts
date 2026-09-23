@@ -11,6 +11,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve as pathResolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { chromium } from 'playwright-core';
 
 const root = pathResolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,7 +25,7 @@ function chromiumPath(): string | undefined {
   return dir ? `${base}/${dir}/chrome-linux/chrome` : undefined;
 }
 
-const HOOK = `window.__P={state,loadPreset,renderAll,buildModel,solve,geomOK,geom,resolve,splitSeg,removeSeg,PRESETS,get G(){return G}};`;
+const HOOK = `window.__P={state,loadPreset,renderAll,buildModel,solve,renderSVG,geomOK,geom,resolve,splitSeg,removeSeg,PRESETS,resetIds:()=>{uid=1;nid=1;sid=1;},setIds:(k)=>{uid=k;nid=k;sid=k;},get G(){return G}};`;
 
 function instrumented(): string {
   const src = readFileSync(pathResolve(root, 'prototype/statika.html'), 'utf8');
@@ -50,7 +51,7 @@ async function main() {
 
   const random: unknown[] = [];
   for (let seed = 1; seed <= RANDOM_CASES; seed++) random.push({ seed, ...(await capture({ mode: 'random', seed })) });
-  writeFileSync(pathResolve(root, 'tests/golden/random.json'), JSON.stringify(random) + '\n');
+  writeFileSync(pathResolve(root, 'tests/golden/random.json.gz'), gzipSync(JSON.stringify(random) + '\n', { level: 9 }));
 
   await browser.close();
   const byStatus: Record<string, number> = {};

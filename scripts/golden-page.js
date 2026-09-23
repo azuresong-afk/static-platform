@@ -105,9 +105,13 @@ window.__capture = function (args) {
 
   let input, rnd = null;
   if (args.mode === 'preset') {
+    // Счётчики идентификаторов с 1 — как у свежезагруженной задачи в порте.
+    P.resetIds();
     P.loadPreset(args.key);
     input = null;
   } else {
+    // Новые точки и участки при «разделить» не должны совпасть с идентификаторами случайной конструкции.
+    P.setIds(1000);
     const g = generate(args.seed);
     rnd = g.rnd;
     input = { nodes: g.nodes, segs: g.segs, items: g.items, notTarget: g.notTarget };
@@ -139,6 +143,19 @@ window.__capture = function (args) {
       return r;
     }),
   };
+  // Чертёж в обоих видах; для случайных конструкций иногда с выделенным элементом.
+  st.sel = rnd && st.items.length && rnd() < 0.5 ? st.items[Math.floor(rnd() * st.items.length)].id : null;
+  out.sel = st.sel;
+  out.svg = {};
+  for (const view of ['construct', 'schema']) {
+    st.view = view;
+    const mm = P.buildModel(),
+      ss = P.solve(mm);
+    P.renderSVG(mm, ss);
+    out.svg[view] = { viewBox: $('#svg').getAttribute('viewBox'), html: $('#svg').innerHTML };
+  }
+  st.view = 'construct';
+  st.sel = null;
   // Операции редактирования на копии состояния.
   if (rnd && st.segs.length) {
     const saved = JSON.stringify({ nodes: st.nodes, segs: st.segs, items: st.items });

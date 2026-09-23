@@ -1,12 +1,11 @@
 /**
  * Поведение прототипа, похожее на ошибку, но не влияющее на расчёт. Перенесено как есть;
  * тесты фиксируют текущее поведение, чтобы исправление было осознанным и видимым.
- * Баги №1 и №2 (влияли на расчёт) исправлены — см. tests/fixes.test.ts.
+ * Баги №1 и №2 (влияли на расчёт) исправлены — см. tests/fixes.test.ts; №7 — в tests/edit.test.ts.
  * При исправлении тест меняется вместе с кодом.
  */
 import { describe, expect, it } from 'vitest';
 import { analyze } from '../src/core';
-import { removeSeg } from '../src/model/edit';
 import { idGenAfter } from '../src/model/ids';
 import { loadPreset } from '../src/model/presets';
 
@@ -34,8 +33,4 @@ describe('известные особенности прототипа', () => {
       expect(analyze(loadPreset(k)).html).not.toContain('Ошибка: сумма не равна нулю');
   });
 
-  it('№7: «Убрать участок» никогда не срабатывает', () => {
-    const s = loadPreset('simple');
-    for (const q of s.segs) expect(removeSeg(s, q.id)).toMatchObject({ ok: false, msg: 'Этот участок нельзя убрать: участки пересекутся.' });
-  });
 });
