@@ -41,9 +41,11 @@ export function solve(m: Model): Solution {
   if (!m.supports.length && !n) return { ...out, status: 'nosupport' };
   if (n === 0) return { ...out, status: 'nosupport' };
   out.rank = rankOf(m.cands.map((e) => keys.map((k) => e.coeffs[k] || 0)));
-  // Прототип: неопределимость — только по числу неизвестных (n > 3), до сравнения с рангом.
-  if (n > 3) return { ...out, status: 'indeterminate' };
-  if (out.rank < n) return { ...out, status: 'mechanism' };
+  // Независимых уравнений столько, каков ранг. Если неизвестных больше:
+  // ранг 3 — связи закрепляют тело, но лишние (неопределимость степени n − 3);
+  // ранг < 3 — какое-то перемещение не закреплено (изменяемая система), даже если связей больше трёх.
+  // (Прототип ставил «неопределима» при любом n > 3 до проверки ранга — баг №1.)
+  if (out.rank < n) return { ...out, status: out.rank === 3 ? 'indeterminate' : 'mechanism' };
 
   const used = new Set<string>(),
     vals: Record<string, number> = {};

@@ -4,12 +4,12 @@
  * При explain = true добавляются пояснения к ходу решения (абзацы с классом explain);
  * числа, уравнения и правила знаков при этом не меняются.
  */
-import { LOADDIR, SIDES, TYPES } from '../model/constants';
-import { fmt } from '../model/format';
+import { LOADDIR, REFS, SIDES, TYPES } from '../model/constants';
+import { fmt, trigFactor } from '../model/format';
 import type { ForceItem } from '../model/types';
 import { checkPasses } from '../solver/check';
 import type { Eq, Term } from '../solver/equations';
-import type { Model, Unknown } from '../solver/model';
+import type { Action, Model, Unknown } from '../solver/model';
 import type { Solution } from '../solver/solve';
 import { b, join, sub, sym, v, type AnswerRow, type Block, type Doc, type Inline } from './doc';
 import { STATUS, STATUS_TONE, forceDirText } from './labels';
@@ -135,7 +135,13 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
     const why: string[] = [];
     if (types.has('fixed')) why.push('жёсткая заделка не даёт сечению ни смещаться, ни поворачиваться — две составляющие реакции и реактивный момент');
     if (types.has('pin')) why.push('шарнирно-неподвижная опора не даёт точке смещаться ни по горизонтали, ни по вертикали, но позволяет поворот — две составляющие реакции');
-    if (types.has('roller')) why.push('каток мешает смещению только по нормали к опорной поверхности — одна реакция по нормали');
+    if (types.has('roller'))
+      why.push(
+        'каток может свободно катиться вдоль опорной поверхности и мешает только движению поперёк неё, поэтому его реакция одна и направлена перпендикулярно (под прямым углом) к поверхности — это и называют «по нормали»' +
+          (m.supports.some((q) => q.it.type === 'roller' && q.it.side === 'tilt')
+            ? '; у катка на наклонной поверхности реакция перпендикулярна наклонной поверхности, поэтому она тоже наклонена'
+            : ''),
+      );
     if (types.has('rod'))
       why.push('опорный стержень с шарнирами на концах передаёт усилие только вдоль себя — одна реакция вдоль стержня; положительное направление принято от опоры к конструкции, то есть «+» означает, что стержень сжат');
     const r: Inline[] = [];
@@ -143,6 +149,11 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
     r.push('Направления реакций на схеме выбираем произвольно: если в ответе получится знак «−», реакция направлена в противоположную сторону.');
     if (m.unkLoads.length) r.push(' Для искомой нагрузки направление тоже принимаем, а знак ответа покажет, угадано ли оно.');
     s1.push(explain(...r));
+    for (const a of [...m.knowns, ...m.unkLoads]) {
+      if (a.kind !== 'f' || !a.item || a.item.type !== 'force') continue;
+      const p = projectionText(a);
+      if (p) s1.push(explain(...p));
+    }
     s1.push(
       explain(
         'Момент силы относительно точки считаем со знаком «+», если сила стремится повернуть тело вокруг этой точки против часовой стрелки. ',
@@ -170,6 +181,52 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
         B = m.g.name[d.it.to];
       const where: Inline[] = [`на расстоянии ${fmt(d.d)} м от точки `, v(A), `, направлена ${LOADDIR[d.it.dir].name}`];
       const lq: Inline[] = [v('l'), ` = ${fmt(d.l)} м (участок `, v(A), '–', v(B), ')'];
+      if (d.split) {
+        const [p1, p2] = d.split.parts;
+        rows.push({
+          k: 'p',
+          c: [
+            'Нагрузка ',
+            q,
+            ` меняет знак: `,
+            v('q'),
+            ` = 0 на расстоянии ${fmt(d.split.l1)} м от точки `,
+            v(A),
+            '. Заменяем эпюру двумя треугольниками, у каждого — своя равнодействующая.',
+          ],
+        });
+        const tri = (p: typeof p1, edge: 'нач' | 'кон', lname: string): Block => ({
+          k: 'eq',
+          lines: [
+            {
+              c: [
+                sym(p.o),
+                ' = ½·|',
+                v('q'),
+                sub(edge),
+                '|·',
+                v(lname),
+                ` = ½·${fmt(Math.abs(p.q))}·${fmt(p.l)} = `,
+                b(`${fmt(p.Q)} кН`),
+              ],
+            },
+            {
+              num: true,
+              c: [v(lname), ` = ${fmt(p.l)} м; на трети длины треугольника от большего края: на расстоянии ${fmt(p.d)} м от точки `, v(A), `, направлена ${LOADDIR[p.dir].name}`],
+            },
+          ],
+        });
+        rows.push(tri(p1, 'нач', 'l′'), tri(p2, 'кон', 'l″'));
+        if (ex)
+          rows.push(
+            explain(
+              'Части эпюры по разные стороны от нуля действуют в противоположные стороны. Одна общая сила здесь не годится: ',
+              'при равных по модулю краях она равна нулю, хотя нагрузка поворачивает тело (две части образуют пару сил), ',
+              'а в остальных случаях её точка приложения уходит за пределы участка. Поэтому каждый треугольник заменяем своей силой; обе входят в уравнения равновесия.',
+            ),
+          );
+        continue;
+      }
       if (Math.abs(d.q1 - d.q2) < 1e-12)
         rows.push({
           k: 'eq',
@@ -242,6 +299,13 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       k: 'p',
       c: [
         `Ранг системы уравнений (${sol.rank}) меньше числа неизвестных: связи не закрепляют балку. Так бывает, когда все реакции параллельны или их линии действия пересекаются в одной точке. Добавьте или переставьте опору.`,
+      ],
+    });
+  if (sol.status === 'mechanism' && sol.n > 3)
+    det.push({
+      k: 'p',
+      c: [
+        `Неизвестных больше трёх, но система не статически неопределима, а изменяема: независимых уравнений только ${sol.rank}, часть связей дублирует друг друга, а какое-то перемещение остаётся свободным.`,
       ],
     });
   if (sol.status !== 'indeterminate' && sol.status !== 'mechanism' && sol.n < 3)
@@ -415,6 +479,38 @@ function whyEquation(m: Model, e: Eq, key: string, before: Record<string, number
     r.push(...symList(couples), plural(couples, ' — момент, в уравнения проекций не входит. ', ' — моменты, в уравнения проекций не входят. '));
   if (found.length) r.push(plural(found, 'Значение ', 'Значения '), ...symList(found), plural(found, ' уже найдено. ', ' уже найдены. '));
   r.push('Остаётся одно неизвестное — ', sym(m.byKey[key]), '.');
+  return r;
+}
+
+/**
+ * Проекции наклонной силы через угол с той осью, от которой пользователь отсчитывал угол.
+ * Угол больше 90° приводится к острому углу между линией действия силы и этой осью.
+ */
+function projectionText(a: Action): Inline[] | null {
+  const it = a.item as ForceItem;
+  const tx = trigFactor(a.angle, 'x', a.refAxis),
+    ty = trigFactor(a.angle, 'y', a.refAxis);
+  if (!tx || !ty) return null; // сила параллельна одной из осей — проекция либо полная, либо нулевая
+  const ref = REFS[it.ref] || REFS.down;
+  const axis = ref.axis === 'v' ? 'y' : 'x';
+  const alpha = +it.alpha || 0;
+  const acuteDeg = axis === 'x' ? tx.deg : ty.deg;
+  const r: Inline[] = ['Сила ', sym(a), ` задана углом ${fmt(alpha, 2)}° к направлению «${ref.short}», то есть угол отсчитан от оси `, v(axis), '. '];
+  if (Math.abs(acuteDeg - alpha) > 1e-9)
+    r.push('Для проекций берём острый угол между линией действия силы и осью ', v(axis), `: ${fmt(acuteDeg, 2)}°. `);
+  r.push(
+    'Проекция на ось ',
+    v(axis),
+    ' — через cos этого угла, на другую ось — через sin: на ',
+    v('x'),
+    ' — ',
+    sym(a),
+    `·${tx.fn} ${fmt(tx.deg, 2)}°, на `,
+    v('y'),
+    ' — ',
+    sym(a),
+    `·${ty.fn} ${fmt(ty.deg, 2)}°; знак берём по направлению составляющей.`,
+  );
   return r;
 }
 

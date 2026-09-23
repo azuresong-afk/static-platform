@@ -40,9 +40,9 @@ const loadArb = fc.oneof(
   fc.record({
     type: fc.constant('dist' as const),
     seg: fc.nat(),
-    // Разные знаки допустимы, кроме q1 = −q2 (баг №2 прототипа: пара теряется).
+    // Знакопеременная нагрузка, в том числе q1 = −q2 (там прототип терял пару сил — баг №2).
     q1: fc.constantFrom(0, 1, 2, 3, 4, -1),
-    q2: fc.constantFrom(0, 1, 2, 3, 5, -2),
+    q2: fc.constantFrom(0, 1, 2, 3, 5, -2, -4, -1),
     dir: fc.constantFrom<LoadDir>('down', 'up', 'left', 'right'),
   }),
 );
@@ -99,9 +99,7 @@ export const structureArb = fc
     for (const l of loads) {
       if (l.type === 'dist') {
         const q = s.segs[l.seg % s.segs.length];
-        const q1 = l.q1,
-          q2 = l.q1 + l.q2 === 0 ? l.q2 + 1 : l.q2;
-        add({ type: 'dist', from: q.a, to: q.b, q1, q2, dir: l.dir });
+        add({ type: 'dist', from: q.a, to: q.b, q1: l.q1, q2: l.q2, dir: l.dir });
       } else if (l.type === 'force') add({ ...l, at: node(l.at), unknown: false });
       else if (l.type === 'moment') add({ ...l, at: node(l.at), unknown: false });
       else add({ ...l, at: node(l.at) });

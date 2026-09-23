@@ -72,6 +72,42 @@ describe('пояснения к ходу решения', () => {
     );
   });
 
+  it('«по нормали» объяснено простыми словами', () => {
+    const [post] = explainTexts(analyze(loadPreset('post'), { explain: true }).doc, 'Освобождаемся от связей');
+    expect(post).toContain('перпендикулярно (под прямым углом) к поверхности — это и называют «по нормали»');
+  });
+
+  it('проекции наклонной силы — через угол с осью, от которой отсчитан угол', () => {
+    const proj = (k: PresetKey) =>
+      explainTexts(analyze(loadPreset(k), { explain: true }).doc, 'Освобождаемся от связей').filter((t) => t.startsWith('Сила'));
+    // Угол от горизонтального направления: на x — cos, на y — sin.
+    expect(proj('simple')).toEqual([
+      'Сила F задана углом 60° к направлению «влево», то есть угол отсчитан от оси x. Проекция на ось x — через cos этого угла, на другую ось — через sin: на x — F·cos 60°, на y — F·sin 60°; знак берём по направлению составляющей.',
+    ]);
+    // Угол от вертикального направления: на y — cos, на x — sin.
+    expect(proj('pframe')).toEqual([
+      'Сила F_2 задана углом 30° к направлению «вниз», то есть угол отсчитан от оси y. Проекция на ось y — через cos этого угла, на другую ось — через sin: на x — F_2·sin 30°, на y — F_2·cos 30°; знак берём по направлению составляющей.',
+    ]);
+  });
+
+  it('угол больше 90° приводится к острому углу с той же осью', () => {
+    const s = presetStructure({
+      pts: [[0, 0], [2, 0], [4, 0]],
+      items: [
+        { type: 'pin', at: 0, side: 'below' },
+        { type: 'roller', at: 2, side: 'below' },
+        { type: 'force', at: 1, F: 10, ref: 'right', rot: 'ccw', alpha: 120, unknown: false },
+      ],
+    });
+    const { doc, solution } = analyze(s, { explain: true });
+    const [t] = explainTexts(doc, 'Освобождаемся от связей').filter((x) => x.startsWith('Сила'));
+    expect(t).toContain('задана углом 120° к направлению «вправо»');
+    expect(t).toContain('острый угол между линией действия силы и осью x: 60°');
+    expect(t).toContain('на x — F·cos 60°, на y — F·sin 60°');
+    // Числа: F = 10 под 120° → Fx = −5, Fy = 8,66; X_A = 5.
+    expect(solution.vals.X_A).toBeCloseTo(5, 12);
+  });
+
   it('пояснения есть во всех шагах решённой задачи', () => {
     const { doc } = analyze(loadPreset('pframe'), { explain: true });
     for (const title of ['Освобождаемся от связей', 'Заменяем распределённую нагрузку равнодействующей', 'Проверяем статическую определимость', 'Составляем и решаем уравнения равновесия', 'Проверка', 'Ответ'])

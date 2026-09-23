@@ -5,7 +5,7 @@
 import { LOADDIR, REFS } from '../model/constants';
 import { dirOf, type RefAxis } from '../model/format';
 import { distGeom, resolve, type Geom, type PointItem } from '../model/geometry';
-import type { DistItem, ForceItem, MomentItem, Structure, SupportItem, SupportType } from '../model/types';
+import type { DistItem, ForceItem, LoadDir, MomentItem, Structure, SupportItem, SupportType } from '../model/types';
 import { makeEq, type Eq } from './equations';
 
 /** Обозначение: буква и индекс (X с индексом A, F с индексом 2…). */
@@ -60,7 +60,29 @@ export interface DistInfo {
   d: number;
   S: string;
   o: Known;
+  /**
+   * Нагрузка меняет знак на участке: эпюра делится в нуле (на расстоянии l1 от начала) на два треугольника.
+   * Тогда Q, f, d, o относятся к первому треугольнику, а обе равнодействующие — в parts.
+   */
+  split: { l1: number; parts: [DistPart, DistPart] } | null;
 }
+
+/** Треугольник эпюры знакопеременной нагрузки. */
+export interface DistPart {
+  /** Интенсивность на краю, где треугольник максимален (со знаком). */
+  q: number;
+  /** Длина треугольника. */
+  l: number;
+  /** Модуль равнодействующей. */
+  Q: number;
+  /** Расстояние от начала участка до точки приложения. */
+  d: number;
+  /** Направление равнодействующей. */
+  dir: LoadDir;
+  o: Known;
+}
+
+const OPPLOAD: Record<LoadDir, LoadDir> = { down: 'up', up: 'down', left: 'right', right: 'left' };
 
 export interface BadDist {
   it: DistItem;
@@ -206,14 +228,43 @@ export function buildModel(s: Structure): Model {
       const q1 = +it.q1,
         q2 = +it.q2,
         l = dg.len,
-        Q = ((q1 + q2) / 2) * l,
-        f = Math.abs(q1 + q2) < 1e-12 ? 0.5 : (q1 + 2 * q2) / (3 * (q1 + q2));
-      const xc = dg.P[0] + (dg.Q[0] - dg.P[0]) * f,
-        yc = dg.P[1] + (dg.Q[1] - dg.P[1]) * f,
         ang = LOADDIR[it.dir].ang;
-      const o: Known = { L: 'Q', S, kind: 'f', x: xc, y: yc, ...dirOf(ang), angle: ang, s: 0, refAxis: 'h', val: Q, itemId: it.id };
+      const force = (L: string, val: number, dist: number, a: number): Known => {
+        const t = l > 0 ? dist / l : 0;
+        return {
+          L,
+          S,
+          kind: 'f',
+          x: dg.P[0] + (dg.Q[0] - dg.P[0]) * t,
+          y: dg.P[1] + (dg.Q[1] - dg.P[1]) * t,
+          ...dirOf(a),
+          angle: a,
+          s: 0,
+          refAxis: 'h',
+          val,
+          itemId: it.id,
+        };
+      };
+      if (q1 * q2 < 0 && Math.abs(q1) > 1e-12 && Math.abs(q2) > 1e-12) {
+        // Нагрузка меняет знак: делим эпюру в нуле на два треугольника, у каждого своя равнодействующая.
+        // (В прототипе здесь была одна сила; при q1 = −q2 она равна нулю и пара сил терялась — баг №2.)
+        const l1 = (l * q1) / (q1 - q2),
+          l2 = l - l1;
+        const part = (L: string, q: number, len: number, d: number): DistPart => {
+          const dir = q > 0 ? it.dir : OPPLOAD[it.dir];
+          const Q = (Math.abs(q) * len) / 2;
+          return { q, l: len, Q, d, dir, o: force(L, Q, d, LOADDIR[dir].ang) };
+        };
+        const parts: [DistPart, DistPart] = [part('Q′', q1, l1, l1 / 3), part('Q″', q2, l2, l1 + (2 * l2) / 3)];
+        parts.forEach((p) => knowns.push(p.o));
+        dists.push({ it, q1, q2, l, Q: parts[0].Q, f: parts[0].d / l, d: parts[0].d, S, o: parts[0].o, split: { l1, parts } });
+        continue;
+      }
+      const Q = ((q1 + q2) / 2) * l,
+        f = Math.abs(q1 + q2) < 1e-12 ? 0.5 : (q1 + 2 * q2) / (3 * (q1 + q2));
+      const o = force('Q', Q, f * l, ang);
       knowns.push(o);
-      dists.push({ it, q1, q2, l, Q, f, d: f * l, S, o });
+      dists.push({ it, q1, q2, l, Q, f, d: f * l, S, o, split: null });
     }
   }
   const byKey: Record<string, Unknown> = {};
