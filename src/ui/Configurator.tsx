@@ -141,6 +141,34 @@ function AddSegment({ g }: { g: Geom }) {
   );
 }
 
+/** Внутренние шарниры: доступны в точках, где сходятся хотя бы два участка. */
+function Hinges({ model }: { model: Model }) {
+  const [st, store] = useStore();
+  const g = model.g;
+  const inner = g.order.filter((id) => g.adj[id].size >= 2);
+  const hinge = new Set(st.s.nodes.filter((n) => n.hinge).map((n) => n.id));
+  return (
+    <div data-port-only="">
+      <div className="sub">
+        Внутренние шарниры{' '}
+        {model.parts.count > 1 && <span className="lentotal">частей: {model.parts.count}</span>}
+      </div>
+      {inner.length ? (
+        <div className="targets" id="hinges">
+          {inner.map((id) => (
+            <label className="chip" key={id} title="Шарнир соединяет участки, но позволяет им поворачиваться друг относительно друга">
+              <input type="checkbox" data-hinge={id} checked={hinge.has(id)} onChange={(e) => store.setHinge(id, e.target.checked)} />
+              <span className="v">{g.name[id]}</span>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="empty">Шарнир можно поставить в точке между участками — сначала разделите участок.</p>
+      )}
+    </div>
+  );
+}
+
 function Palette({ items, icons }: { items: [ItemType, string][]; icons: Record<string, React.ReactNode> }) {
   const [, store] = useStore();
   return (
@@ -389,6 +417,7 @@ export function Configurator({ model }: { model: Model }) {
         <p className="msg" id="segmsg" role="status" key={st.msg.seq}>
           {st.msg.text}
         </p>
+        <Hinges model={model} />
       </div>
       <div hidden={!show2}>
         <div className="sub">Опоры</div>

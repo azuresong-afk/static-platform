@@ -242,8 +242,8 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
   // распределённая нагрузка
   const qmax = Math.max(1e-9, ...m.dists.map((d) => Math.max(Math.abs(d.q1), Math.abs(d.q2))));
   for (const d of m.dists) {
-    const [ax, ay] = sp(d.it.from),
-      [bx, by] = sp(d.it.to),
+    const [ax, ay] = sp(d.from),
+      [bx, by] = sp(d.to),
       t = (LOADDIR[d.it.dir].ang * Math.PI) / 180,
       u = [Math.cos(t), -Math.sin(t)],
       n = [-u[0], -u[1]];
@@ -299,6 +299,11 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
   pointItems
     .filter((it) => it.type === 'pin' || it.type === 'roller' || it.type === 'rod')
     .forEach((it) => o.push(`<circle cx="${r1(X(it.x))}" cy="${r1(Y(it.y))}" r="4.5" class="hinge"${schema ? ' opacity=".35"' : ''}/>`));
+  // Внутренние шарниры: кружок на стержне (в конструкции без шарниров ничего не добавляется).
+  m.parts.hinges.forEach((h) => {
+    const [hx, hy] = sp(h);
+    o.push(`<circle cx="${r1(hx)}" cy="${r1(hy)}" r="6.5" class="hinge ihinge" stroke-width="2"><title>Внутренний шарнир</title></circle>`);
+  });
   // нагрузки
   const loadObj = (id: string): Action | undefined => [...m.knowns, ...m.unkLoads].find((a) => a.itemId === id);
   const angleMark = (px: number, py: number, it: PointItem & { type: 'force' }) => {

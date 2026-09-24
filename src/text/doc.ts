@@ -8,6 +8,8 @@ export type Inline =
   /** Переменная курсивом: <span class="v">. */
   | { t: 'v'; text: string }
   | { t: 'sub'; text: string }
+  /** Верхний индекс (номер части составной конструкции). */
+  | { t: 'sup'; text: string }
   /** Обозначение с индексом: буква курсивом и нижний индекс. */
   | { t: 'sym'; L: string; S: string }
   | { t: 'b'; c: Inline[] };
@@ -39,6 +41,7 @@ export interface Doc {
 
 export const v = (text: string): Inline => ({ t: 'v', text });
 export const sub = (text: string): Inline => ({ t: 'sub', text });
+export const sup = (text: string): Inline => ({ t: 'sup', text });
 export const sym = (o: { L: string; S: string }): Inline => ({ t: 'sym', L: o.L, S: o.S });
 export const b = (...c: Inline[]): Inline => ({ t: 'b', c });
 
@@ -65,6 +68,8 @@ export function inlineHTML(c: Inline[]): string {
           return `<span class="v">${esc(x.text)}</span>`;
         case 'sub':
           return `<sub>${esc(x.text)}</sub>`;
+        case 'sup':
+          return `<sup>${esc(x.text)}</sup>`;
         case 'sym':
           return `<span class="v">${esc(x.L)}</span>${x.S ? `<sub>${esc(x.S)}</sub>` : ''}`;
         case 'b':
@@ -116,6 +121,8 @@ export function inlineText(c: Inline[]): string {
         case 'v':
         case 'sub':
           return x.text;
+        case 'sup':
+          return '^' + x.text;
         case 'sym':
           return x.L + (x.S ? '_' + x.S : '');
         case 'b':

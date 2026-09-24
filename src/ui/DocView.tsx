@@ -14,6 +14,8 @@ export function InlineView({ c }: { c: Inline[] }): ReactNode {
         );
       case 'sub':
         return <sub key={i}>{x.text}</sub>;
+      case 'sup':
+        return <sup key={i}>{x.text}</sup>;
       case 'sym':
         return (
           <Fragment key={i}>

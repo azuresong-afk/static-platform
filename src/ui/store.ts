@@ -210,6 +210,15 @@ export class Store {
     else if (r.msg) this.flash(r.msg);
   };
 
+  /** Внутренний шарнир в точке: включить или выключить. */
+  setHinge = (nodeId: string, on: boolean) => {
+    const n = this.st.s.nodes.find((x) => x.id === nodeId);
+    if (!n || !!n.hinge === on) return;
+    this.commit();
+    const nodes = this.st.s.nodes.map((x) => (x.id !== nodeId ? x : on ? { id: x.id, hinge: true } : { id: x.id }));
+    this.set({ s: { ...this.st.s, nodes } });
+  };
+
   /* ---------- элементы ---------- */
   addItem = (type: ItemType) => {
     this.commit();

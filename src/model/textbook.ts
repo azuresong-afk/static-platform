@@ -330,3 +330,126 @@ export const TEXTBOOK: TextbookProblem[] = [
     note: 'В книге ось x вертикальна, ось y направлена влево: X книги — наш Y, Y книги = −X. Пик нагрузки 2q = 4 т/м.',
   },
 ];
+
+/**
+ * Составные конструкции с внутренними шарнирами (этап 4). Взаимные реакции в шарнире в книге даны со знаком «±»;
+ * здесь — значение для части, к которой шарнир присоединён второй (по порядку обхода), в правиле знаков приложения.
+ */
+export const TEXTBOOK_COMPOSITE: TextbookProblem[] = [
+  {
+    id: '4.32',
+    page: 46,
+    title: 'Составная балка: шарнир D',
+    preset: {
+      pts: [[0, 0], [8, 0], [10, 0], [15, 0], [20, 0]],
+      hinges: [3],
+      items: [
+        { type: 'pin', at: 0, side: 'below' },
+        { type: 'force', at: 1, F: 4, ref: 'right', rot: 'cw', alpha: 45, unknown: false },
+        { type: 'roller', at: 2, side: 'below' },
+        { type: 'roller', at: 4, side: 'below' },
+        { type: 'dist', from: 2, to: 4, q1: 2, q2: 2, dir: 'down' },
+      ],
+    },
+    answer: { X_A: -2.8, Y_A: -4.4, R_C: 22.2, R_E: 5, X_D: 0, Y_D: 5 },
+    note: 'Опоры B и C книги — точки C и E. Нагрузка q проходит через шарнир D и делится им на две части.',
+  },
+  {
+    id: '4.33',
+    page: 46,
+    title: 'Составная балка с консолями: шарнир D',
+    preset: {
+      pts: [[0, 0], [4, 0], [8, 0], [12, 0], [16, 0], [20, 0], [24, 0]],
+      hinges: [4],
+      items: [
+        { type: 'dist', from: 0, to: 1, q1: 1.75, q2: 1.75, dir: 'down' },
+        { type: 'pin', at: 1, side: 'below' },
+        { type: 'force', at: 2, F: 6, ref: 'left', rot: 'ccw', alpha: 60, unknown: false },
+        { type: 'roller', at: 3, side: 'below' },
+        { type: 'roller', at: 5, side: 'below' },
+        { type: 'weight', at: 6, G: 5 },
+      ],
+    },
+    answer: { X_B: 3, Y_B: 13.8, R_D: -6.6, R_H: 10, X_E: 0, Y_E: -5 },
+    note: 'Опоры A, B, C и шарнир D книги — точки B, D, H и E.',
+  },
+  {
+    id: '4.34 (143)',
+    page: 46,
+    title: 'Трёхшарнирная арка: мост из двух частей',
+    preset: {
+      pts: [[0, 0], [0, 4], [1, 4], [4, 4], [5, 4], [9, 4], [10, 4], [10, 0]],
+      hinges: [4],
+      items: [
+        { type: 'pin', at: 0, side: 'below' },
+        { type: 'pin', at: 7, side: 'below' },
+        { type: 'weight', at: 2, G: 4 },
+        { type: 'weight', at: 3, G: 2 },
+        { type: 'weight', at: 5, G: 4 },
+      ],
+    },
+    answer: { X_A: 2, Y_A: 5.2, X_L: -2, Y_L: 4.8, X_E: 2, Y_E: -0.8 },
+    note: 'Арка заменена ломаной рамой с теми же точками опор, шарнира и нагрузок — для статики это то же самое. Опоры B, C и шарнир A книги — точки A, L и E.',
+  },
+  {
+    id: '4.38 (150)',
+    page: 47,
+    title: 'Трёхшарнирная арка мастерской с мостовым краном',
+    preset: {
+      pts: [[0, 0], [0, 5], [0, 12], [1.8, 12], [2, 12], [8, 12], [14, 12], [14.2, 12], [16, 12], [16, 0]],
+      hinges: [5],
+      items: [
+        { type: 'pin', at: 0, side: 'below' },
+        { type: 'pin', at: 9, side: 'below' },
+        { type: 'force', at: 1, F: 1.2, ref: 'right', rot: 'ccw', alpha: 0, unknown: false },
+        { type: 'weight', at: 3, G: 1.2 },
+        { type: 'weight', at: 4, G: 6 },
+        { type: 'weight', at: 6, G: 6 },
+        { type: 'weight', at: 7, G: 0.8 },
+      ],
+    },
+    answer: { X_A: 0.2, Y_A: 6.78, X_O: -1.4, Y_O: 7.22, X_H: 1.4, Y_H: -0.42 },
+    note:
+      'Давления рельсов на арку найдены из равновесия моста крана: балка 1,2 т посередине пролёта между рельсами, кран 0,8 т на четверти пролёта от левого рельса: слева 0,6 + 0,6 = 1,2 т, справа 0,6 + 0,2 = 0,8 т. Опоры A, B и шарнир C книги — точки A, O и H.',
+  },
+  {
+    id: '3.37 (111)',
+    page: 37,
+    title: 'Консольный мост: главная ферма и две боковые на шарнирах',
+    preset: {
+      pts: [[0, 0], [20, 0], [35, 0], [85, 0], [100, 0], [120, 0]],
+      hinges: [1, 4],
+      items: [
+        { type: 'roller', at: 0, side: 'below' },
+        { type: 'pin', at: 2, side: 'below' },
+        { type: 'roller', at: 3, side: 'below' },
+        { type: 'roller', at: 5, side: 'below' },
+        { type: 'dist', from: 0, to: 1, q1: 1, q2: 1, dir: 'down' },
+        { type: 'dist', from: 1, to: 4, q1: 1.5, q2: 1.5, dir: 'down' },
+        { type: 'dist', from: 4, to: 5, q1: 1, q2: 1, dir: 'down' },
+        { type: 'dist', from: 3, to: 5, q1: 3, q2: 3, dir: 'down' },
+      ],
+    },
+    answer: { R_A: 10, X_C: 0, Y_C: 54.25, R_D: 160.75, R_H: 40 },
+    note: 'Опоры C, E, F, D книги — точки A, C, D, H; шарниры A и B — точки B и E. Поезд (3 т/м на F–D) проходит через шарнир.',
+  },
+  {
+    id: '4.37 (149)',
+    page: 47,
+    title: 'Мост из двух балок на шарнире и четырёх стержнях',
+    preset: {
+      pts: [[0, 0], [4, 0], [6, 0], [8, 0], [10, 0], [16, 0]],
+      hinges: [3],
+      items: [
+        { type: 'rod', at: 0, angle: 90 },
+        { type: 'rod', at: 2, angle: 60 },
+        { type: 'rod', at: 4, angle: 120 },
+        { type: 'rod', at: 5, angle: 90 },
+        { type: 'weight', at: 1, G: 15 },
+      ],
+    },
+    answer: { S_A: 6.25, S_C: 5.77, S_E: 5.77, S_H: -1.25, X_D: 2.89, Y_D: -3.75 },
+    note:
+      'В книге «+» у стержня — растяжение (S1 = −6,25; S2 = S3 = −5,77; S4 = 1,25), в приложении «+» — сжатие, поэтому знаки противоположны. Стержни 1–4 — в точках A, C, E, H; шарнир A книги — точка D.',
+  },
+];

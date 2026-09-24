@@ -89,3 +89,19 @@ describe('ошибки в файле', () => {
     expect(errs(o)[0]).toMatch(/без замкнутых контуров/);
   });
 });
+
+describe('шарниры в файле проекта', () => {
+  it('сохраняются и загружаются', () => {
+    const s = resolve(loadPreset('arch3')).structure;
+    const p = roundtrip(s);
+    expect(p.structure.nodes.filter((n) => n.hinge).length).toBe(1);
+    expect(analyze(p.structure).html).toBe(analyze(s).html);
+  });
+  it('неверный признак шарнира', () => {
+    const o = JSON.parse(serializeProject({ title: 't', structure: loadPreset('simple'), notTarget: [] }));
+    o.structure.nodes[1].hinge = 'да';
+    const r = parseProject(JSON.stringify(o));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors[0]).toMatch(/признак шарнира/);
+  });
+});

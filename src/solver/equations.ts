@@ -28,6 +28,8 @@ export interface Eq {
   type: EqType;
   /** Точка, относительно которой берутся моменты. */
   P: string | null;
+  /** Уравнение для одной части составной конструкции (номер части); нет — для всей конструкции. */
+  part?: number;
   terms: Term[];
   /** Коэффициенты при неизвестных. */
   coeffs: Record<string, number>;
@@ -35,8 +37,9 @@ export interface Eq {
   cst: number;
 }
 
-export function makeEq(type: EqType, P: string | null, pp: Pt | null, actions: Action[]): Eq {
-  const e: Eq = { id: type + (P || ''), type, P, terms: [], coeffs: {}, cst: 0 };
+export function makeEq(type: EqType, P: string | null, pp: Pt | null, actions: Action[], part?: number): Eq {
+  const e: Eq = { id: (part != null ? `p${part}:` : '') + type + (P || ''), type, P, terms: [], coeffs: {}, cst: 0 };
+  if (part != null) e.part = part;
   const push = (a: Action, c: number, comp: Term['comp'], trig: TrigFactor | null, arm: number | null) => {
     if (Math.abs(c) < 1e-12) return;
     const t: Term = { c, sym: { L: a.L, S: a.S }, trig, arm, comp };

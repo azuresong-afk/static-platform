@@ -121,3 +121,60 @@ export function residuals(ws: Wrench[], points: [number, number][]) {
   const scale = Math.max(1, ...ws.map((w) => Math.max(Math.abs(w.fx), Math.abs(w.fy)) * span + Math.abs(w.m)));
   return { fx, fy, ms, scale };
 }
+
+/**
+ * Равновесие каждой части составной конструкции. Разбиение на части и принадлежность точек берутся из модели,
+ * силы — независимо: сосредоточенные — как в wrenches(), распределённая нагрузка интегрируется отдельно
+ * по каждому участку своей части; взаимные силы в шарнирах — со знаком «+» на часть on и «−» на часть from.
+ */
+export function partWrenches(
+  s: Structure,
+  vals: Record<string, number>,
+  unknowns: (UnknownRef & { hinge?: { node: string; on: number; from: number } })[],
+  parts: { count: number; segPart: Record<string, number>; nodeParts: Record<string, number[]> },
+  skipDist: Set<string>,
+): Wrench[][] {
+  const pos = coords(s);
+  const out: Wrench[][] = Array.from({ length: parts.count }, () => []);
+  const carrier = (id: string) => parts.nodeParts[id][0];
+  // Сосредоточенные силы и реакции — через общий расчёт по одному элементу.
+  for (const it of s.items) {
+    if (it.type === 'dist') continue;
+    const one = { ...s, items: [it] } as Structure;
+    out[carrier(it.at)].push(...wrenches(one, vals, unknowns, new Set()));
+  }
+  // Распределённая нагрузка: по участкам пути, каждый — своей части.
+  for (const it of s.items) {
+    if (it.type !== 'dist' || skipDist.has(it.id)) continue;
+    const P = pos[it.from],
+      Q = pos[it.to],
+      L = Math.hypot(Q[0] - P[0], Q[1] - P[1]);
+    const [nx, ny] = unit(LOAD_ANG[it.dir]);
+    const qAt = (pt: [number, number]) => it.q1 + ((it.q2 - it.q1) * Math.hypot(pt[0] - P[0], pt[1] - P[1])) / L;
+    for (const q of s.segs) {
+      const A = pos[q.a],
+        B = pos[q.b];
+      // Участок лежит на отрезке нагрузки?
+      const on = (pt: [number, number]) => Math.abs(Math.hypot(pt[0] - P[0], pt[1] - P[1]) + Math.hypot(pt[0] - Q[0], pt[1] - Q[1]) - L) < 1e-9;
+      if (!on(A) || !on(B)) continue;
+      const len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+      for (let i = 0; i <= 2; i++) {
+        const t = i / 2,
+          w = (i === 1 ? 4 : 1) / 6;
+        const pt: [number, number] = [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t];
+        const qv = qAt(pt);
+        out[parts.segPart[q.id]].push({ x: pt[0], y: pt[1], fx: nx * qv * len * w, fy: ny * qv * len * w, m: 0 });
+      }
+    }
+  }
+  for (const u of unknowns) {
+    if (!u.hinge) continue;
+    const [x, y] = pos[u.hinge.node];
+    const v = vals[u.key],
+      fx = u.L === 'X' ? v : 0,
+      fy = u.L === 'Y' ? v : 0;
+    out[u.hinge.on].push({ x, y, fx, fy, m: 0 });
+    out[u.hinge.from].push({ x, y, fx: -fx, fy: -fy, m: 0 });
+  }
+  return out;
+}

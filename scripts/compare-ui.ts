@@ -26,9 +26,12 @@ function chromiumPath(): string | undefined {
 // Код передаётся строкой: tsx добавляет в функции служебный __name, которого нет в странице.
 const SNAPSHOT = `(() => {
   const q = (s) => document.querySelector(s);
+  // Новое в порте (внутренние шарниры) в прототипе отсутствует — не сравниваем.
+  const extra = [...document.querySelectorAll('[data-port-only]')];
+  extra.forEach((e) => (e.style.display = 'none'));
   const visible = (e) => e.offsetParent !== null;
   const conf = q('.panel[aria-label="Конфигуратор"]');
-  return {
+  const snap = {
     viewBox: q('#svg').getAttribute('viewBox'),
     svg: q('#svg').innerHTML.replace(/>\\s+</g, '><'),
     solution: visible(q('#solution')) ? q('#solution').innerText : '(скрыто)',
@@ -46,6 +49,8 @@ const SNAPSHOT = `(() => {
     wiz: q('#wiz') && visible(q('#wiz')) ? q('#wiz').innerText : '(нет мастера)',
     dimedit: q('#dimedit') && visible(q('#dimedit')) ? q('#dimedit').value : null,
   };
+  extra.forEach((e) => (e.style.display = ''));
+  return snap;
 })()`;
 const snapshot = (p: Page) => p.evaluate(SNAPSHOT) as Promise<Record<string, unknown>>;
 

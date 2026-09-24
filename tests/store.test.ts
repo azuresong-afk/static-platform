@@ -147,3 +147,15 @@ describe('файлы проекта', () => {
     expect(st.get().notice?.text).toMatch(/^Не удалось открыть «x\.json»: В файле нет конструкции/);
   });
 });
+
+describe('внутренние шарниры', () => {
+  it('включить и отменить', () => {
+    const st = new Store({ preset: 'simple' });
+    const D = st.get().s.nodes[3].id;
+    st.setHinge(D, true);
+    expect(st.get().s.nodes[3].hinge).toBe(true);
+    expect(st.get().preset).toBe('custom');
+    st.undo();
+    expect(st.get().s.nodes[3].hinge).toBeUndefined();
+  });
+});

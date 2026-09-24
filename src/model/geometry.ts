@@ -169,3 +169,50 @@ export function resolve(s: Structure): Resolved {
   });
   return { structure: { nodes: s.nodes, segs: s.segs, items: norm }, g, items };
 }
+
+/** Разбиение рамы на жёсткие части по внутренним шарнирам. */
+export interface Parts {
+  count: number;
+  /** Номер части (0, 1, …) для каждого участка. */
+  segPart: Record<string, number>;
+  /** Части, к которым примыкает точка (по возрастанию). У шарнира их две и больше. */
+  nodeParts: Record<string, number[]>;
+  /** Действующие шарниры (в порядке обхода): точки со свойством hinge, где сходятся хотя бы две части. */
+  hinges: string[];
+}
+
+/**
+ * Участки, соединённые в обычной точке, — одна жёсткая часть; в точке-шарнире они разделяются.
+ * Части нумеруются в порядке обхода (часть 0 содержит первый участок от корня).
+ */
+export function partsOf(s: Pick<Structure, 'nodes' | 'segs'>, g: Geom): Parts {
+  const hinge = new Set(s.nodes.filter((n) => n.hinge).map((n) => n.id));
+  const parent: Record<string, string> = {};
+  const find = (x: string): string => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+  s.segs.forEach((q) => (parent[q.id] = q.id));
+  const incident: Record<string, string[]> = {};
+  s.segs.forEach((q) => {
+    (incident[q.a] ||= []).push(q.id);
+    (incident[q.b] ||= []).push(q.id);
+  });
+  for (const [node, list] of Object.entries(incident)) {
+    if (hinge.has(node)) continue;
+    for (let i = 1; i < list.length; i++) parent[find(list[i])] = find(list[0]);
+  }
+  const num: Record<string, number> = {};
+  const segPart: Record<string, number> = {};
+  let count = 0;
+  for (const q of g.segOrder) {
+    const r = find(q.id);
+    if (!(r in num)) num[r] = count++;
+    segPart[q.id] = num[r];
+  }
+  const nodeParts: Record<string, number[]> = {};
+  for (const id of g.order) nodeParts[id] = [...new Set((incident[id] || []).map((sid) => segPart[sid]))].sort((a, b) => a - b);
+  if (!s.segs.length) for (const id of g.order) nodeParts[id] = [0];
+  const hinges = g.order.filter((id) => hinge.has(id) && nodeParts[id].length >= 2);
+  return { count: Math.max(count, 1), segPart, nodeParts, hinges };
+}
+
+export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+export const roman = (i: number): string => ROMAN[i] ?? String(i + 1);

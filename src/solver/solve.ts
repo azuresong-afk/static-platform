@@ -45,7 +45,8 @@ export function solve(m: Model): Solution {
   // ранг 3 — связи закрепляют тело, но лишние (неопределимость степени n − 3);
   // ранг < 3 — какое-то перемещение не закреплено (изменяемая система), даже если связей больше трёх.
   // (Прототип ставил «неопределима» при любом n > 3 до проверки ранга — баг №1.)
-  if (out.rank < n) return { ...out, status: out.rank === 3 ? 'indeterminate' : 'mechanism' };
+  // Для составной конструкции независимых уравнений 3 на каждую часть.
+  if (out.rank < n) return { ...out, status: out.rank === 3 * m.parts.count ? 'indeterminate' : 'mechanism' };
 
   const used = new Set<string>(),
     vals: Record<string, number> = {};

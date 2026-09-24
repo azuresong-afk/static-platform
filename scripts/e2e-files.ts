@@ -102,7 +102,26 @@ async function main() {
   const [dl2] = await Promise.all([p.waitForEvent('download'), p.keyboard.press('Control+s')]);
   check(dl2.suggestedFilename().endsWith('.statika.json'), 'Ctrl+S сохраняет файл');
 
-  // 7. Отчёт в PDF (печать).
+  // 7. Внутренний шарнир: трёхшарнирная арка без шарнира неопределима, с шарниром — определима.
+  await p.selectOption('#preset', 'arch3');
+  const stampStatus = () => p.evaluate(`[...document.querySelectorAll('#svg .t-stv')].pop().textContent`) as Promise<string>;
+  check((await stampStatus()) === 'статически определима', 'арка с шарниром определима');
+  check((await p.innerText('#solution')).includes('Расчленяем конструкцию по шарнирам'), 'в решении есть шаг «Расчленяем конструкцию»');
+  check((await p.locator('#svg .ihinge').count()) === 1, 'шарнир нарисован на чертеже');
+  await p.uncheck('[data-hinge]:checked');
+  check((await stampStatus()) === 'статически неопределима', 'без шарнира — неопределима');
+  await p.click('#undo');
+  check((await stampStatus()) === 'статически определима', 'отмена возвращает шарнир');
+  if (out) {
+    await p.click('[data-view="schema"]');
+    await p.screenshot({ path: pathResolve(out, 'arch3.png'), fullPage: true });
+    await p.click('[data-view="construct"]');
+  }
+  await p.selectOption('#preset', 'pframe');
+  await p.locator('.item [data-f="F"]').first().fill('7,5');
+  await p.uncheck('[data-target] >> nth=0');
+
+  // 8. Отчёт в PDF (печать).
   await p.emulateMedia({ media: 'print' });
   const report = await p.evaluate(`(() => {
     const r = document.querySelector('.print-report');

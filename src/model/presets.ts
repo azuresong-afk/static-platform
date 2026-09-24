@@ -11,6 +11,8 @@ export interface Preset {
   /** Точки ломаной по порядку; соседние соединяются участками. */
   pts: [number, number][];
   items: PresetItem[];
+  /** Индексы точек с внутренним шарниром. */
+  hinges?: number[];
 }
 
 export const PRESET_TITLES = {
@@ -23,6 +25,8 @@ export const PRESET_TITLES = {
   post: 'Стойка с катком у стены',
   bracket: 'Кронштейн: шарнир на стене и подкос',
   indet: 'Статически неопределимая балка',
+  gerber: 'Составная балка с шарниром',
+  arch3: 'Трёхшарнирная рама (арка)',
   blank: 'Пустой шаблон — собрать по шагам',
 } as const;
 
@@ -110,12 +114,36 @@ export const PRESETS: Record<PresetKey, Preset> = {
       { type: 'dist', from: 0, to: 1, q1: 3, q2: 3, dir: 'down' },
     ],
   },
+  // Мещерский 4.32: составная балка, шарнир D.
+  gerber: {
+    pts: [[0, 0], [8, 0], [10, 0], [15, 0], [20, 0]],
+    hinges: [3],
+    items: [
+      { type: 'pin', at: 0, side: 'below' },
+      { type: 'force', at: 1, F: 4, ref: 'right', rot: 'cw', alpha: 45, unknown: false },
+      { type: 'roller', at: 2, side: 'below' },
+      { type: 'roller', at: 4, side: 'below' },
+      { type: 'dist', from: 2, to: 4, q1: 2, q2: 2, dir: 'down' },
+    ],
+  },
+  // Мещерский 4.34: трёхшарнирная арка, заменённая рамой с теми же точками опор, шарнира и нагрузок.
+  arch3: {
+    pts: [[0, 0], [0, 4], [1, 4], [4, 4], [5, 4], [9, 4], [10, 4], [10, 0]],
+    hinges: [4],
+    items: [
+      { type: 'pin', at: 0, side: 'below' },
+      { type: 'pin', at: 7, side: 'below' },
+      { type: 'weight', at: 2, G: 4 },
+      { type: 'weight', at: 3, G: 2 },
+      { type: 'weight', at: 5, G: 4 },
+    ],
+  },
   blank: { pts: [[0, 0], [4, 0]], items: [] },
 };
 
 /** Конструкция из описания готовой задачи (как loadPreset в прототипе). */
 export function presetStructure(p: Preset, ids: IdGen = createIdGen()): Structure {
-  const nodes = p.pts.map(() => ({ id: ids.node() }));
+  const nodes = p.pts.map((_, i) => (p.hinges?.includes(i) ? { id: ids.node(), hinge: true } : { id: ids.node() }));
   const segs = p.pts.slice(1).map((q, i) => {
     const P = p.pts[i],
       dx = q[0] - P[0],

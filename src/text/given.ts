@@ -10,6 +10,8 @@ export interface Given {
   size: string;
   points: Inline[][];
   items: Inline[][];
+  /** «Внутренние шарниры: D, H» — пусто, если шарниров нет. */
+  hinges: Inline[];
 }
 
 export function givenData(items: Item[], m: Model): Given {
@@ -38,7 +40,9 @@ export function givenData(items: Item[], m: Model): Given {
       }
     }
   });
-  return { size: sizeText(m), points, items: rows };
+  const hn = m.parts.hinges.map((h) => g.name[h]);
+  const hinges: Inline[] = hn.length ? [`Внутренн${hn.length > 1 ? 'ие шарниры' : 'ий шарнир'}: `, ...hn.flatMap((n, i) => (i ? [', ', v(n)] : [v(n)]))] : [];
+  return { size: sizeText(m), points, items: rows, hinges };
 }
 
 /** Искомые величины для отчёта. */

@@ -114,3 +114,62 @@ describe('пояснения к ходу решения', () => {
       expect(explainTexts(doc, title).length, title).toBeGreaterThan(0);
   });
 });
+
+describe('составные конструкции: текст решения', () => {
+  const text = (k: PresetKey, explain = true) =>
+    analyze(loadPreset(k), { explain })
+      .doc.steps.map((s) => s.title + '\n' + s.blocks.map((b) => (b.k === 'eq' ? b.lines.map((l) => inlineText(l.c)).join('\n') : 'c' in b ? inlineText(b.c) : b.k === 'ul' ? b.items.map(inlineText).join('\n') : '')).join('\n'))
+      .join('\n');
+  it('шаг «Расчленяем конструкцию»: части, взаимные силы, пояснение', () => {
+    const t = text('gerber');
+    expect(t).toContain('Внутренний шарнир D делит конструкцию на 2 части, каждая — отдельное твёрдое тело:');
+    expect(t).toContain('Часть I: точки A, B, C, D');
+    expect(t).toContain('Часть II: точки D, E');
+    expect(t).toContain('В шарнире D на часть II действуют силы X_D, Y_D, на часть I — такие же силы в обратную сторону');
+    expect(t).toContain('Шарнир передаёт силу, но не момент');
+  });
+  it('нагрузка, проходящая через шарнир, делится на куски', () => {
+    const t = text('gerber');
+    expect(t).toContain('Нагрузка q на участке C–E проходит через шарнир D: делим её на куски');
+    expect(t).toContain('Q_I = q·l = 2·5 = 10 кН');
+    expect(t).toContain('Q_II = q·l = 2·5 = 10 кН');
+  });
+  it('определимость: 3 уравнения на каждую часть; уравнения с номером части', () => {
+    const t = text('gerber');
+    expect(t).toContain('Неизвестных: 6 (из них взаимных сил в шарнирах: 2). Для каждой из 2 частей можно составить три независимых уравнения равновесия, всего 6.');
+    expect(t).toContain('ΣMD^II = R_E·5 − Q_II·2,5 = 0');
+    expect(t).toContain('Уравнение моментов для части II относительно точки D. X_A, Y_A, R_C действуют на другую часть и сюда не входят. X_D, Y_D не входят: их линии действия проходят через точку D, плечи равны нулю. Остаётся одно неизвестное — R_E.');
+  });
+  it('ответ: взаимные силы подписаны', () => {
+    const { doc } = analyze(loadPreset('arch3'));
+    const ans = doc.steps.at(-1)!.blocks[0] as Extract<Block, { k: 'answer' }>;
+    expect(ans.rows.find((r) => inlineText(r.val).startsWith('X_E'))?.note).toBe('шарнир E: сила на часть II, на часть I — в обратную сторону');
+  });
+  it('неопределимость и изменяемость считаются по 3p уравнениям', () => {
+    // Балка на трёх катках и шарнирно-неподвижной опоре с шарниром посередине: 5 + 2 = 7 > 6 — неопределима, степень 1.
+    const s = presetStructure({
+      pts: [[0, 0], [2, 0], [4, 0], [6, 0], [8, 0]],
+      hinges: [2],
+      items: [
+        { type: 'pin', at: 0, side: 'below' },
+        { type: 'roller', at: 1, side: 'below' },
+        { type: 'roller', at: 3, side: 'below' },
+        { type: 'roller', at: 4, side: 'below' },
+      ],
+    });
+    const r = analyze(s);
+    expect(r.solution.status).toBe('indeterminate');
+    expect(r.html).toContain('Степень статической неопределимости: 1.');
+    // Шарнир в пролёте балки на двух опорах — механизм.
+    const m = presetStructure({
+      pts: [[0, 0], [3, 0], [6, 0]],
+      hinges: [1],
+      items: [
+        { type: 'pin', at: 0, side: 'below' },
+        { type: 'roller', at: 2, side: 'below' },
+        { type: 'weight', at: 1, G: 5 },
+      ],
+    });
+    expect(analyze(m).solution.status).toBe('noequilibrium');
+  });
+});

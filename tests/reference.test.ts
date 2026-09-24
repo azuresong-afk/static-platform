@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { analyze } from '../src/core';
 import { loadPreset, type PresetKey } from '../src/model/presets';
 
-const REF: Record<Exclude<PresetKey, 'indet' | 'blank'>, Record<string, number>> = {
+const REF: Record<Exclude<PresetKey, 'indet' | 'blank' | 'gerber' | 'arch3'>, Record<string, number>> = {
   simple: { X_A: 5, Y_A: 6.274, R_E: 8.387 },
   cantilever: { X_A: 0, Y_A: 12, M_A: 29.667 },
   rod: { X_A: 2.057, Y_A: 8.437, S_D: 10.114 },
@@ -37,5 +37,20 @@ describe('эталонные ответы', () => {
 
   it('blank: нет опор', () => {
     expect(analyze(loadPreset('blank')).solution.status).toBe('nosupport');
+  });
+});
+
+describe('эталонные ответы: составные конструкции', () => {
+  it('gerber (Мещерский 4.32)', () => {
+    const { solution } = analyze(loadPreset('gerber'));
+    expect(solution.status).toBe('ok');
+    const ref = { X_A: -2.828, Y_A: -4.434, R_C: 22.263, R_E: 5, X_D: 0, Y_D: 5 };
+    for (const [k, v] of Object.entries(ref)) expect(Math.abs(solution.vals[k] - v), k).toBeLessThan(1e-3);
+  });
+  it('arch3 (Мещерский 4.34)', () => {
+    const { solution } = analyze(loadPreset('arch3'));
+    expect(solution.status).toBe('ok');
+    const ref = { X_A: 2, Y_A: 5.2, X_L: -2, Y_L: 4.8, X_E: 2, Y_E: -0.8 };
+    for (const [k, v] of Object.entries(ref)) expect(Math.abs(solution.vals[k] - v), k).toBeLessThan(1e-3);
   });
 });

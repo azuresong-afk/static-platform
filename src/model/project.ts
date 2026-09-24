@@ -37,7 +37,7 @@ export function serializeProject(p: Project, now = new Date()): string {
     title: p.title,
     savedAt: now.toISOString(),
     structure: {
-      nodes: p.structure.nodes.map((n) => ({ id: n.id })),
+      nodes: p.structure.nodes.map((n) => (n.hinge ? { id: n.id, hinge: true } : { id: n.id })),
       segs: p.structure.segs.map(({ id, a, b, dir, len }) => ({ id, a, b, dir, len })),
       items: p.structure.items.map(cleanItem),
     },
@@ -117,7 +117,8 @@ export function parseProject(text: string): ParseResult {
     if (!isObj(n) || !isStr(n.id)) return errors.push(`Точка №${i + 1}: нет идентификатора.`);
     if (nodeIds.has(n.id)) return errors.push(`Точка «${n.id}» встречается дважды.`);
     nodeIds.add(n.id);
-    nodes.push({ id: n.id });
+    if (n.hinge !== undefined && typeof n.hinge !== 'boolean') return errors.push(`Точка «${n.id}»: признак шарнира должен быть true или false.`);
+    nodes.push(n.hinge ? { id: n.id, hinge: true } : { id: n.id });
   });
   if (!nodes.length) errors.push('В конструкции нет ни одной точки.');
 

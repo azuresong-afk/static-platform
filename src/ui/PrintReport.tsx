@@ -38,6 +38,11 @@ export function PrintReport({ s, a, notTarget, title }: { s: Structure; a: Analy
           ))}
           .
         </p>
+        {given.hinges.length > 0 && (
+          <p>
+            <InlineView c={given.hinges} />.
+          </p>
+        )}
         <ul>
           {given.items.map((r, i) => (
             <li key={i}>

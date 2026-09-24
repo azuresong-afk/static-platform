@@ -11,7 +11,8 @@ import { checkPasses } from '../solver/check';
 import type { Eq, Term } from '../solver/equations';
 import type { Action, Model, Unknown } from '../solver/model';
 import type { Solution } from '../solver/solve';
-import { b, join, sub, sym, v, type AnswerRow, type Block, type Doc, type Inline } from './doc';
+import { b, join, sub, sup, sym, v, type AnswerRow, type Block, type Doc, type Inline } from './doc';
+import { roman } from '../model/geometry';
 import { STATUS, STATUS_TONE, forceDirText } from './labels';
 
 export interface SolutionOptions {
@@ -24,10 +25,11 @@ export interface SolutionOptions {
 const unitOf = (o: { kind: string }) => (o.kind === 'm' ? 'кН·м' : 'кН');
 
 /** Обозначение уравнения: ΣFkx, ΣFky, ΣMA. */
-export function eqName(e: Pick<Eq, 'type' | 'P'>): Inline[] {
-  if (e.type === 'x') return ['Σ', v('F'), sub('kx')];
-  if (e.type === 'y') return ['Σ', v('F'), sub('ky')];
-  return ['Σ', v('M'), sub(e.P || '')];
+export function eqName(e: Pick<Eq, 'type' | 'P' | 'part'>): Inline[] {
+  const part: Inline[] = e.part != null ? [sup(roman(e.part))] : [];
+  if (e.type === 'x') return ['Σ', v('F'), sub('kx'), ...part];
+  if (e.type === 'y') return ['Σ', v('F'), sub('ky'), ...part];
+  return ['Σ', v('M'), sub(e.P || ''), ...part];
 }
 
 /** Слагаемое в буквенной записи: F·sin 60°·2. */
@@ -164,6 +166,55 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   }
   step('Освобождаемся от связей', s1);
 
+  // 1а. Составная конструкция: расчленение по шарнирам
+  const comp = m.parts.count > 1,
+    NP = m.parts.count;
+  if (comp) {
+    const hn = m.parts.hinges.map((h) => m.g.name[h]);
+    const blocks: Block[] = [
+      {
+        k: 'p',
+        c: [
+          `Внутренн${hn.length > 1 ? 'ие шарниры' : 'ий шарнир'} `,
+          ...join(hn.map((n) => [v(n)]), ', '),
+          ` дел${hn.length > 1 ? 'ят' : 'ит'} конструкцию на ${NP} ${NP < 5 ? 'части' : 'частей'}, каждая — отдельное твёрдое тело:`,
+        ],
+      },
+      {
+        k: 'ul',
+        items: m.partNames.map((names, p) => [`Часть ${roman(p)}: точки `, ...join(names.map((n) => [v(n)]), ', ')]),
+      },
+    ];
+    for (const h of m.parts.hinges) {
+      const us = m.unknowns.filter((u) => u.hinge?.node === h);
+      const ons = [...new Set(us.map((u) => u.hinge!.on))];
+      const from = us[0]?.hinge?.from ?? 0;
+      for (const on of ons) {
+        const pair = us.filter((u) => u.hinge!.on === on);
+        blocks.push({
+          k: 'p',
+          c: [
+            'В шарнире ',
+            v(m.g.name[h]),
+            ` на часть ${roman(on)} действуют силы `,
+            ...symList(pair),
+            `, на часть ${roman(from)} — такие же силы в обратную сторону (действие равно противодействию).`,
+          ],
+        });
+      }
+      if (Object.values(m.labels).some((l) => l.P === m.g.name[h]))
+        blocks.push({ k: 'p', c: ['Опоры и нагрузки, приложенные в самом шарнире ', v(m.g.name[h]), `, отнесены к части ${roman(from)}.`] });
+    }
+    if (ex)
+      blocks.push(
+        explain(
+          'Шарнир передаёт силу, но не момент: части могут поворачиваться друг относительно друга. Поэтому в шарнире две неизвестные составляющие силы и нет реактивного момента. ',
+          'Для каждой части составляем свои уравнения равновесия; уравнения для всей конструкции — их сумма, в них внутренние силы в шарнирах взаимно уничтожаются.',
+        ),
+      );
+    step('Расчленяем конструкцию по шарнирам', blocks);
+  }
+
   // 2. Распределённая нагрузка
   if (m.dists.length || m.badDists.length) {
     const rows: Block[] = [];
@@ -175,12 +226,30 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
         ),
       );
     for (const d of m.dists) {
-      const q = sym({ L: 'q', S: d.S }),
+      const q = sym({ L: 'q', S: d.piece ? (m.labels[d.it.id]?.S ?? '') : d.S }),
         Q = sym(d.o),
-        A = m.g.name[d.it.from],
-        B = m.g.name[d.it.to];
+        A = m.g.name[d.from],
+        B = m.g.name[d.to];
       const where: Inline[] = [`на расстоянии ${fmt(d.d)} м от точки `, v(A), `, направлена ${LOADDIR[d.it.dir].name}`];
       const lq: Inline[] = [v('l'), ` = ${fmt(d.l)} м (участок `, v(A), '–', v(B), ')'];
+      if (d.piece && d.piece.index === 0) {
+        const all = m.dists.filter((x) => x.it === d.it);
+        const cutNames = all.slice(1).map((x) => m.g.name[x.from]);
+        rows.push({
+          k: 'p',
+          c: [
+            'Нагрузка ',
+            sym({ L: 'q', S: m.labels[d.it.id]?.S ?? '' }),
+            ' на участке ',
+            v(m.g.name[d.it.from]),
+            '–',
+            v(m.g.name[d.it.to]),
+            ` проходит через шарнир${cutNames.length > 1 ? 'ы' : ''} `,
+            ...join(cutNames.map((n) => [v(n)]), ', '),
+            ': делим её на куски — для каждой части своя равнодействующая.',
+          ],
+        });
+      }
       if (d.split) {
         const [p1, p2] = d.split.parts;
         rows.push({
@@ -283,37 +352,63 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
 
   // 3. Определимость
   const st = STATUS[sol.status];
+  const nEq = 3 * NP,
+    nHinge = m.unknowns.filter((u) => u.hinge).length;
   const det: Block[] = [
-    { k: 'p', c: ['Неизвестных: ', b(String(sol.n)), '. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.'] },
+    comp
+      ? {
+          k: 'p',
+          c: [
+            'Неизвестных: ',
+            b(String(sol.n)),
+            ` (из них взаимных сил в шарнирах: ${nHinge}). Для каждой из ${NP} частей можно составить три независимых уравнения равновесия, всего `,
+            b(String(nEq)),
+            '.',
+          ],
+        }
+      : { k: 'p', c: ['Неизвестных: ', b(String(sol.n)), '. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.'] },
     { k: 'badge', tone: STATUS_TONE[sol.status], text: `Система ${st[0]}` },
   ];
   if (sol.status === 'indeterminate')
     det.push({
       k: 'p',
       c: [
-        `Степень статической неопределимости: ${sol.n - 3}. Одних уравнений статики не хватает — нужны уравнения совместности деформаций (метод сил, сопротивление материалов). Уберите лишнюю связь, чтобы решить задачу статикой.`,
+        `Степень статической неопределимости: ${sol.n - nEq}. Одних уравнений статики не хватает — нужны уравнения совместности деформаций (метод сил, сопротивление материалов). Уберите лишнюю связь, чтобы решить задачу статикой.`,
       ],
     });
   if (sol.status === 'mechanism')
     det.push({
       k: 'p',
       c: [
-        `Ранг системы уравнений (${sol.rank}) меньше числа неизвестных: связи не закрепляют балку. Так бывает, когда все реакции параллельны или их линии действия пересекаются в одной точке. Добавьте или переставьте опору.`,
+        `Ранг системы уравнений (${sol.rank}) меньше числа неизвестных: связи не закрепляют ${comp ? 'конструкцию' : 'балку'}. Так бывает, когда все реакции параллельны или их линии действия пересекаются в одной точке. Добавьте или переставьте опору.`,
       ],
     });
-  if (sol.status === 'mechanism' && sol.n > 3)
+  if (sol.status === 'mechanism' && sol.n > nEq)
     det.push({
       k: 'p',
       c: [
-        `Неизвестных больше трёх, но система не статически неопределима, а изменяема: независимых уравнений только ${sol.rank}, часть связей дублирует друг друга, а какое-то перемещение остаётся свободным.`,
+        `Неизвестных больше ${comp ? 'числа уравнений' : 'трёх'}, но система не статически неопределима, а изменяема: независимых уравнений только ${sol.rank}, часть связей дублирует друг друга, а какое-то перемещение остаётся свободным.`,
       ],
     });
-  if (sol.status !== 'indeterminate' && sol.status !== 'mechanism' && sol.n < 3)
-    det.push({ k: 'p', c: ['Неизвестных меньше трёх: равновесие возможно, только если нагрузка это допускает.'] });
-  if (ex && (sol.status === 'ok' || sol.status === 'noequilibrium') && sol.n === 3)
-    det.push(explain('Число неизвестных равно числу независимых уравнений равновесия, и связи расположены так, что система уравнений имеет единственное решение (ранг системы равен трём). Значит, все неизвестные находятся из уравнений статики.'));
-  if (ex && (sol.status === 'ok' || sol.status === 'noequilibrium') && sol.n < 3)
-    det.push(explain(`Из трёх уравнений ${sol.n} уйдут на поиск неизвестных, остальные должны выполняться сами собой — это и есть условие, что нагрузка допускает равновесие.`));
+  if (sol.status !== 'indeterminate' && sol.status !== 'mechanism' && sol.n < nEq)
+    det.push({
+      k: 'p',
+      c: [comp ? `Неизвестных меньше, чем уравнений (${nEq}): равновесие возможно, только если нагрузка это допускает.` : 'Неизвестных меньше трёх: равновесие возможно, только если нагрузка это допускает.'],
+    });
+  if (ex && (sol.status === 'ok' || sol.status === 'noequilibrium') && sol.n === nEq)
+    det.push(
+      explain(
+        comp
+          ? `Число неизвестных равно числу независимых уравнений (${nEq}), и система уравнений имеет единственное решение (её ранг равен ${nEq}). Значит, все неизвестные, включая силы в шарнирах, находятся из уравнений статики.`
+          : 'Число неизвестных равно числу независимых уравнений равновесия, и связи расположены так, что система уравнений имеет единственное решение (ранг системы равен трём). Значит, все неизвестные находятся из уравнений статики.',
+      ),
+    );
+  if (ex && (sol.status === 'ok' || sol.status === 'noequilibrium') && sol.n < nEq)
+    det.push(
+      explain(
+        `Из ${comp ? nEq : 'трёх'} уравнений ${sol.n} уйдут на поиск неизвестных, остальные должны выполняться сами собой — это и есть условие, что нагрузка допускает равновесие.`,
+      ),
+    );
   step('Проверяем статическую определимость', det);
   if (sol.status === 'indeterminate' || sol.status === 'mechanism') return { steps };
 
@@ -416,6 +511,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       anyNeg = true;
       note = u.kind === 'm' ? (u.s > 0 ? 'направлен по часовой стрелке' : 'направлен против часовой стрелки') : 'направлена противоположно принятой на схеме';
     }
+    if (u.hinge) note = `шарнир ${u.hinge.name}: сила на часть ${roman(u.hinge.on)}, на часть ${roman(u.hinge.from)} — в обратную сторону` + (note ? '; ' + note : '');
     if (aux) note = (note ? note + '; ' : '') + 'промежуточная';
     rows.push({ kind: aux ? 'aux' : 'main', val: [sym(u), ` = ${fmt(val)} ${unitOf(u)}`], note });
     if (u.L === 'Y' && (u.support === 'pin' || u.support === 'fixed')) {
@@ -445,11 +541,23 @@ function whyEquation(m: Model, e: Eq, key: string, before: Record<string, number
   const found: Unknown[] = [],
     through: Unknown[] = [],
     perp: Unknown[] = [],
-    couples: Unknown[] = [];
+    couples: Unknown[] = [],
+    other: Unknown[] = [],
+    internal: Unknown[] = [];
+  const comp = m.parts.count > 1;
+  const actsOn = (u: Unknown, p: number) => (u.hinge ? u.hinge.on === p || u.hinge.from === p : u.part === p);
   for (const u of m.unknowns) {
     if (u.key === key) continue;
     if (u.key in before) {
       found.push(u);
+      continue;
+    }
+    if (comp && e.part != null && !actsOn(u, e.part)) {
+      other.push(u);
+      continue;
+    }
+    if (comp && e.part == null && u.hinge) {
+      internal.push(u);
       continue;
     }
     // В уравнении этого неизвестного нет (иначе оно не было бы единственным).
@@ -458,9 +566,19 @@ function whyEquation(m: Model, e: Eq, key: string, before: Record<string, number
     else perp.push(u);
   }
   const r: Inline[] = [];
-  if (e.type === 'm') r.push('Уравнение моментов относительно точки ', v(e.P || ''), '. ');
-  else r.push('Уравнение проекций на ось ', v(e.type), '. ');
+  const whom = !comp ? '' : e.part != null ? ` для части ${roman(e.part)}` : ' для всей конструкции';
+  if (e.type === 'm') r.push(`Уравнение моментов${whom} относительно точки `, v(e.P || ''), '. ');
+  else r.push(`Уравнение проекций${whom} на ось `, v(e.type), '. ');
   const plural = (us: Unknown[], one: string, many: string) => (us.length > 1 ? many : one);
+  if (other.length)
+    r.push(
+      ...symList(other),
+      m.parts.count === 2
+        ? plural(other, ' действует на другую часть и сюда не входит. ', ' действуют на другую часть и сюда не входят. ')
+        : plural(other, ' действует на другую часть и сюда не входит. ', ' действуют на другие части и сюда не входят. '),
+    );
+  if (internal.length)
+    r.push(...symList(internal), ' — внутренние силы в шарнирах: для всей конструкции они взаимно уничтожаются. ');
   if (through.length)
     r.push(
       ...symList(through),
