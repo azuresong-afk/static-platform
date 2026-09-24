@@ -23,12 +23,12 @@ export const STATUS_TONE: Record<Status, 'ok' | 'warn' | 'bad'> = {
   nosupport: 'bad',
 };
 
-export function forceDirText(it: Pick<ForceItem, 'alpha' | 'ref' | 'rot'>): string {
+export function forceDirText(it: Pick<ForceItem, 'alpha' | 'ref' | 'rot'> & { angleName?: string }): string {
   const a = +it.alpha || 0,
     r = REFS[it.ref] || REFS.down;
   return Math.abs(a % 360) < 1e-9
     ? `направлена ${r.short}`
-    : `под углом ${fmt(a, 2)}° к направлению «${r.short}», отсчёт ${it.rot === 'ccw' ? 'против часовой стрелки' : 'по часовой стрелке'}`;
+    : `под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(a, 2)}° к направлению «${r.short}», отсчёт ${it.rot === 'ccw' ? 'против часовой стрелки' : 'по часовой стрелке'}`;
 }
 
 /** Подсказка под полями силы: «Сила … (к оси x: 240°)». */

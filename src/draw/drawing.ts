@@ -324,7 +324,7 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
       s += `<line x1="${r1(px)}" y1="${r1(py)}" x2="${r1(ex)}" y2="${r1(ey)}" class="angref"/>`;
     }
     s += `<path d="M${r1(x0)} ${r1(y0)} A${R} ${R} 0 ${a > 180 ? 1 : 0} ${sg > 0 ? 0 : 1} ${r1(x1)} ${r1(y1)}" class="angarc"/>`;
-    s += `<text x="${r1(lx)}" y="${r1(ly + 5)}" text-anchor="middle" class="t-ang">${fmt(a, 2)}°</text>`;
+    s += `<text x="${r1(lx)}" y="${r1(ly + 5)}" text-anchor="middle" class="t-ang">${it.angleName ? it.angleName + ' = ' : ''}${fmt(a, 2)}°</text>`;
     return s;
   };
   for (const it of pointItems) {

@@ -45,7 +45,7 @@ function BlockView({ b }: { b: Block }): ReactNode {
       );
     case 'ul':
       return (
-        <ul>
+        <ul className={b.cls}>
           {b.items.map((it, i) => (
             <li key={i}>
               <InlineView c={it} />

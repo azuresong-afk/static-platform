@@ -242,6 +242,24 @@ function Check({ it, label }: { it: Item & { unknown: boolean }; label: string }
   );
 }
 
+/** Обозначение угла: в решении угол пишется буквой, значение вводится в поле угла. */
+function AngleName({ it }: { it: Item & { angleName?: string } }) {
+  const [, store] = useStore();
+  return (
+    <label className="field" data-port-only="">
+      <span>Обозначение угла</span>
+      <select data-id={it.id} data-f="angleName" value={it.angleName ?? ''} onChange={(e) => store.setItemField(it.id, 'angleName', e.target.value || undefined)}>
+        <option value="">— число</option>
+        {['α', 'β', 'γ', 'φ', 'ψ', 'θ'].map((l) => (
+          <option key={l} value={l}>
+            {l}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 const sideOptions = (tilt: boolean): [string, string][] => [
   ...Object.entries(SIDES).map(([k, s]) => [k, s.name] as [string, string]),
   ...(tilt ? [['tilt', 'наклонная, задать угол'] as [string, string]] : []),
@@ -268,6 +286,7 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
           {P}
           <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(true)} />
           {it.side === 'tilt' && <Field it={it} f="angle" label="Угол реакции к оси x" unit="°" />}
+          {it.side === 'tilt' && <AngleName it={it} />}
         </>
       );
       break;
@@ -276,6 +295,7 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
         <>
           {P}
           <Field it={it} f="angle" label="Угол стержня к оси x" unit="°" />
+          <AngleName it={it} />
         </>
       );
       break;
@@ -285,6 +305,7 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
           {P}
           <Field it={it} f="F" label="Модуль F" unit="кН" disabled={it.unknown} />
           <Field it={it} f="alpha" label="Угол α" unit="°" />
+          <AngleName it={it} />
           <Select it={it} f="ref" label="Отсчёт от направления" options={Object.entries(REFS).map(([k, r]) => [k, r.name] as [string, string])} />
           <Select
             it={it}

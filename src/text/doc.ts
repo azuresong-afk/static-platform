@@ -16,7 +16,7 @@ export type Inline =
 
 export type Block =
   | { k: 'p'; cls?: string; c: Inline[] }
-  | { k: 'ul'; items: Inline[][] }
+  | { k: 'ul'; cls?: string; items: Inline[][] }
   /** Формулы: каждая строка — либо запись уравнения, либо численная подстановка (num). */
   | { k: 'eq'; lines: { num?: boolean; c: Inline[] }[] }
   | { k: 'badge'; tone: 'ok' | 'warn' | 'bad'; text: string }
@@ -86,7 +86,7 @@ export function blockHTML(bl: Block): string {
     case 'p':
       return `<p${bl.cls ? ` class="${bl.cls}"` : ''}>${inlineHTML(bl.c)}</p>`;
     case 'ul':
-      return `<ul>${bl.items.map((i) => `<li>${inlineHTML(i)}</li>`).join('')}</ul>`;
+      return `<ul${bl.cls ? ` class="${bl.cls}"` : ''}>${bl.items.map((i) => `<li>${inlineHTML(i)}</li>`).join('')}</ul>`;
     case 'eq':
       return `<div class="eq">${bl.lines.map((l) => `<span class="ln${l.num ? ' num' : ''}">${inlineHTML(l.c)}</span>`).join('')}</div>`;
     case 'badge':

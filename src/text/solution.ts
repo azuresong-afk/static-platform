@@ -5,7 +5,7 @@
  * числа, уравнения и правила знаков при этом не меняются.
  */
 import { LOADDIR, REFS, SIDES, TYPES } from '../model/constants';
-import { fmt, trigFactor } from '../model/format';
+import { acuteExpr, fmt, trigFactor, trigText } from '../model/format';
 import type { ForceItem } from '../model/types';
 import { checkPasses } from '../solver/check';
 import type { Eq, Term } from '../solver/equations';
@@ -35,7 +35,7 @@ export function eqName(e: Pick<Eq, 'type' | 'P' | 'part'>): Inline[] {
 /** Слагаемое в буквенной записи: F·sin 60°·2. */
 export function termInline(t: Term): Inline[] {
   const r: Inline[] = [sym(t.sym)];
-  if (t.trig) r.push(`·${t.trig.fn} ${fmt(t.trig.deg, 2)}°`);
+  if (t.trig) r.push('·' + trigText(t.trig));
   if (t.arm != null) r.push('·' + fmt(t.arm));
   return r;
 }
@@ -103,11 +103,11 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
         P(s.P),
         `${surf} → реакция `,
         ...u,
-        ` по нормали к поверхности, угол ${fmt(it.angle as number, 2)}° к оси `,
+        ` по нормали к поверхности, угол ${it.side === 'tilt' && it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle as number, 2)}° к оси `,
         v('x'),
       ];
     if (it.type === 'rod')
-      return [`${TYPES.rod.name} `, P(s.P), ' → усилие ', ...u, ` вдоль стержня, угол ${fmt(it.angle, 2)}° к оси `, v('x')];
+      return [`${TYPES.rod.name} `, P(s.P), ' → усилие ', ...u, ` вдоль стержня, угол ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle, 2)}° к оси `, v('x')];
     return [`${TYPES[it.type].name} `, P(s.P), `${surf} → реакции `, ...u];
   });
   m.unkLoads.forEach((u) =>
@@ -132,6 +132,11 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       ],
     },
   ];
+  // Углы, обозначенные буквами: значения, которые подставляем в уравнения.
+  const named = new Map<string, number>();
+  for (const a of [...m.unknowns, ...m.knowns]) if (a.angleName && !named.has(a.angleName)) named.set(a.angleName, a.userAngle ?? 0);
+  if (named.size)
+    s1.push({ k: 'p', c: ['Углы: ' + [...named].map(([n, val]) => `${n} = ${fmt(val, 2)}°`).join(', ') + '.'] });
   if (ex) {
     const types = new Set(m.supports.map((s) => s.it.type));
     const why: string[] = [];
@@ -421,7 +426,11 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   ];
   for (const s of sol.steps) {
     const u = m.byKey[s.key];
-    if (ex) eqs.push(explain(...whyEquation(m, s.e, s.key, s.before)));
+    if (ex) {
+      eqs.push(explain(...whyEquation(m, s.e, s.key, s.before)));
+      const arms = armExplain(m, s.e);
+      if (arms) eqs.push(arms);
+    }
     eqs.push({
       k: 'eq',
       lines: [
@@ -441,6 +450,11 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
           '.',
         ),
       );
+    if (ex)
+      for (const e of J.eqs) {
+        const arms = armExplain(m, e);
+        if (arms) eqs.push({ k: 'p', cls: 'explain', c: [...eqName(e), ':'] }, arms);
+      }
     eqs.push({
       k: 'eq',
       lines: [
@@ -606,16 +620,18 @@ function whyEquation(m: Model, e: Eq, key: string, before: Record<string, number
  */
 function projectionText(a: Action): Inline[] | null {
   const it = a.item as ForceItem;
-  const tx = trigFactor(a.angle, 'x', a.refAxis),
-    ty = trigFactor(a.angle, 'y', a.refAxis);
+  const nm = it.angleName;
+  const alpha = +it.alpha || 0;
+  const named = (t: ReturnType<typeof trigFactor>) => (t && nm ? { ...t, name: acuteExpr(alpha, nm) } : t);
+  const tx = named(trigFactor(a.angle, 'x', a.refAxis)),
+    ty = named(trigFactor(a.angle, 'y', a.refAxis));
   if (!tx || !ty) return null; // сила параллельна одной из осей — проекция либо полная, либо нулевая
   const ref = REFS[it.ref] || REFS.down;
   const axis = ref.axis === 'v' ? 'y' : 'x';
-  const alpha = +it.alpha || 0;
   const acuteDeg = axis === 'x' ? tx.deg : ty.deg;
-  const r: Inline[] = ['Сила ', sym(a), ` задана углом ${fmt(alpha, 2)}° к направлению «${ref.short}», то есть угол отсчитан от оси `, v(axis), '. '];
+  const r: Inline[] = ['Сила ', sym(a), ` задана углом ${nm ? nm + ' = ' : ''}${fmt(alpha, 2)}° к направлению «${ref.short}», то есть угол отсчитан от оси `, v(axis), '. '];
   if (Math.abs(acuteDeg - alpha) > 1e-9)
-    r.push('Для проекций берём острый угол между линией действия силы и осью ', v(axis), `: ${fmt(acuteDeg, 2)}°. `);
+    r.push('Для проекций берём острый угол между линией действия силы и осью ', v(axis), `: ${nm ? acuteExpr(alpha, nm) + ' = ' : ''}${fmt(acuteDeg, 2)}°. `);
   r.push(
     'Проекция на ось ',
     v(axis),
@@ -623,13 +639,52 @@ function projectionText(a: Action): Inline[] | null {
     v('x'),
     ' — ',
     sym(a),
-    `·${tx.fn} ${fmt(tx.deg, 2)}°, на `,
+    '·' + trigText(tx) + ', на ',
     v('y'),
     ' — ',
     sym(a),
-    `·${ty.fn} ${fmt(ty.deg, 2)}°; знак берём по направлению составляющей.`,
+    '·' + trigText(ty) + '; знак берём по направлению составляющей.',
   );
   return r;
+}
+
+/**
+ * Разбор слагаемых уравнения моментов: какая составляющая, где приложена, почему плечо такое и откуда знак.
+ */
+function armExplain(m: Model, e: Eq): Block | null {
+  if (e.type !== 'm' || !e.P) return null;
+  const Pid = m.pts.find((p) => p.name === e.P)!;
+  const nodeAt = (x: number, y: number) => m.pts.find((p) => Math.abs(p.x - x) < 1e-9 && Math.abs(p.y - y) < 1e-9);
+  const items: Inline[][] = [];
+  for (const t of e.terms) {
+    const head: Inline[] = [sym(t.sym)];
+    if (t.trig) head.push('·' + trigText(t.trig));
+    const sign: Inline[] = ['поворачивает тело вокруг точки ', v(e.P), t.c > 0 ? ' против часовой стрелки — знак «+»' : ' по часовой стрелке — знак «−»'];
+    if (t.comp === 'm') {
+      items.push([...head, ' — пара сил: её момент одинаков относительно любой точки, плечо не нужно; ', t.c > 0 ? 'против часовой стрелки — «+».' : 'по часовой стрелке — «−».']);
+      continue;
+    }
+    const vert = t.comp === 'y';
+    const what = t.trig ? `${vert ? 'вертикальная' : 'горизонтальная'} составляющая силы` : `сила направлена ${vert ? 'вертикально' : 'горизонтально'}`;
+    const node = nodeAt(t.at[0], t.at[1]);
+    // Равнодействующая распределённой нагрузки — в центре тяжести эпюры.
+    const d = !node ? m.dists.find((x) => [x.o, ...(x.split?.parts.map((p) => p.o) ?? [])].some((o) => o.L === t.sym.L && o.S === t.sym.S)) : undefined;
+    const dd = d ? ([d, ...(d.split?.parts ?? [])] as { o: { L: string; S: string }; d: number }[]).find((x) => x.o.L === t.sym.L && x.o.S === t.sym.S) : undefined;
+    const where: Inline[] = node
+      ? [', приложена в точке ', v(node.name)]
+      : d && dd
+        ? [`, приложена в центре тяжести эпюры — на ${fmt(dd.d)} м от точки `, v(m.g.name[d.from])]
+        : [`, приложена в точке (${fmt(t.at[0], 2)}; ${fmt(t.at[1], 2)})`];
+    const dist: Inline[] = [
+      `; плечо — расстояние по ${vert ? 'горизонтали' : 'вертикали'} от точки `,
+      v(Pid.name),
+      node ? ' до точки ' : ' до точки приложения',
+      ...(node ? [v(node.name)] : []),
+      `: ${fmt(t.arm as number)} м; `,
+    ];
+    items.push([...head, ' — ', what, ...where, ...dist, ...sign, '.']);
+  }
+  return items.length ? { k: 'ul', cls: 'explain', items } : null;
 }
 
 /** Заголовок статуса для штампа и подсказок. */

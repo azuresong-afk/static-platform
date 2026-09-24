@@ -105,3 +105,16 @@ describe('шарниры в файле проекта', () => {
     if (!r.ok) expect(r.errors[0]).toMatch(/признак шарнира/);
   });
 });
+
+describe('обозначение угла в файле проекта', () => {
+  it('сохраняется и проверяется', () => {
+    const s = loadPreset('simple');
+    (s.items.find((i) => i.type === 'force') as { angleName?: string }).angleName = 'α';
+    const p = roundtrip(s);
+    expect(p.structure.items.find((i) => i.type === 'force')).toMatchObject({ angleName: 'α' });
+    const o = JSON.parse(serializeProject({ title: 't', structure: s, notTarget: [] }));
+    o.structure.items[2].angleName = 'слишком длинное';
+    const r = parseProject(JSON.stringify(o));
+    expect(r.ok).toBe(false);
+  });
+});

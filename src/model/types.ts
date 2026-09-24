@@ -52,11 +52,15 @@ export interface RollerItem extends AtItem {
   side: Side | 'tilt';
   /** Угол реакции к оси x, град. Для side ≠ tilt синхронизируется с SIDES[side].ang. */
   angle?: number;
+  /** Обозначение угла наклонной поверхности (α, β…) — в решении углы пишутся буквой. */
+  angleName?: string;
 }
 export interface RodItem extends AtItem {
   type: 'rod';
   /** Угол стержня к оси x, град. Положительное S направлено под этим углом. */
   angle: number;
+  /** Обозначение угла (α, β…). */
+  angleName?: string;
 }
 export interface ForceItem extends AtItem {
   type: 'force';
@@ -65,6 +69,8 @@ export interface ForceItem extends AtItem {
   rot: Rot;
   alpha: number;
   unknown: boolean;
+  /** Обозначение угла α (α, β…): в уравнениях пишется буквой, значение — alpha. */
+  angleName?: string;
 }
 export interface WeightItem extends AtItem {
   type: 'weight';

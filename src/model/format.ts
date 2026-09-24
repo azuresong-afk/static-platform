@@ -47,6 +47,26 @@ export type RefAxis = 'h' | 'v';
 export interface TrigFactor {
   fn: 'sin' | 'cos';
   deg: number;
+  /** Острый угол, записанный через букву, которую выбрал пользователь: «α», «180° − α»… */
+  name?: string;
+}
+
+/**
+ * Острый угол с осью отсчёта, выраженный через заданный пользователем угол v (град.) с обозначением name:
+ * 0…90° → «α»; 90…180° → «180° − α»; 180…270° → «α − 180°»; 270…360° → «360° − α».
+ */
+export function acuteExpr(v: number, name: string): string {
+  const a = ((v % 360) + 360) % 360;
+  if (a <= 90) return name;
+  if (a <= 180) return `180° − ${name}`;
+  if (a <= 270) return `${name} − 180°`;
+  return `360° − ${name}`;
+}
+
+/** «sin 60°», «sin α», «cos(180° − α)». */
+export function trigText(t: TrigFactor): string {
+  if (!t.name) return `${t.fn} ${fmt(t.deg, 2)}°`;
+  return t.name.includes(' ') ? `${t.fn}(${t.name})` : `${t.fn} ${t.name}`;
 }
 
 /**

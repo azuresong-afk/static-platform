@@ -25,9 +25,9 @@ export function givenData(items: Item[], m: Model): Given {
       case 'pin':
         return [...head, `, опорная поверхность ${SIDES[it.side].name}`];
       case 'roller':
-        return [...head, it.side === 'tilt' ? `, наклонная поверхность, реакция под углом ${fmt(it.angle ?? 90, 2)}° к оси x` : `, опорная поверхность ${SIDES[it.side].name}`];
+        return [...head, it.side === 'tilt' ? `, наклонная поверхность, реакция под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle ?? 90, 2)}° к оси x` : `, опорная поверхность ${SIDES[it.side].name}`];
       case 'rod':
-        return [...head, `, стержень под углом ${fmt(it.angle, 2)}° к оси x`];
+        return [...head, `, стержень под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle, 2)}° к оси x`];
       case 'force':
         return [...head, it.unknown ? ': модуль ищем, ' : `: ${fmt(it.F)} кН, `, forceDirText(it)];
       case 'weight':

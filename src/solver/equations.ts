@@ -3,7 +3,7 @@
  * Момент силы относительно точки P: M = Δx·Fy − Δy·Fx; в записи раскладывается на два слагаемых
  * (вертикальная составляющая на горизонтальное плечо и горизонтальная на вертикальное).
  */
-import { trigFactor, type TrigFactor } from '../model/format';
+import { acuteExpr, trigFactor, type TrigFactor } from '../model/format';
 import type { Pt } from '../model/geometry';
 import type { Action, Sym } from './model';
 
@@ -20,6 +20,8 @@ export interface Term {
   arm: number | null;
   /** Какая составляющая силы входит в слагаемое. */
   comp: 'x' | 'y' | 'm';
+  /** Точка приложения силы (для пояснения плеча). */
+  at: [number, number];
 }
 
 export interface Eq {
@@ -42,7 +44,8 @@ export function makeEq(type: EqType, P: string | null, pp: Pt | null, actions: A
   if (part != null) e.part = part;
   const push = (a: Action, c: number, comp: Term['comp'], trig: TrigFactor | null, arm: number | null) => {
     if (Math.abs(c) < 1e-12) return;
-    const t: Term = { c, sym: { L: a.L, S: a.S }, trig, arm, comp };
+    if (trig && a.angleName) trig = { ...trig, name: acuteExpr(a.userAngle ?? 0, a.angleName) };
+    const t: Term = { c, sym: { L: a.L, S: a.S }, trig, arm, comp, at: [a.x, a.y] };
     if (a.key) {
       t.key = a.key;
       e.coeffs[a.key] = (e.coeffs[a.key] || 0) + c;

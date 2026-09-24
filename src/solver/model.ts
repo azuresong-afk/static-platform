@@ -37,6 +37,9 @@ export interface Action extends Sym {
   item?: ForceItem | MomentItem;
   /** Номер жёсткой части, на которую действует фактор (для конструкции без шарниров — 0). */
   part?: number;
+  /** Обозначение угла и его значение, как их ввёл пользователь (для записи sin α вместо sin 60°). */
+  angleName?: string;
+  userAngle?: number;
   /** Взаимная реакция во внутреннем шарнире: действует на часть on, на часть from — в обратную сторону. */
   hinge?: { node: string; name: string; on: number; from: number };
 }
@@ -204,7 +207,8 @@ export function buildModel(s: Structure): Model {
       if (it.type === 'fixed') add('M', { kind: 'm', s: 1 });
       if (it.type === 'roller' || it.type === 'rod') {
         const angle = it.angle as number;
-        add(it.type === 'roller' ? 'R' : 'S', { kind: 'f', ...dirOf(angle), angle });
+        const named = it.angleName && (it.type === 'rod' || it.side === 'tilt') ? { angleName: it.angleName, userAngle: angle } : {};
+        add(it.type === 'roller' ? 'R' : 'S', { kind: 'f', ...dirOf(angle), angle, ...named });
       }
       supports.push({ it, P, list });
       labels[it.id] = { type: it.type, S: '', P };
@@ -228,6 +232,7 @@ export function buildModel(s: Structure): Model {
         itemId: it.id,
         item: it,
         part: carrier(it.at),
+        ...(it.angleName ? { angleName: it.angleName, userAngle: +it.alpha || 0 } : {}),
       };
       if (it.unknown) {
         const u = { ...o, key: mkKey('F' + S) };

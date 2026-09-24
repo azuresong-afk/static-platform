@@ -58,11 +58,11 @@ function cleanItem(it: Item): Item {
     case 'pin':
       return pick('at', 'side');
     case 'roller':
-      return pick('at', 'side', 'angle');
+      return pick('at', 'side', 'angle', 'angleName');
     case 'rod':
-      return pick('at', 'angle');
+      return pick('at', 'angle', 'angleName');
     case 'force':
-      return pick('at', 'F', 'ref', 'rot', 'alpha', 'unknown');
+      return pick('at', 'F', 'ref', 'rot', 'alpha', 'unknown', 'angleName');
     case 'weight':
       return pick('at', 'G');
     case 'moment':
@@ -172,6 +172,7 @@ export function parseProject(text: string): ParseResult {
       }
       return true;
     };
+    if (it.angleName !== undefined && !(typeof it.angleName === 'string' && it.angleName.length >= 1 && it.angleName.length <= 3)) return bad('обозначение угла должно быть строкой из 1–3 символов.');
     let ok = true;
     switch (type) {
       case 'fixed':

@@ -7,7 +7,7 @@ import { docHTML, inlineText } from '../src/text/doc';
 import { goldenRandom } from './helpers/golden';
 
 const withoutExplain = (d: Doc): Doc => ({
-  steps: d.steps.map((s) => ({ ...s, blocks: s.blocks.filter((b) => !(b.k === 'p' && b.cls === 'explain')) })),
+  steps: d.steps.map((s) => ({ ...s, blocks: s.blocks.filter((b) => !((b.k === 'p' || b.k === 'ul') && b.cls === 'explain')) })),
 });
 const explainTexts = (d: Doc, title: string) =>
   d.steps
@@ -171,5 +171,65 @@ describe('составные конструкции: текст решения',
       ],
     });
     expect(analyze(m).solution.status).toBe('noequilibrium');
+  });
+});
+
+describe('угол-буква и разбор плеч', () => {
+  const flat = (d: Doc) =>
+    d.steps
+      .flatMap((s) => s.blocks)
+      .flatMap((b) => (b.k === 'eq' ? b.lines.map((l) => inlineText(l.c)) : b.k === 'ul' ? b.items.map(inlineText) : 'c' in b ? [inlineText(b.c)] : []));
+  const named = (k: PresetKey, name: string, pick: (t: string) => boolean) => {
+    const s = loadPreset(k);
+    const it = s.items.find((i) => pick(i.type)) as { angleName?: string };
+    it.angleName = name;
+    return s;
+  };
+
+  it('в уравнениях — буква, в подстановке — числа, значение угла указано', () => {
+    const s = named('simple', 'α', (t) => t === 'force');
+    const plain = analyze(loadPreset('simple'));
+    const r = analyze(s);
+    const t = flat(r.doc);
+    expect(t).toContain('Углы: α = 60°.');
+    expect(t).toContain('ΣMA = R_E·6 − F·sin α·2 − M − Q·4,5 = 0');
+    expect(t.some((x) => x.startsWith('6·R_E − 17,321 − 6 − 27 = 0') && x.endsWith('R_E = 8,387 кН'))).toBe(true);
+    expect(r.solution.vals).toEqual(plain.solution.vals);
+  });
+
+  it('угол больше 90°: острый угол записан через букву', () => {
+    const s = presetStructure({
+      pts: [[0, 0], [2, 0], [4, 0]],
+      items: [
+        { type: 'pin', at: 0, side: 'below' },
+        { type: 'roller', at: 2, side: 'below' },
+        { type: 'force', at: 1, F: 10, ref: 'right', rot: 'ccw', alpha: 120, unknown: false, angleName: 'φ' },
+      ],
+    });
+    const t = flat(analyze(s, { explain: true }).doc);
+    expect(t.some((x) => x.includes('F·sin(180° − φ)·2'))).toBe(true);
+    expect(t.some((x) => x.includes('острый угол между линией действия силы и осью x: 180° − φ = 60°'))).toBe(true);
+  });
+
+  it('опорный стержень с буквой', () => {
+    const s = named('bracket', 'β', (t) => t === 'rod');
+    const t = flat(analyze(s).doc);
+    expect(t).toContain('Углы: β = 45°.');
+    expect(t.some((x) => x.includes('усилие S_C вдоль стержня, угол β = 45° к оси x'))).toBe(true);
+    expect(t.some((x) => /S_C·sin β·3/.test(x))).toBe(true);
+  });
+
+  it('разбор плеч в уравнении моментов', () => {
+    const t = flat(analyze(named('simple', 'α', (x) => x === 'force'), { explain: true }).doc);
+    expect(t).toContain(
+      'F·sin α — вертикальная составляющая силы, приложена в точке B; плечо — расстояние по горизонтали от точки A до точки B: 2 м; поворачивает тело вокруг точки A по часовой стрелке — знак «−».',
+    );
+    expect(t).toContain(
+      'Q — сила направлена вертикально, приложена в центре тяжести эпюры — на 1,5 м от точки C; плечо — расстояние по горизонтали от точки A до точки приложения: 4,5 м; поворачивает тело вокруг точки A по часовой стрелке — знак «−».',
+    );
+    expect(t).toContain('M — пара сил: её момент одинаков относительно любой точки, плечо не нужно; по часовой стрелке — «−».');
+    // Горизонтальная составляющая — на вертикальное плечо (П-образная рама).
+    const f = flat(analyze(loadPreset('pframe'), { explain: true }).doc);
+    expect(f.some((x) => x.startsWith('F_1 — сила направлена горизонтально, приложена в точке B; плечо — расстояние по вертикали от точки A до точки B: 4 м'))).toBe(true);
   });
 });

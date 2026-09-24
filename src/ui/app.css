@@ -190,6 +190,7 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .sol-head h2{margin-bottom:14px}
 .toggle{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-2);cursor:pointer}
 /* Пояснения к ходу решения: отличаются от основного текста, но не спорят с формулами. */
+.step ul.explain{font-size:14px;line-height:1.55;color:var(--ink-2);background:var(--sel-bg);border-left:2px solid var(--react);padding:6px 10px 6px 26px;margin:8px 0}
 .step p.explain{font-size:14px;line-height:1.55;color:var(--ink-2);background:var(--sel-bg);
   border-left:2px solid var(--react);padding:6px 10px;margin:8px 0}
 /* Файлы проекта */
@@ -226,6 +227,7 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
   .print-report .step{break-inside:avoid-page;margin-bottom:4mm}
   .print-report .eq{white-space:normal;overflow:visible;break-inside:avoid}
   .print-report .step p,.print-report .step ul{max-width:none}
-  .print-report .step p.explain{background:none;border-left:1.5pt solid var(--react)}
+  .print-report .step ul.explain{font-size:14px;line-height:1.55;color:var(--ink-2);background:var(--sel-bg);border-left:2px solid var(--react);padding:6px 10px 6px 26px;margin:8px 0}
+.step p.explain{background:none;border-left:1.5pt solid var(--react)}
   .print-report .ans tr{break-inside:avoid}
 }
