@@ -15,7 +15,7 @@ function readExplain(): boolean {
   }
 }
 
-export function createFramesModule(): StatikaModule {
+export function createFramesModule(): StatikaModule & { store: Store } {
   const store = new Store({ explain: readExplain() });
   store.subscribe(() => {
     try {

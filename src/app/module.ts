@@ -22,6 +22,8 @@ export interface ModuleStore {
 export interface Chrome {
   tabs: ReactNode;
   files: ReactNode;
+  /** Перейти на вкладку другого раздела. */
+  goto(id: string): void;
 }
 
 export interface StatikaModule {
@@ -30,6 +32,8 @@ export interface StatikaModule {
   /** Подпись вкладки. */
   tab: string;
   store: ModuleStore;
+  /** Разделы, чьи файлы этот раздел открывает у себя (например, «Изгиб» — файлы «Балок и рам»). */
+  accepts?: string[];
   /** Экран раздела. Отчёт для печати раздел тоже рисует сам. */
   Screen: ComponentType<{ chrome: Chrome }>;
 }

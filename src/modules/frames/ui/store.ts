@@ -136,6 +136,12 @@ export class Store {
     this.set({ s: loadPreset(k, this.ids), nt: [], preset: k, title: PRESET_TITLES[k], sel: null, wiz });
   };
 
+  /** Загрузить готовую схему другого раздела (например, задачу вкладки «Изгиб»). Отменяется одним шагом. */
+  loadStructure = (structure: Structure, title: string) => {
+    this.commit();
+    this.set({ s: structure, nt: [], preset: 'custom', title, sel: null, wiz: { on: false, step: this.st.wiz.step } });
+  };
+
   /* ---------- файлы проекта ---------- */
   /** Содержимое файла проекта и предлагаемое имя. */
   exportProject = (now = new Date()): { name: string; text: string } => {

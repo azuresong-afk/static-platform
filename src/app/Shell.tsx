@@ -39,7 +39,8 @@ export function Shell({ modules, planned }: { modules: StatikaModule[]; planned:
   const openText = (text: string, name?: string) => {
     const env = readEnvelope(text);
     if (env.ok) {
-      const target = modules.find((x) => x.id === env.module);
+      // Активный раздел открывает и файлы родственных разделов, иначе — переход на вкладку раздела файла.
+      const target = m.id === env.module || m.accepts?.includes(env.module) ? m : modules.find((x) => x.id === env.module);
       if (!target) {
         const p = planned.find((x) => x.id === env.module);
         const why = p ? `раздел «${p.tab}» ещё в разработке` : `раздела «${env.module}» нет в этой версии приложения`;
@@ -138,5 +139,5 @@ export function Shell({ modules, planned }: { modules: StatikaModule[]; planned:
     </nav>
   );
   const files = <FileBar actions={actions} register={(f) => (openDialog.current = f)} />;
-  return <m.Screen key={m.id} chrome={{ tabs, files }} />;
+  return <m.Screen key={m.id} chrome={{ tabs, files, goto: switchTo }} />;
 }

@@ -128,7 +128,7 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 7, 'семь вкладок: готовый раздел и шесть запланированных');
+  check((await p.locator('.tabs [role="tab"]').count()) === 9, 'девять вкладок: два готовых раздела и семь запланированных');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   check(await p.isDisabled('[data-tab="truss"]'), 'запланированные разделы недоступны');
   const v1 = JSON.parse(text);
@@ -168,6 +168,48 @@ async function main() {
     writeFileSync(pathResolve(out, 'report.pdf'), pdf);
     await p.screenshot({ path: pathResolve(out, 'report-print.png'), fullPage: true });
   }
+
+  // 9. Вкладка «Изгиб».
+  await p.emulateMedia({ media: 'screen' });
+  await p.click('[data-tab="bending"]');
+  check((await p.getAttribute('[data-tab="bending"]', 'aria-selected')) === 'true', 'вкладка «Изгиб» открывается');
+  await p.selectOption('#bpreset', 'antonov7');
+  const sol = await p.innerText('#bsolution');
+  check(sol.includes('54,704') && sol.includes('опасное сечение'), 'решение по участкам: экстремум и опасное сечение');
+  check((await p.locator('#bdg .dg-line').count()) === 8, 'эпюры Q и M по четырём участкам');
+  const mLabel = () => p.evaluate(`[...document.querySelectorAll('#bdg .dg-val')].find((t) => t.textContent === '−120').getAttribute('y')`) as Promise<string>;
+  const yCompressed = +(await mLabel());
+  await p.click('input[name="mSide"] >> nth=1');
+  const yTension = +(await mLabel());
+  check(yTension < yCompressed, 'на растянутых волокнах отрицательный момент откладывается вверх', `${yCompressed} → ${yTension}`);
+  check((await p.innerText('#bsolution')).includes('растянутых волокнах'), 'правило знаков в решении меняется вместе с настройкой');
+  await p.click('input[name="axis"] >> nth=1');
+  await p.click('input[name="indexed"] >> nth=1');
+  check((await p.innerText('#bsolution')).includes('Qy(x1)'), 'обозначения Qy и ось x в формулах');
+  await p.reload();
+  await p.waitForSelector('#bsolution');
+  check((await p.getAttribute('[data-tab="bending"]', 'aria-selected')) === 'true', 'после перезагрузки открыта та же вкладка');
+  check(await p.isChecked('input[name="mSide"] >> nth=1'), 'настройки правил запоминаются');
+  await p.click('input[name="mSide"] >> nth=0');
+  await p.click('input[name="axis"] >> nth=0');
+  await p.click('input[name="indexed"] >> nth=0');
+  // Схема общая с «Балками и рамами»: правка там видна здесь; файл «Балок и рам» открывается во вкладке «Изгиб».
+  await p.selectOption('#bpreset', 'antonov85');
+  await p.click('#bedit');
+  check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', '«Изменить схему» ведёт в «Балки и рамы»');
+  check((await p.inputValue('#preset')) === 'custom' && (await p.textContent('h1'))!.includes('балки'), 'там открыта та же схема');
+  await p.selectOption('#preset', 'pframe');
+  await p.click('[data-tab="bending"]');
+  check((await p.innerText('.dg-empty')).includes('только для прямых горизонтальных балок'), 'для рамы — понятное сообщение');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.innerText('#bsolution')).includes('M(0,667) = 2,667'), 'отмена во вкладке «Изгиб» возвращает балку (M_max = 8/9·ql²)');
+  await openText('beam.json', text, 'ok');
+  check((await p.getAttribute('[data-tab="bending"]', 'aria-selected')) === 'true', 'файл «Балок и рам» открывается, не уходя с вкладки «Изгиб»');
+  await p.selectOption('#bpreset', 'antonov7');
+  await p.emulateMedia({ media: 'print' });
+  const brep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length, shown: getComputedStyle(r).display }; })()`)) as { text: string; svgs: number; shown: string };
+  check(brep.shown !== 'none' && brep.svgs === 2 && brep.text.includes('Участок IV') && brep.text.includes('54,704'), 'отчёт вкладки «Изгиб»: схема, эпюры и решение');
+  await p.emulateMedia({ media: 'screen' });
 
   await browser.close();
   await new Promise<void>((r) => server.httpServer.close(() => r()));
