@@ -3,12 +3,12 @@
  * Состав: заголовок, «Дано», чертёж в двух видах, «Найти», пошаговое решение.
  */
 import { useMemo } from 'react';
-import type { Analysis } from '../core';
+import type { Analysis } from '../analyze';
 import { renderDrawing } from '../draw/drawing';
 import type { Structure } from '../model/types';
 import { givenData, targetsInline } from '../text/given';
 import { STATUS } from '../text/labels';
-import { DocView, InlineView } from './DocView';
+import { DocView, InlineView } from '../../../shared/ui/DocView';
 
 /** Для печати — без миллиметровой сетки (и без ссылок на узоры, объявленные в скрытом чертеже страницы). */
 const noGrid = (svg: string) => svg.replace(/<defs>.*?<\/defs>/, '').replace(/<rect width="\d+" height="\d+" fill="url\(#cm\)"\/>/, '');

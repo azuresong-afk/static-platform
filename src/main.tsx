@@ -1,9 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './ui/App';
-import { Store } from './ui/store';
-import { StoreContext } from './ui/useStore';
-import './ui/app.css';
+import { App } from './modules/frames/ui/FramesView';
+import { Store } from './modules/frames/ui/store';
+import { StoreContext } from './modules/frames/ui/useStore';
+import './shared/ui/app.css';
 
 // Плашка ошибок, как в прототипе: текст для разработчика вместо молчаливой поломки.
 (function () {

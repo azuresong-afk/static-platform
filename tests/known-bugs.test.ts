@@ -5,9 +5,9 @@
  * При исправлении тест меняется вместе с кодом.
  */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { idGenAfter } from '../src/model/ids';
-import { loadPreset } from '../src/model/presets';
+import { analyze } from '../src/modules/frames/analyze';
+import { idGenAfter } from '../src/shared/ids';
+import { loadPreset } from '../src/modules/frames/model/presets';
 
 describe('известные особенности прототипа', () => {
   it('№3: «что найти» хранится по имени, после новой точки отметка теряется', () => {

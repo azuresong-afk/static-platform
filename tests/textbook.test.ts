@@ -1,13 +1,13 @@
 /**
- * Задачи Мещерского (src/model/textbook.ts): ответ приложения сравнивается с ответом книги
+ * Задачи Мещерского (src/modules/frames/model/textbook.ts): ответ приложения сравнивается с ответом книги
  * с точностью до двух единиц последнего напечатанного знака; дробные ответы из формул — точно.
  * Дополнительно каждое решение проверяется независимым расчётом равновесия.
  */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { resolve } from '../src/model/geometry';
-import { presetStructure } from '../src/model/presets';
-import { TEXTBOOK } from '../src/model/textbook';
+import { analyze } from '../src/modules/frames/analyze';
+import { resolve } from '../src/modules/frames/model/geometry';
+import { presetStructure } from '../src/modules/frames/model/presets';
+import { TEXTBOOK } from '../src/modules/frames/model/textbook';
 import { residuals, wrenches } from './helpers/equilibrium';
 
 /**

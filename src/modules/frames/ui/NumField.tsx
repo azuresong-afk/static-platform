@@ -4,7 +4,7 @@
  * и сбрасывает подсветку при любом изменении конструкции — как прототип, перерисовывающий списки.
  */
 import { useLayoutEffect, useRef, useState } from 'react';
-import { fmtIn, parseNum } from '../model/format';
+import { fmtIn, parseNum } from '../../../shared/format';
 import { useStore } from './useStore';
 
 interface Props {

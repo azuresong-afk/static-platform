@@ -3,7 +3,7 @@
  * нагрузок и уравнения-кандидаты. Аналог buildModel() прототипа без HTML.
  */
 import { LOADDIR, REFS } from '../model/constants';
-import { dirOf, type RefAxis } from '../model/format';
+import { dirOf, type RefAxis } from '../../../shared/format';
 import { distGeom, pathNodes, partsOf, resolve, roman, type Geom, type Parts, type PointItem, type Pt } from '../model/geometry';
 import type { DistItem, ForceItem, LoadDir, MomentItem, Structure, SupportItem, SupportType } from '../model/types';
 import { makeEq, type Eq } from './equations';

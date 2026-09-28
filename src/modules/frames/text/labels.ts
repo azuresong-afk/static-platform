@@ -1,10 +1,10 @@
 /** Подписи для интерфейса: статусы, заголовки карточек, описание направления силы. */
 import { REFS, TYPES, forceAngle } from '../model/constants';
-import { fmt } from '../model/format';
+import { fmt } from '../../../shared/format';
 import type { ForceItem } from '../model/types';
 import type { ItemLabel, Model } from '../solver/model';
 import type { Status } from '../solver/solve';
-import { inlineHTML, sym, v, type Inline } from './doc';
+import { inlineHTML, sym, v, type Inline } from '../../../shared/doc';
 
 /** Статус: подпись, класс бейджа, класс для штампа на чертеже. */
 export const STATUS: Record<Status, [string, 'b-ok' | 'b-warn' | 'b-bad', 'st-ok' | 'st-warn' | 'st-bad']> = {

@@ -3,9 +3,9 @@
  * исходную не меняют. Правила и сообщения — как в прототипе.
  */
 import { OPP } from './constants';
-import { r3 } from './format';
+import { r3 } from '../../../shared/format';
 import { geom, geomOK, resolve, type Geom } from './geometry';
-import type { IdGen } from './ids';
+import type { IdGen } from '../../../shared/ids';
 import type { Dir, Item, ItemType, Side, Structure } from './types';
 
 export type EditResult =

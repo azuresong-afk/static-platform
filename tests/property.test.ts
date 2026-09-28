@@ -7,10 +7,10 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { addSeg, setSegDir, setSegLen, splitSeg } from '../src/model/edit';
-import { geom, geomOK, resolve } from '../src/model/geometry';
-import { checkPasses } from '../src/solver/check';
+import { analyze } from '../src/modules/frames/analyze';
+import { addSeg, setSegDir, setSegLen, splitSeg } from '../src/modules/frames/model/edit';
+import { geom, geomOK, resolve } from '../src/modules/frames/model/geometry';
+import { checkPasses } from '../src/modules/frames/solver/check';
 import { residuals, wrenches } from './helpers/equilibrium';
 import { frameArb, structureArb } from './helpers/random';
 

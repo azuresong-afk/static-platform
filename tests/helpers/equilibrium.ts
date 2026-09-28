@@ -4,7 +4,7 @@
  * распределённая нагрузка — численное интегрирование по Симпсону (точно для линейной q),
  * а не формула центра тяжести трапеции.
  */
-import type { Structure } from '../../src/model/types';
+import type { Structure } from '../../src/modules/frames/model/types';
 
 const DV: Record<string, [number, number]> = { r: [1, 0], l: [-1, 0], u: [0, 1], d: [0, -1] };
 const SIDE_ANG: Record<string, number> = { below: 90, above: 270, left: 0, right: 180 };

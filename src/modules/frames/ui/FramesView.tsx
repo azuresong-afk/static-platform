@@ -1,11 +1,11 @@
 /** Приложение: чертёж, конфигуратор, решение, мастер и история — как в прототипе. */
 import { useEffect, useMemo, useRef } from 'react';
-import { analyze } from '../core';
+import { analyze } from '../analyze';
 import { renderDrawing, type View } from '../draw/drawing';
 import { PRESET_TITLES, type PresetKey } from '../model/presets';
 import { Canvas } from './Canvas';
 import { Configurator } from './Configurator';
-import { FileBar, Notice, openFile, type FileBarHandle } from './FileBar';
+import { FileBar, Notice, openFile, type FileBarHandle } from '../../../app/FileBar';
 import { PrintReport } from './PrintReport';
 import { RedoIcon, UndoIcon } from './icons';
 import { SolutionPanel } from './SolutionPanel';

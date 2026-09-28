@@ -1,12 +1,12 @@
 /** Конфигуратор: участки, опоры, нагрузки, карточки элементов, «Что найти» — как в прототипе. */
 import { useEffect, useState } from 'react';
 import { DGL, LOADDIR, REFS, SIDES } from '../model/constants';
-import { fmt, parseNum } from '../model/format';
+import { fmt, parseNum } from '../../../shared/format';
 import { distGeom, type Geom } from '../model/geometry';
 import type { Dir, Item, ItemType, LoadDir } from '../model/types';
 import type { Model } from '../solver/model';
 import { forceCalcText, itemTitle, sizeText } from '../text/labels';
-import { InlineView } from './DocView';
+import { InlineView } from '../../../shared/ui/DocView';
 import { LOAD_ICONS, SUPPORT_ICONS } from './icons';
 import { NumField } from './NumField';
 import { useStore } from './useStore';

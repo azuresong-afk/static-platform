@@ -1,9 +1,9 @@
 /** Режим подробных пояснений: добавляет абзацы, но не меняет остальной текст решения. */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { loadPreset, PRESETS, presetStructure, type PresetKey } from '../src/model/presets';
-import type { Block, Doc } from '../src/text/doc';
-import { docHTML, inlineText } from '../src/text/doc';
+import { analyze } from '../src/modules/frames/analyze';
+import { loadPreset, PRESETS, presetStructure, type PresetKey } from '../src/modules/frames/model/presets';
+import type { Block, Doc } from '../src/shared/doc';
+import { docHTML, inlineText } from '../src/shared/doc';
 import { goldenRandom } from './helpers/golden';
 
 const withoutExplain = (d: Doc): Doc => ({

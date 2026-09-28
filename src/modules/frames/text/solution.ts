@@ -5,13 +5,13 @@
  * числа, уравнения и правила знаков при этом не меняются.
  */
 import { LOADDIR, REFS, SIDES, TYPES } from '../model/constants';
-import { acuteExpr, fmt, trigFactor, trigText } from '../model/format';
+import { acuteExpr, fmt, trigFactor, trigText } from '../../../shared/format';
 import type { ForceItem } from '../model/types';
 import { checkPasses } from '../solver/check';
 import type { Eq, Term } from '../solver/equations';
 import type { Action, Model, Unknown } from '../solver/model';
 import type { Solution } from '../solver/solve';
-import { b, join, sub, sup, sym, v, type AnswerRow, type Block, type Doc, type Inline } from './doc';
+import { b, join, sub, sup, sym, v, type AnswerRow, type Block, type Doc, type Inline } from '../../../shared/doc';
 import { roman } from '../model/geometry';
 import { STATUS, STATUS_TONE, forceDirText } from './labels';
 

@@ -7,12 +7,12 @@
  */
 import { addItem, addSeg, removeSeg, setSegDir, setSegLen, splitSeg, type EditResult } from '../model/edit';
 import { resolve } from '../model/geometry';
-import { createIdGen, type IdGen } from '../model/ids';
+import { createIdGen, type IdGen } from '../../../shared/ids';
 import { loadPreset, PRESET_TITLES, type PresetKey } from '../model/presets';
 import { parseProject, projectFileName, remapIds, serializeProject } from '../model/project';
 import type { Dir, Item, ItemType, RefDir, Structure } from '../model/types';
 import type { View } from '../draw/drawing';
-import { clamp } from '../model/format';
+import { clamp } from '../../../shared/format';
 
 export type PresetValue = PresetKey | 'custom';
 

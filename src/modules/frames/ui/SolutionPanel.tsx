@@ -1,6 +1,6 @@
 /** Панель решения; на шагах 1–3 мастера решение скрыто. */
-import type { Doc } from '../text/doc';
-import { DocView } from './DocView';
+import type { Doc } from '../../../shared/doc';
+import { DocView } from '../../../shared/ui/DocView';
 import { useStore } from './useStore';
 
 export function SolutionPanel({ doc }: { doc: Doc }) {

@@ -1,8 +1,8 @@
 /** Состояние интерфейса и история отмены. */
 import { describe, expect, it } from 'vitest';
-import { geom } from '../src/model/geometry';
-import { Store } from '../src/ui/store';
-import { analyze } from '../src/core';
+import { geom } from '../src/modules/frames/model/geometry';
+import { Store } from '../src/modules/frames/ui/store';
+import { analyze } from '../src/modules/frames/analyze';
 
 describe('история', () => {
   it('отменить и повторить; после изменения повтор недоступен', () => {

@@ -1,5 +1,5 @@
 import type { Dir, ForceItem, ItemType, LoadDir, RefDir, Side } from './types';
-import type { RefAxis } from './format';
+import type { RefAxis } from '../../../shared/format';
 
 /** Буквы для точек. Пропущены буквы, занятые обозначениями сил и реакций (F, G, M, Q, R, S, X, Y…). */
 export const LETTERS = 'ABCDEHKLNOPTUVWZ'.split('');

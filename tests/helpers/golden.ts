@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { analyze } from '../../src/core';
-import type { Structure } from '../../src/model/types';
+import { analyze } from '../../src/modules/frames/analyze';
+import type { Structure } from '../../src/modules/frames/model/types';
 
 export interface GoldenCase {
   seed?: number;

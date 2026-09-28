@@ -1,9 +1,9 @@
 /** Генераторы случайных конструкций для fast-check. */
 import fc from 'fast-check';
-import { addSeg } from '../../src/model/edit';
-import { geom } from '../../src/model/geometry';
-import { createIdGen } from '../../src/model/ids';
-import type { Dir, Item, ItemData, LoadDir, RefDir, Side, Structure } from '../../src/model/types';
+import { addSeg } from '../../src/modules/frames/model/edit';
+import { geom } from '../../src/modules/frames/model/geometry';
+import { createIdGen } from '../../src/shared/ids';
+import type { Dir, Item, ItemData, LoadDir, RefDir, Side, Structure } from '../../src/modules/frames/model/types';
 
 const DIRS: Dir[] = ['r', 'l', 'u', 'd'];
 const SIDES: Side[] = ['below', 'above', 'left', 'right'];

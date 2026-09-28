@@ -1,9 +1,9 @@
 /** «Дано» для отчёта: точки, участки и элементы конструкции словами. */
 import { LOADDIR, SIDES, TYPES } from '../model/constants';
-import { fmt } from '../model/format';
+import { fmt } from '../../../shared/format';
 import type { Item } from '../model/types';
 import type { Model } from '../solver/model';
-import { sym, v, type Inline } from './doc';
+import { sym, v, type Inline } from '../../../shared/doc';
 import { forceDirText, itemTitle, sizeText } from './labels';
 
 export interface Given {

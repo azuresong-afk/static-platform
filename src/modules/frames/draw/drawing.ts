@@ -5,7 +5,7 @@
  * Разметка совпадает с прототипом (проверяется golden-тестами).
  */
 import { LOADDIR, REFS, TYPES } from '../model/constants';
-import { fmt, r1 } from '../model/format';
+import { fmt, r1 } from '../../../shared/format';
 import { distGeom, pathNodes, resolve, type Geom, type PointItem } from '../model/geometry';
 import type { Seg, Structure } from '../model/types';
 import type { Action, Model } from '../solver/model';

@@ -1,11 +1,11 @@
 /** Файл проекта: сохранить → загрузить без потерь; понятные ошибки на испорченных файлах. */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { resolve } from '../src/model/geometry';
-import { createIdGen } from '../src/model/ids';
-import { loadPreset, PRESETS, type PresetKey } from '../src/model/presets';
-import { parseProject, projectFileName, remapIds, serializeProject } from '../src/model/project';
-import type { Structure } from '../src/model/types';
+import { analyze } from '../src/modules/frames/analyze';
+import { resolve } from '../src/modules/frames/model/geometry';
+import { createIdGen } from '../src/shared/ids';
+import { loadPreset, PRESETS, type PresetKey } from '../src/modules/frames/model/presets';
+import { parseProject, projectFileName, remapIds, serializeProject } from '../src/modules/frames/model/project';
+import type { Structure } from '../src/modules/frames/model/types';
 import { goldenRandom } from './helpers/golden';
 
 const roundtrip = (s: Structure, nt: string[] = []) => {

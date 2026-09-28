@@ -1,8 +1,8 @@
 /** Составные конструкции с внутренними шарнирами: эталоны Мещерского и независимая проверка каждой части. */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { presetStructure } from '../src/model/presets';
-import { TEXTBOOK_COMPOSITE } from '../src/model/textbook';
+import { analyze } from '../src/modules/frames/analyze';
+import { presetStructure } from '../src/modules/frames/model/presets';
+import { TEXTBOOK_COMPOSITE } from '../src/modules/frames/model/textbook';
 
 const printedUnit = (v: number) => {
   const s = String(Math.abs(v));
@@ -22,8 +22,8 @@ describe('Мещерский: составные конструкции', () => 
 });
 
 import fc from 'fast-check';
-import { resolve } from '../src/model/geometry';
-import type { Structure } from '../src/model/types';
+import { resolve } from '../src/modules/frames/model/geometry';
+import type { Structure } from '../src/modules/frames/model/types';
 import { partWrenches, residuals } from './helpers/equilibrium';
 import { structureArb } from './helpers/random';
 

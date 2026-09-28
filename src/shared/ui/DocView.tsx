@@ -1,6 +1,6 @@
 /** Отрисовка структурированного решения (src/text/doc.ts) в React. Разметка — как у прототипа. */
 import { Fragment, type ReactNode } from 'react';
-import type { Block, Doc, Inline } from '../text/doc';
+import type { Block, Doc, Inline } from '../doc';
 
 export function InlineView({ c }: { c: Inline[] }): ReactNode {
   return c.map((x, i) => {

@@ -1,7 +1,7 @@
 /** Эталонные ответы готовых задач (кН, кН·м; точность 1e-3). */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { loadPreset, type PresetKey } from '../src/model/presets';
+import { analyze } from '../src/modules/frames/analyze';
+import { loadPreset, type PresetKey } from '../src/modules/frames/model/presets';
 
 const REF: Record<Exclude<PresetKey, 'indet' | 'blank' | 'gerber' | 'arch3'>, Record<string, number>> = {
   simple: { X_A: 5, Y_A: 6.274, R_E: 8.387 },

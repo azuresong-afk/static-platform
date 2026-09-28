@@ -1,5 +1,5 @@
 import { DIRV, OPP, SIDES, ptName, forceAngle } from './constants';
-import { r3 } from './format';
+import { r3 } from '../../../shared/format';
 import type { Dir, DistItem, Item, Seg, Structure } from './types';
 
 export type Pt = [number, number];

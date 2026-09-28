@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { nearestNode, type Drawing } from '../draw/drawing';
-import { fmtIn, parseNum, r1 } from '../model/format';
+import { fmtIn, parseNum, r1 } from '../../../shared/format';
 import type { Geom } from '../model/geometry';
 import { useStore } from './useStore';
 

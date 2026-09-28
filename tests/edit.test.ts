@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { addItem, addSeg, defaults, removeSeg, setSegDir, setSegLen, splitSeg } from '../src/model/edit';
-import { geom, geomOK, resolve } from '../src/model/geometry';
-import { createIdGen, idGenAfter, type IdGen } from '../src/model/ids';
-import { loadPreset, presetStructure } from '../src/model/presets';
-import type { Structure } from '../src/model/types';
+import { addItem, addSeg, defaults, removeSeg, setSegDir, setSegLen, splitSeg } from '../src/modules/frames/model/edit';
+import { geom, geomOK, resolve } from '../src/modules/frames/model/geometry';
+import { createIdGen, idGenAfter, type IdGen } from '../src/shared/ids';
+import { loadPreset, presetStructure } from '../src/modules/frames/model/presets';
+import type { Structure } from '../src/modules/frames/model/types';
 import { goldenRandom } from './helpers/golden';
 
 /** Элементы в состоянии прототипа хранят угол силы; в порте он производный. */

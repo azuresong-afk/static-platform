@@ -7,9 +7,9 @@
  */
 import { known, type Eq } from './equations';
 import { firstViolated, pickCheck, residual } from './check';
-import { gauss } from './gauss';
+import { gauss } from '../../../shared/gauss';
 import type { Model } from './model';
-import { rankOf } from './rank';
+import { rankOf } from '../../../shared/rank';
 
 export type Status = 'ok' | 'indeterminate' | 'mechanism' | 'noequilibrium' | 'nosupport';
 

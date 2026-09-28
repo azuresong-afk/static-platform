@@ -12,7 +12,7 @@
  * Загрузка проверяет всё, от чего зависит расчёт, и сообщает понятные ошибки по-русски.
  */
 import { geomOK } from './geometry';
-import type { IdGen } from './ids';
+import type { IdGen } from '../../../shared/ids';
 import type { Dir, Item, Node, Seg, Structure } from './types';
 
 export const PROJECT_FORMAT = 'statika-project';

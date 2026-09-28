@@ -1,8 +1,8 @@
 /** Исправленные ошибки прототипа, влиявшие на расчёт (согласовано). */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { presetStructure } from '../src/model/presets';
-import { inlineText } from '../src/text/doc';
+import { analyze } from '../src/modules/frames/analyze';
+import { presetStructure } from '../src/modules/frames/model/presets';
+import { inlineText } from '../src/shared/doc';
 
 const text = (d: ReturnType<typeof analyze>['doc']) =>
   d.steps

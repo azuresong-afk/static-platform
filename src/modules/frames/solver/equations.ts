@@ -3,7 +3,7 @@
  * Момент силы относительно точки P: M = Δx·Fy − Δy·Fx; в записи раскладывается на два слагаемых
  * (вертикальная составляющая на горизонтальное плечо и горизонтальная на вертикальное).
  */
-import { acuteExpr, trigFactor, type TrigFactor } from '../model/format';
+import { acuteExpr, trigFactor, type TrigFactor } from '../../../shared/format';
 import type { Pt } from '../model/geometry';
 import type { Action, Sym } from './model';
 

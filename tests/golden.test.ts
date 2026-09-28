@@ -10,11 +10,11 @@
  * Для таких случаев сравнивается всё, что должно совпасть, а отличия проверяются явно.
  */
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/core';
-import { resolve } from '../src/model/geometry';
-import { loadPreset, type PresetKey } from '../src/model/presets';
-import type { Structure } from '../src/model/types';
-import { itemTitleHTML, sizeText } from '../src/text/labels';
+import { analyze } from '../src/modules/frames/analyze';
+import { resolve } from '../src/modules/frames/model/geometry';
+import { loadPreset, type PresetKey } from '../src/modules/frames/model/presets';
+import type { Structure } from '../src/modules/frames/model/types';
+import { itemTitleHTML, sizeText } from '../src/modules/frames/text/labels';
 import { goldenPresets, goldenRandom, modeOf, normHTML, type GoldenCase, type Mode } from './helpers/golden';
 
 /**

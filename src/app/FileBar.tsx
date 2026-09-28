@@ -1,6 +1,6 @@
 /** Открыть и сохранить проект (JSON), экспорт решения в PDF через печать. */
 import { forwardRef, useImperativeHandle, useRef } from 'react';
-import { useStore } from './useStore';
+import { useStore } from '../modules/frames/ui/useStore';
 
 export interface FileBarHandle {
   open(): void;

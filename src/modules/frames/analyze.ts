@@ -2,7 +2,7 @@
 import type { Structure } from './model/types';
 import { buildModel, type Model } from './solver/model';
 import { solve, type Solution } from './solver/solve';
-import { docHTML, type Doc } from './text/doc';
+import { docHTML, type Doc } from '../../shared/doc';
 import { solutionDoc, type SolutionOptions } from './text/solution';
 
 export interface Analysis {

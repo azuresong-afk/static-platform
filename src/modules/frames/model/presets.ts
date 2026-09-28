@@ -1,5 +1,5 @@
-import { r3 } from './format';
-import { createIdGen, type IdGen } from './ids';
+import { r3 } from '../../../shared/format';
+import { createIdGen, type IdGen } from '../../../shared/ids';
 import type { Dir, DistItem, Item, Structure } from './types';
 
 type DistPresetItem<T> = T extends DistItem ? Omit<T, 'id' | 'from' | 'to'> & { from: number; to: number } : never;
