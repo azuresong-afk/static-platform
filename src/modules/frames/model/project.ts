@@ -1,22 +1,24 @@
 /**
- * Файл проекта (JSON): сохранение и загрузка конструкции с проверкой содержимого.
+ * Файл проекта модуля «Балки и рамы»: сохранение и загрузка конструкции с проверкой содержимого.
  *
- * Формат, версия 1:
+ * Конверт (format, version, module, title, savedAt) — src/shared/projectFile.ts; данные модуля:
  * {
- *   "format": "statika-project", "version": 1,
- *   "title": "…", "savedAt": "2026-09-23T12:00:00.000Z",
  *   "structure": { "nodes": [...], "segs": [...], "items": [...] },
  *   "notTarget": ["X_A", …]
  * }
- * Поля конструкции — те же, что в src/model/types.ts. Лишние поля игнорируются.
+ * Поля конструкции — те же, что в model/types.ts. Лишние поля игнорируются.
+ * Файлы версии 1 (без поля module) открываются этим модулем.
  * Загрузка проверяет всё, от чего зависит расчёт, и сообщает понятные ошибки по-русски.
  */
+import { isNum, isObj, isStr, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import { geomOK } from './geometry';
 import type { IdGen } from '../../../shared/ids';
 import type { Dir, Item, Node, Seg, Structure } from './types';
 
-export const PROJECT_FORMAT = 'statika-project';
-export const PROJECT_VERSION = 1;
+export { projectFileName } from '../../../shared/projectFile';
+
+/** Идентификатор модуля в файле проекта. */
+export const FRAMES_MODULE = 'frames';
 
 export interface Project {
   title: string;
@@ -25,25 +27,13 @@ export interface Project {
   savedAt?: string;
 }
 
-export interface ProjectFile extends Project {
-  format: typeof PROJECT_FORMAT;
-  version: number;
-}
-
 export function serializeProject(p: Project, now = new Date()): string {
-  const file: ProjectFile = {
-    format: PROJECT_FORMAT,
-    version: PROJECT_VERSION,
-    title: p.title,
-    savedAt: now.toISOString(),
-    structure: {
-      nodes: p.structure.nodes.map((n) => (n.hinge ? { id: n.id, hinge: true } : { id: n.id })),
-      segs: p.structure.segs.map(({ id, a, b, dir, len }) => ({ id, a, b, dir, len })),
-      items: p.structure.items.map(cleanItem),
-    },
-    notTarget: [...p.notTarget],
+  const structure = {
+    nodes: p.structure.nodes.map((n) => (n.hinge ? { id: n.id, hinge: true } : { id: n.id })),
+    segs: p.structure.segs.map(({ id, a, b, dir, len }) => ({ id, a, b, dir, len })),
+    items: p.structure.items.map(cleanItem),
   };
-  return JSON.stringify(file, null, 2) + '\n';
+  return writeEnvelope(FRAMES_MODULE, p.title, { structure, notTarget: [...p.notTarget] }, now);
 }
 
 /** Только поля, которые относятся к типу элемента (производные вроде x, y не сохраняются). */
@@ -90,22 +80,13 @@ const TYPE_NAMES: Record<string, string> = {
   dist: 'распределённая нагрузка',
 };
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 
 /** Разбор и проверка файла проекта. */
 export function parseProject(text: string): ParseResult {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return { ok: false, errors: ['Файл не является JSON: возможно, он повреждён или это не файл проекта.'] };
-  }
-  if (!isObj(raw) || raw.format !== PROJECT_FORMAT)
-    return { ok: false, errors: ['Это не файл проекта «Статика» (нет отметки format: "statika-project").'] };
-  if (!isNum(raw.version) || raw.version > PROJECT_VERSION)
-    return { ok: false, errors: [`Версия файла (${String(raw.version)}) новее, чем поддерживает приложение (${PROJECT_VERSION}). Обновите приложение.`] };
+  const env = readEnvelope(text);
+  if (!env.ok) return env;
+  if (env.module !== FRAMES_MODULE) return { ok: false, errors: [`Это файл другого раздела («${env.module}»), а не «Балки и рамы».`] };
+  const raw = env.raw;
   const errors: string[] = [];
   const st = raw.structure;
   if (!isObj(st) || !Array.isArray(st.nodes) || !Array.isArray(st.segs) || !Array.isArray(st.items))
@@ -223,10 +204,4 @@ export function remapIds(s: Structure, ids: IdGen): Structure {
     return it.type === 'dist' ? { ...it, id, from: nm.get(it.from)!, to: nm.get(it.to)! } : { ...it, id, at: nm.get(it.at)! };
   }) as Item[];
   return { nodes: s.nodes.map((n) => (n.hinge ? { id: nm.get(n.id)!, hinge: true } : { id: nm.get(n.id)! })), segs, items };
-}
-
-/** Имя файла: «Своя схема 2026-09-23.statika.json» без недопустимых символов. */
-export function projectFileName(title: string, date = new Date()): string {
-  const safe = title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Проект';
-  return `${safe} ${date.toISOString().slice(0, 10)}.statika.json`;
 }

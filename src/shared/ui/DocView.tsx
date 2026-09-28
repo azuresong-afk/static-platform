@@ -1,4 +1,4 @@
-/** Отрисовка структурированного решения (src/text/doc.ts) в React. Разметка — как у прототипа. */
+/** Отрисовка структурированного решения (src/shared/doc.ts) в React. Разметка — как у прототипа. */
 import { Fragment, type ReactNode } from 'react';
 import type { Block, Doc, Inline } from '../doc';
 

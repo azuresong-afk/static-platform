@@ -1,5 +1,5 @@
 /**
- * Проверка в браузере: сохранение и открытие проекта, перетаскивание файла, ошибки, отчёт в PDF.
+ * Проверка в браузере: сохранение и открытие проекта, перетаскивание файла, ошибки, вкладки разделов, отчёт в PDF.
  * Запуск: npm run build && npm run e2e:files   (PDF и скриншот — в E2E_OUT, по умолчанию не сохраняются)
  */
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
@@ -56,7 +56,7 @@ async function main() {
   const name = dl.suggestedFilename();
   const text = await (await dl.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(/^Своя схема \d{4}-\d{2}-\d{2}\.statika\.json$/.test(name), 'имя файла', name);
-  check(JSON.parse(text).format === 'statika-project', 'формат файла');
+  check(JSON.parse(text).format === 'statika-project' && JSON.parse(text).version === 2 && JSON.parse(text).module === 'frames', 'формат файла: версия 2, раздел frames');
   check((await p.textContent('.notice'))!.includes(name), 'уведомление о сохранении');
 
   // 2. Другая задача → открыть сохранённый файл через выбор файла.
@@ -112,6 +112,34 @@ async function main() {
   check((await stampStatus()) === 'статически неопределима', 'без шарнира — неопределима');
   await p.click('#undo');
   check((await stampStatus()) === 'статически определима', 'отмена возвращает шарнир');
+
+  // Шарниры переживают сохранение и открытие.
+  const [dl3] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const archText = await (await dl3.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  await p.selectOption('#preset', 'simple');
+  const openText = async (fileName: string, body: string, tone: 'ok' | 'bad') => {
+    await p.click('.notice .del').catch(() => {});
+    const [c] = await Promise.all([p.waitForEvent('filechooser'), p.click('#fopen')]);
+    await c.setFiles({ name: fileName, mimeType: 'application/json', buffer: Buffer.from(body) });
+    await p.waitForSelector(`.notice.n-${tone}`);
+    return (await p.textContent('.notice'))!;
+  };
+  await openText('arch.json', archText, 'ok');
+  check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
+
+  // 7а. Вкладки разделов и файлы разных версий и разделов.
+  check((await p.locator('.tabs [role="tab"]').count()) === 7, 'семь вкладок: готовый раздел и шесть запланированных');
+  check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
+  check(await p.isDisabled('[data-tab="truss"]'), 'запланированные разделы недоступны');
+  const v1 = JSON.parse(text);
+  delete v1.module;
+  v1.version = 1;
+  await p.selectOption('#preset', 'simple');
+  await openText('old.json', JSON.stringify(v1), 'ok');
+  check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
+  const truss = await openText('truss.json', JSON.stringify({ ...JSON.parse(text), module: 'truss' }), 'bad');
+  check(truss.includes('раздел «Фермы» ещё в разработке'), 'файл неготового раздела — понятное сообщение', truss);
+  check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
     await p.screenshot({ path: pathResolve(out, 'arch3.png'), fullPage: true });

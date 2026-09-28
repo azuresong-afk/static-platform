@@ -13,6 +13,7 @@ import { parseProject, projectFileName, remapIds, serializeProject } from '../mo
 import type { Dir, Item, ItemType, RefDir, Structure } from '../model/types';
 import type { View } from '../draw/drawing';
 import { clamp } from '../../../shared/format';
+import { History } from '../../../shared/history';
 
 export type PresetValue = PresetKey | 'custom';
 
@@ -50,8 +51,7 @@ interface Snap {
 export class Store {
   private st: AppState;
   private listeners = new Set<() => void>();
-  private hist = { u: [] as string[], r: [] as string[] };
-  private session: string | null = null;
+  private hist = new History<string>(HIST_MAX);
   private msgTimer: ReturnType<typeof setTimeout> | null = null;
   readonly ids: IdGen;
 
@@ -86,8 +86,8 @@ export class Store {
       next.s = resolve(patch.s).structure;
       if (next.sel && !next.s.items.some((i) => i.id === next.sel)) next.sel = null;
     }
-    next.canUndo = this.hist.u.length > 0;
-    next.canRedo = this.hist.r.length > 0;
+    next.canUndo = this.hist.canUndo;
+    next.canRedo = this.hist.canRedo;
     this.st = next;
     this.listeners.forEach((f) => f());
   }
@@ -100,38 +100,26 @@ export class Store {
   }
   /** Запомнить текущее состояние перед изменением; схема становится «своей». */
   private commit() {
-    this.hist.u.push(this.snap());
-    if (this.hist.u.length > HIST_MAX) this.hist.u.shift();
-    this.hist.r = [];
+    this.hist.push(this.snap());
     this.st = { ...this.st, preset: 'custom', title: this.st.preset === 'custom' ? this.st.title : 'Своя схема' };
   }
   /** Начало правки поля: первая правка в поле — одна запись истории. */
   private touch(key: string) {
-    if (this.session !== key) {
-      this.session = key;
-      this.commit();
-    }
+    if (this.hist.startSession(key)) this.commit();
   }
   /** Поле потеряло фокус — следующая правка в нём будет новой записью истории. */
-  endSession = (key: string) => {
-    if (this.session === key) this.session = null;
-  };
+  endSession = (key: string) => this.hist.endSession(key);
   private restore(str: string) {
     const o = JSON.parse(str) as Snap;
-    this.session = null;
     this.set({ s: { nodes: o.nodes, segs: o.segs, items: o.items }, nt: o.nt, preset: o.preset, title: o.title });
   }
   undo = () => {
-    const prev = this.hist.u.pop();
-    if (prev === undefined) return;
-    this.hist.r.push(this.snap());
-    this.restore(prev);
+    const prev = this.hist.undo(this.snap());
+    if (prev !== undefined) this.restore(prev);
   };
   redo = () => {
-    const next = this.hist.r.pop();
-    if (next === undefined) return;
-    this.hist.u.push(this.snap());
-    this.restore(next);
+    const next = this.hist.redo(this.snap());
+    if (next !== undefined) this.restore(next);
   };
 
   /* ---------- сообщения ---------- */
@@ -169,6 +157,7 @@ export class Store {
     return true;
   };
   setTitle = (title: string) => this.set({ title });
+  projectTitle = () => this.st.title;
   notify = (text: string, tone: 'ok' | 'bad' = 'ok') => this.set({ notice: { text, tone, seq: (this.st.notice?.seq ?? 0) + 1 } });
   closeNotice = () => this.set({ notice: null });
   setView = (view: View) => this.set({ view });

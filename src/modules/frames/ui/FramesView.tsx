@@ -1,76 +1,28 @@
-/** Приложение: чертёж, конфигуратор, решение, мастер и история — как в прототипе. */
-import { useEffect, useMemo, useRef } from 'react';
+/** Экран раздела «Балки и рамы»: чертёж, конфигуратор, решение, мастер и история — как в прототипе. */
+import { useMemo } from 'react';
+import type { Chrome } from '../../../app/module';
+import { Notice } from '../../../shared/ui/Notice';
 import { analyze } from '../analyze';
 import { renderDrawing, type View } from '../draw/drawing';
 import { PRESET_TITLES, type PresetKey } from '../model/presets';
 import { Canvas } from './Canvas';
 import { Configurator } from './Configurator';
-import { FileBar, Notice, openFile, type FileBarHandle } from '../../../app/FileBar';
 import { PrintReport } from './PrintReport';
 import { RedoIcon, UndoIcon } from './icons';
 import { SolutionPanel } from './SolutionPanel';
 import { useStore } from './useStore';
 import { Wizard } from './Wizard';
 
-export function App() {
+export function FramesView({ chrome }: { chrome: Chrome }) {
   const [st, store] = useStore();
   const nt = useMemo(() => new Set(st.nt), [st.nt]);
   const a = useMemo(() => analyze(st.s, { notTarget: nt, explain: st.explain }), [st.s, nt, st.explain]);
   const drawing = useMemo(() => renderDrawing(st.s, a.model, a.solution, { view: st.view, sel: st.sel }), [st.s, a, st.view, st.sel]);
 
-  const files = useRef<FileBarHandle>(null);
-
-  // Ctrl+S — сохранить, Ctrl+O — открыть (работают и в полях ввода).
-  // Ctrl+Z — отменить, Ctrl+Shift+Z и Ctrl+Y — повторить. В текстовом поле работает отмена браузера.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.code === 'KeyS' && !e.shiftKey) {
-        e.preventDefault();
-        files.current?.save();
-        return;
-      }
-      if (e.code === 'KeyO' && !e.shiftKey) {
-        e.preventDefault();
-        files.current?.open();
-        return;
-      }
-      const el = document.activeElement as HTMLInputElement | null;
-      if (el && el.tagName === 'INPUT' && el.type === 'text') return;
-      if (e.code === 'KeyZ' && !e.shiftKey) {
-        e.preventDefault();
-        store.undo();
-      } else if ((e.code === 'KeyZ' && e.shiftKey) || e.code === 'KeyY') {
-        e.preventDefault();
-        store.redo();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [store]);
-
-  // Файл проекта можно перетащить на страницу.
-  useEffect(() => {
-    const over = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
-    };
-    const drop = (e: DragEvent) => {
-      const f = e.dataTransfer?.files?.[0];
-      if (!f) return;
-      e.preventDefault();
-      void openFile(f, store.importProject);
-    };
-    window.addEventListener('dragover', over);
-    window.addEventListener('drop', drop);
-    return () => {
-      window.removeEventListener('dragover', over);
-      window.removeEventListener('drop', drop);
-    };
-  }, [store]);
-
   return (
     <>
       <div className="wrap">
+        {chrome.tabs}
         <header className="top">
           <div>
             <h1>Статика: балки и рамы</h1>
@@ -90,10 +42,10 @@ export function App() {
                 </option>
               </select>
             </label>
-            <FileBar ref={files} />
+            {chrome.files}
           </div>
         </header>
-        <Notice />
+        <Notice notice={st.notice} onClose={store.closeNotice} />
 
         <Wizard model={a.model} sol={a.solution} />
 

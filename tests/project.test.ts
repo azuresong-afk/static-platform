@@ -40,7 +40,7 @@ describe('сохранить и загрузить', () => {
     const withXY = { ...s, items: s.items.map((it) => ({ ...it, x: 1, y: 2 })) } as Structure;
     const text = serializeProject({ title: 't', structure: withXY, notTarget: [] });
     expect(text).not.toMatch(/"x":/);
-    expect(JSON.parse(text)).toMatchObject({ format: 'statika-project', version: 1 });
+    expect(JSON.parse(text)).toMatchObject({ format: 'statika-project', version: 2, module: 'frames' });
   });
 
   it('новые идентификаторы при загрузке сохраняют связи', () => {
@@ -48,6 +48,19 @@ describe('сохранить и загрузить', () => {
     const r = remapIds(s, createIdGen({ n: 100, s: 100, e: 100 }));
     expect(r.nodes[0].id).toBe('n100');
     expect(analyze(r).html).toBe(analyze(s).html);
+  });
+
+  it('файл версии 1 (без поля module) открывается как «Балки и рамы»', () => {
+    const s = resolve(loadPreset('gerber')).structure;
+    const o = JSON.parse(serializeProject({ title: 'Старый', structure: s, notTarget: ['R_E'] }));
+    delete o.module;
+    o.version = 1;
+    const r = parseProject(JSON.stringify(o));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.project.title).toBe('Старый');
+    expect(r.project.notTarget).toEqual(['R_E']);
+    expect(analyze(r.project.structure).html).toBe(analyze(s).html);
   });
 
   it('имя файла', () => {
@@ -65,6 +78,12 @@ describe('ошибки в файле', () => {
   it('не JSON', () => expect(errs('{нет')[0]).toMatch(/не является JSON/));
   it('чужой файл', () => expect(errs({ a: 1 })[0]).toMatch(/не файл проекта/));
   it('версия новее', () => expect(errs({ ...good(), version: 99 })[0]).toMatch(/новее/));
+  it('файл другого раздела', () => expect(errs({ ...good(), module: 'truss' })[0]).toMatch(/другого раздела/));
+  it('версия 2 без раздела', () => {
+    const o = good();
+    delete o.module;
+    expect(errs(o)[0]).toMatch(/не указано, к какому разделу/);
+  });
   it('ссылка на несуществующую точку', () => {
     const o = good();
     o.structure.items[0].at = 'zzz';

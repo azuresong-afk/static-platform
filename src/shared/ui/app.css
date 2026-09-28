@@ -231,3 +231,13 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .step p.explain{background:none;border-left:1.5pt solid var(--react)}
   .print-report .ans tr{break-inside:avoid}
 }
+
+/* Вкладки разделов */
+.tabs{display:flex;gap:0;overflow-x:auto;border-bottom:1px solid var(--rule);margin:-12px 0 20px;scrollbar-width:thin}
+.tabs button{font:inherit;font-size:14px;padding:8px 10px 9px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;
+  background:transparent;color:var(--ink-2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:baseline;gap:6px}
+.tabs button:hover:not(:disabled){color:var(--ink)}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
+.tabs button:disabled{color:var(--ink-3);cursor:default}
+.tabs small{font-size:11px;letter-spacing:.02em;color:var(--ink-3);font-weight:400}
+@media print{.tabs{display:none}}
