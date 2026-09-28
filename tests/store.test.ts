@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { geom } from '../src/model/geometry';
 import { Store } from '../src/ui/store';
+import { analyze } from '../src/core';
 
 describe('история', () => {
   it('отменить и повторить; после изменения повтор недоступен', () => {
@@ -149,6 +150,17 @@ describe('файлы проекта', () => {
 });
 
 describe('внутренние шарниры', () => {
+  it('шарниры сохраняются в файле и восстанавливаются при открытии', () => {
+    for (const k of ['gerber', 'arch3'] as const) {
+      const a = new Store({ preset: k });
+      const b = new Store();
+      expect(b.importProject(a.exportProject().text)).toBe(true);
+      const hinges = (st: Store) => st.get().s.nodes.map((n) => !!n.hinge);
+      expect(hinges(b)).toEqual(hinges(a));
+      expect(analyze(b.get().s).html).toBe(analyze(a.get().s).html);
+    }
+  });
+
   it('включить и отменить', () => {
     const st = new Store({ preset: 'simple' });
     const D = st.get().s.nodes[3].id;

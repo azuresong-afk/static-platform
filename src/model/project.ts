@@ -222,7 +222,7 @@ export function remapIds(s: Structure, ids: IdGen): Structure {
     const id = ids.item();
     return it.type === 'dist' ? { ...it, id, from: nm.get(it.from)!, to: nm.get(it.to)! } : { ...it, id, at: nm.get(it.at)! };
   }) as Item[];
-  return { nodes: s.nodes.map((n) => ({ id: nm.get(n.id)! })), segs, items };
+  return { nodes: s.nodes.map((n) => (n.hinge ? { id: nm.get(n.id)!, hinge: true } : { id: nm.get(n.id)! })), segs, items };
 }
 
 /** Имя файла: «Своя схема 2026-09-23.statika.json» без недопустимых символов. */
