@@ -34,3 +34,17 @@ export function rootsInside(a: Poly, lo: number, hi: number, scale = 1): number[
   }
   throw new Error('rootsInside: степень больше 2');
 }
+
+/** Замена переменной: q(s) = p(L − s) (отсчёт от другого конца отрезка длиной L). */
+export function polyReflect(p: Poly, L: number): Poly {
+  // (L − s)^k = Σ C(k, j)·L^(k−j)·(−s)^j
+  const out: Poly = new Array(p.length).fill(0);
+  p.forEach((c, k) => {
+    let binom = 1;
+    for (let j = 0; j <= k; j++) {
+      out[j] += c * binom * L ** (k - j) * (j % 2 ? -1 : 1);
+      binom = (binom * (k - j)) / (j + 1);
+    }
+  });
+  return out;
+}

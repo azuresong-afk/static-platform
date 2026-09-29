@@ -128,7 +128,7 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 10, 'десять вкладок: четыре готовых раздела и шесть запланированных');
+  check((await p.locator('.tabs [role="tab"]').count()) === 11, 'одиннадцать вкладок: пять готовых разделов и шесть запланированных');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   check(await p.isDisabled('[data-tab="truss"]'), 'запланированные разделы недоступны');
   const v1 = JSON.parse(text);
@@ -271,6 +271,30 @@ async function main() {
   await p.emulateMedia({ media: 'print' });
   const arep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
   check(arep.svgs === 2 && arep.text.includes('Продольные силы по участкам'), 'отчёт по брусу');
+  await p.emulateMedia({ media: 'screen' });
+
+  // 12. Вкладка «Пространственный брус».
+  await p.click('[data-tab="space3"]');
+  await p.selectOption('#spreset3', 's16');
+  let s3 = await p.innerText('#s3solution');
+  check(s3.includes('51,235') && s3.includes('d = 149 мм'), 'задача 3: M_экв в заделке и диаметр круга', s3.slice(0, 200));
+  check((await p.locator('#sMb .sp-line').count()) >= 3 && (await p.locator('#sMk .sp-line').count()) >= 1, 'эпюры изгибающих и крутящего моментов');
+  await p.click('input[name="s3-section"] >> nth=1');
+  check((await p.innerText('#s3solution')).includes('D = 177 мм, d = 141 мм'), 'кольцо: D и d');
+  await p.click('input[name="s3-hyp"] >> nth=1');
+  check((await p.innerText('#s3solution')).includes('четвёртой'), 'четвёртая гипотеза');
+  await p.click('.segbtns button:has-text("+ сила")');
+  check((await p.locator('.lrow').count()) === 3, 'нагрузка добавляется');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.locator('.lrow').count()) === 2, 'отмена');
+  const [dl6] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const s3Text = await (await dl6.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  await p.click('[data-tab="frames"]');
+  await openText('space.json', s3Text, 'ok');
+  check((await p.getAttribute('[data-tab="space3"]', 'aria-selected')) === 'true', 'файл пространственного бруса открывается в своей вкладке');
+  await p.emulateMedia({ media: 'print' });
+  const s3rep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
+  check(s3rep.svgs === 4 && s3rep.text.includes('Опасное сечение'), 'отчёт по пространственному брусу');
   await p.emulateMedia({ media: 'screen' });
 
   await browser.close();
