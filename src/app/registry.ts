@@ -1,4 +1,5 @@
 /** Разделы приложения: готовые и запланированные по дорожной карте (README). */
+import { createAxialModule } from '../modules/axial';
 import { createBendingModule } from '../modules/bending';
 import { createFramesModule } from '../modules/frames';
 import { createSectionsModule } from '../modules/sections';
@@ -8,7 +9,7 @@ import type { PlannedModule, StatikaModule } from './module';
 export function createModules(): StatikaModule[] {
   const frames = createFramesModule();
   const conventions = new ConventionsStore();
-  return [frames, createBendingModule(frames.store, conventions), createSectionsModule(frames.store, conventions)];
+  return [frames, createBendingModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule()];
 }
 
 export const PLANNED: PlannedModule[] = [

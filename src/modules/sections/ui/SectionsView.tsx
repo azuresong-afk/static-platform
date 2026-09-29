@@ -2,11 +2,12 @@
  * Экран «Подбор сечения»: исходные данные (M и Q с эпюр или вручную, материал), эскизы трёх сечений в одном масштабе,
  * решение по шагам. Схема балки — из «Балок и рам».
  */
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import type { Chrome } from '../../../app/module';
 import { forceNames, type ConventionsStore } from '../../../shared/conventions';
 import { sub, sym } from '../../../shared/doc';
-import { fmtIn, parseNum } from '../../../shared/format';
+import { fmtIn } from '../../../shared/format';
+import { Num } from '../../../shared/ui/Num';
 import { DocView, InlineView } from '../../../shared/ui/DocView';
 import { Notice } from '../../../shared/ui/Notice';
 import { analyze } from '../../frames/analyze';
@@ -32,38 +33,6 @@ const SECTION_PRESETS = {
   },
 };
 type SectionPresetKey = keyof typeof SECTION_PRESETS;
-
-/** Числовое поле: запятая или точка; некорректное или неположительное значение подсвечивается и не применяется. */
-function Num({ id, label, unit, value, onType, onEnd, zero = false }: { id: string; label: ReactNode; unit?: string; value: number; onType: (v: number) => void; onEnd: () => void; zero?: boolean }) {
-  const [text, setText] = useState<string | null>(null);
-  const shown = text ?? fmtIn(value);
-  const valid = (x: number) => x > 0 || (zero && x === 0);
-  const bad = !valid(parseNum(shown));
-  return (
-    <label className="sfield">
-      <span>{label}</span>
-      <span className="inp">
-        <input
-          id={id}
-          type="text"
-          inputMode="decimal"
-          className={bad ? 'bad' : undefined}
-          value={shown}
-          onChange={(e) => {
-            setText(e.target.value);
-            const x = parseNum(e.target.value);
-            if (valid(x)) onType(x);
-          }}
-          onBlur={() => {
-            setText(null);
-            onEnd();
-          }}
-        />
-        {unit && <em>{unit}</em>}
-      </span>
-    </label>
-  );
-}
 
 export function SectionsView({ chrome, store, conv }: { chrome: Chrome; store: SectionsStore; conv: ConventionsStore }) {
   const frames = store.frames;

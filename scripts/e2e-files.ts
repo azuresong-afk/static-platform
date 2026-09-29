@@ -128,7 +128,7 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 9, 'девять вкладок: три готовых раздела и шесть запланированных');
+  check((await p.locator('.tabs [role="tab"]').count()) === 10, 'десять вкладок: четыре готовых раздела и шесть запланированных');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   check(await p.isDisabled('[data-tab="truss"]'), 'запланированные разделы недоступны');
   const v1 = JSON.parse(text);
@@ -240,6 +240,37 @@ async function main() {
   await p.emulateMedia({ media: 'print' });
   const srep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
   check(srep.svgs === 1 && srep.text.includes('Проверка по касательным напряжениям'), 'отчёт подбора сечения');
+  await p.emulateMedia({ media: 'screen' });
+
+  // 11. Вкладка «Растяжение-сжатие».
+  await p.click('[data-tab="axial"]');
+  await p.selectOption('#apreset', 'antonov11');
+  let as = await p.innerText('#asolution');
+  check(as.includes('6,667 см²') && as.includes('|σ|max = 150 МПа'), 'задача 1.1: площадь A из условия прочности', as.slice(0, 200));
+  await p.selectOption('#apreset', 'antonov12');
+  as = await p.innerText('#asolution');
+  check(as.includes('−92,861') && as.includes('1,72'), 'задача 1.2: реакция и запас прочности');
+  check((await p.locator('#adg .dg-line').count()) === 12, 'эпюры N, σ, ε, Δ по трём участкам');
+  await p.click('input[name="a-areaMode"] >> nth=0');
+  check((await p.innerText('.dg-empty')).includes('площадь A нужно задать'), 'нагрев с двумя заделками — A нужно задать');
+  await p.click('.hist button[title^="Отменить"]');
+  await p.click('#aadd');
+  check((await p.locator('.arow').count()) === 4, 'ступень добавляется');
+  check((await p.locator('#a-f4').count()) === 0, 'в точке у заделки поля силы нет');
+  await p.click('input[name="a-supports"] >> nth=0');
+  await p.fill('#a-f4', '−50');
+  await p.locator('#a-f4').blur();
+  as = await p.innerText('#asolution');
+  check(as.includes('FE'), 'сила в новой точке E входит в решение', as.slice(0, 300));
+  const [dl5] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const axText = await (await dl5.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(axText).module === 'axial' && JSON.parse(axText).bar.steps.length === 4, 'файл бруса: раздел axial');
+  await p.click('[data-tab="frames"]');
+  await openText('bar.json', axText, 'ok');
+  check((await p.getAttribute('[data-tab="axial"]', 'aria-selected')) === 'true', 'файл бруса открывается во вкладке «Растяжение-сжатие»');
+  await p.emulateMedia({ media: 'print' });
+  const arep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
+  check(arep.svgs === 2 && arep.text.includes('Продольные силы по участкам'), 'отчёт по брусу');
   await p.emulateMedia({ media: 'screen' });
 
   await browser.close();

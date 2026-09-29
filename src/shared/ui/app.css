@@ -279,3 +279,45 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .sk-note{font-family:"Golos Text",system-ui,sans-serif;font-size:12.5px;fill:var(--ink-3)}
 .sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 12px;margin:6px 0 4px}
 .sfield{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--ink-2)}
+
+/* Растяжение-сжатие: брус и эпюры N, σ, ε, Δ */
+.dg-fill.dg-n{fill:color-mix(in srgb,var(--react) 10%,transparent)}
+.dg-fill.dg-s{fill:color-mix(in srgb,var(--load) 9%,transparent)}
+.dg-fill.dg-e{fill:color-mix(in srgb,var(--ok) 10%,transparent)}
+.dg-fill.dg-u{fill:color-mix(in srgb,var(--warn) 10%,transparent)}
+.dg-hatch.dg-n{stroke:color-mix(in srgb,var(--react) 55%,transparent)}
+.dg-hatch.dg-s{stroke:color-mix(in srgb,var(--load) 50%,transparent)}
+.dg-hatch.dg-e{stroke:color-mix(in srgb,var(--ok) 55%,transparent)}
+.dg-hatch.dg-u{stroke:color-mix(in srgb,var(--warn) 55%,transparent)}
+.dg-line.dg-n{stroke:var(--react)}
+.dg-line.dg-s{stroke:var(--load)}
+.dg-line.dg-e{stroke:var(--ok)}
+.dg-line.dg-u{stroke:var(--warn)}
+.ax-axis{stroke:var(--ink-3);stroke-width:.9;stroke-dasharray:10 4 2 4}
+.ax-z{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:17px;fill:var(--ink-2)}
+.ax-step{fill:color-mix(in srgb,var(--ink-3) 14%,transparent);stroke:var(--ink);stroke-width:1.6}
+.ax-hot{fill:color-mix(in srgb,var(--load) 16%,transparent)}
+.ax-cold{fill:color-mix(in srgb,var(--react) 16%,transparent)}
+.ax-area{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:16px;fill:var(--ink);text-anchor:middle}
+.ax-heat{font-family:"Golos Text",system-ui,sans-serif;font-size:12.5px;fill:var(--load);text-anchor:middle}
+.ax-dim{stroke:var(--ink-3);stroke-width:.9}
+.ax-len{font-family:"Golos Text",system-ui,sans-serif;font-size:14px;fill:var(--react);text-anchor:middle;font-variant-numeric:tabular-nums}
+.ax-wall{stroke:var(--ink);stroke-width:3}
+.ax-hatch{stroke:var(--ink);stroke-width:1}
+.ax-pt{font-family:"PT Serif",Georgia,serif;font-style:italic;font-weight:700;font-size:16px;fill:var(--ink);text-anchor:middle}
+.ax-f,.ax-r{stroke-width:2.2}
+.ax-f{stroke:var(--load)}
+.ax-f-head{fill:var(--load)}
+.ax-r{stroke:var(--react);stroke-dasharray:5 3}
+.ax-r-head{fill:var(--react)}
+.ax-f-t,.ax-r-t{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:15px;text-anchor:middle}
+.ax-f-t{fill:var(--load)}
+.ax-r-t{fill:var(--react)}
+.ax-note{font-family:"Golos Text",system-ui,sans-serif;font-size:12.5px;fill:var(--ink-3)}
+.asteps{display:flex;flex-direction:column;gap:4px}
+.ahead,.arow{display:grid;grid-template-columns:34px 1fr 1fr 1fr 28px;gap:6px;align-items:center}
+.ahead span{font-size:12px;color:var(--ink-3)}
+.arow .sfield{gap:0}
+.arow .inp input{padding-right:8px}
+.ax-f-t,.ax-r-t{paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
+.ax-sub{font-size:11px}
