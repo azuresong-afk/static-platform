@@ -8,7 +8,7 @@ import { acuteExpr, fmt, trigFactor, trigText } from '../../../shared/format';
 import { polyDegree, polyEval, type Poly } from '../../../shared/poly';
 import { roman } from '../../frames/model/geometry';
 import type { Action } from '../../frames/solver/model';
-import type { Beam, Span, Term } from '../model/beam';
+import { beamMaxima, type Beam, type Span, type Term } from '../model/beam';
 
 export interface BendingTextOptions {
   explain?: boolean;
@@ -289,18 +289,7 @@ export function bendingDoc(beam: Beam, c: Conventions, opts: BendingTextOptions 
 
   // 6. Ответ: опасные сечения.
   {
-    let qMax = { v: 0, x: 0 },
-      mMax = { v: 0, x: 0 };
-    for (const sp of beam.spans) {
-      for (const zv of [0, sp.L]) {
-        const qv = polyEval(sp.Q, zv);
-        if (Math.abs(qv) > Math.abs(qMax.v) + 1e-12) qMax = { v: qv, x: sp.x0 + zv };
-      }
-      for (const zv of [0, sp.L, ...sp.extrema]) {
-        const mv = polyEval(sp.M, zv);
-        if (Math.abs(mv) > Math.abs(mMax.v) + 1e-12) mMax = { v: mv, x: sp.x0 + zv };
-      }
-    }
+    const { Q: qMax, M: mMax } = beamMaxima(beam);
     const where = (x: number) => {
       const p = beam.points.find((q) => Math.abs(q.x - x) < 1e-9);
       return p ? `в точке ${p.name}` : `на расстоянии ${f3(x)} от ${beam.points[0].name}`;

@@ -128,7 +128,7 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 9, 'девять вкладок: два готовых раздела и семь запланированных');
+  check((await p.locator('.tabs [role="tab"]').count()) === 9, 'девять вкладок: три готовых раздела и шесть запланированных');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   check(await p.isDisabled('[data-tab="truss"]'), 'запланированные разделы недоступны');
   const v1 = JSON.parse(text);
@@ -209,6 +209,37 @@ async function main() {
   await p.emulateMedia({ media: 'print' });
   const brep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length, shown: getComputedStyle(r).display }; })()`)) as { text: string; svgs: number; shown: string };
   check(brep.shown !== 'none' && brep.svgs === 2 && brep.text.includes('Участок IV') && brep.text.includes('54,704'), 'отчёт вкладки «Изгиб»: схема, эпюры и решение');
+  await p.emulateMedia({ media: 'screen' });
+
+  // 10. Вкладка «Подбор сечения».
+  await p.click('[data-tab="sections"]');
+  await p.selectOption('#spreset', 'antonov7');
+  let ss = await p.innerText('#ssolution');
+  check(ss.includes('678,26 см³') && ss.includes('двутавр №36') && ss.includes('16,86 МПа'), 'подбор по задаче Антонова: W, двутавр №36, касательные', ss.slice(0, 200));
+  check((await p.locator('#ssketch .sk-best').count()) === 1, 'эскизы сечений, самое лёгкое выделено');
+  await p.click('input[name="s-source"] >> nth=1');
+  await p.fill('#s-M', '30');
+  await p.locator('#s-M').blur();
+  ss = await p.innerText('#ssolution');
+  check(ss.includes('|M|max = 30 кН·м') && !ss.includes('(в точке'), 'M и Q вручную');
+  await p.fill('#s-tau', '-3');
+  check((await p.getAttribute('#s-tau', 'class')) === 'bad', 'неверное значение подсвечивается');
+  await p.locator('#s-tau').blur();
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.inputValue('#s-M')) === '20', 'первая отмена — прежнее значение M');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.innerText('#ssolution')).includes('|M|max = 120 кН·м'), 'вторая отмена — снова M и Q с эпюр');
+  const [dl4] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const secText = await (await dl4.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(secText).module === 'sections' && JSON.parse(secText).section.sigmaT === 230, 'файл подбора: раздел sections и исходные данные');
+  await p.click('[data-tab="frames"]');
+  await p.selectOption('#preset', 'simple');
+  await openText('sec.json', secText, 'ok');
+  check((await p.getAttribute('[data-tab="sections"]', 'aria-selected')) === 'true', 'файл подбора из «Балок и рам» открывается во вкладке «Подбор сечения»');
+  check((await p.innerText('#ssolution')).includes('двутавр №36'), 'после открытия — тот же подбор');
+  await p.emulateMedia({ media: 'print' });
+  const srep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
+  check(srep.svgs === 1 && srep.text.includes('Проверка по касательным напряжениям'), 'отчёт подбора сечения');
   await p.emulateMedia({ media: 'screen' });
 
   await browser.close();

@@ -154,3 +154,23 @@ export function valuesAt(b: Beam, x: number, side: 'left' | 'right' = 'right'): 
   const z = Math.min(Math.max(x - sp.x0, 0), sp.L);
   return { Q: polyEval(sp.Q, z), M: polyEval(sp.M, z) };
 }
+
+/**
+ * Наибольшие по модулю Q и M и где они (x от левого конца). Проверяются концы участков, экстремумы M
+ * и экстремумы Q внутри участка (при нагрузке по трапеции, меняющей знак, Q может иметь экстремум внутри).
+ */
+export function beamMaxima(b: Beam): { Q: { v: number; x: number }; M: { v: number; x: number } } {
+  let Q = { v: 0, x: 0 },
+    M = { v: 0, x: 0 };
+  for (const sp of b.spans) {
+    for (const z of [0, sp.L, ...rootsInside(polyDeriv(sp.Q), 0, sp.L, b.scaleQ)]) {
+      const v = polyEval(sp.Q, z);
+      if (Math.abs(v) > Math.abs(Q.v) + 1e-12) Q = { v, x: sp.x0 + z };
+    }
+    for (const z of [0, sp.L, ...sp.extrema]) {
+      const v = polyEval(sp.M, z);
+      if (Math.abs(v) > Math.abs(M.v) + 1e-12) M = { v, x: sp.x0 + z };
+    }
+  }
+  return { Q, M };
+}
