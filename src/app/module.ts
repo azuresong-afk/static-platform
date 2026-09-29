@@ -38,9 +38,8 @@ export interface StatikaModule {
   Screen: ComponentType<{ chrome: Chrome }>;
 }
 
-/** Раздел из дорожной карты, который ещё не готов: вкладка видна, но недоступна. */
+/** Раздел из дорожной карты, который ещё не готов: его файл не открывается, а объясняется почему. */
 export interface PlannedModule {
   id: string;
   tab: string;
-  stage: number;
 }

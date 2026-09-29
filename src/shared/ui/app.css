@@ -392,3 +392,22 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .cpmir{display:flex;align-items:center;gap:2px;font-size:13px}
 .cprow .inp input{padding-right:22px}
 @media (max-width:520px){.cprow{grid-template-columns:18px 1fr 1fr;}}
+
+/* Дорожная карта */
+.tabs .tab-map{margin-left:auto}
+.rm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:20px;align-items:start}
+.rm-note{margin:-8px 0 8px;font-size:13px;color:var(--ink-3)}
+.rm-count{font-size:13px;font-weight:400;color:var(--ink-3);margin-left:4px;font-variant-numeric:tabular-nums}
+.rm-list{list-style:none;margin:0;padding:0}
+.rm-item{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:4px 10px;align-items:start;padding:10px 0;border-top:1px solid var(--rule)}
+.rm-mark{width:18px;height:18px;margin-top:2px;border-radius:50%;border:1.5px solid var(--rule);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;line-height:1}
+.rm-done .rm-mark{border-color:var(--ok);background:var(--ok);color:var(--sheet)}
+.rm-next .rm-mark{border-color:var(--react)}
+.rm-title{font-weight:600;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;text-wrap:balance}
+.rm-planned .rm-title{color:var(--ink-2)}
+.rm-badge{font-size:11.5px;font-weight:500;color:var(--react);border:1px solid var(--react);border-radius:10px;padding:0 7px;letter-spacing:.02em}
+.rm-what{margin:2px 0 0;font-size:13.5px;color:var(--ink-2);max-width:62ch}
+.rm-refs{margin:2px 0 0;font-size:12px;color:var(--ink-3)}
+.rm-open{font:inherit;font-size:12.5px;padding:4px 10px;border:1px solid var(--rule);border-radius:5px;background:transparent;color:var(--ink);cursor:pointer}
+.rm-open:hover{background:var(--paper)}
+@media print{.wrap.rm-page{display:block !important}.rm-open{display:none}}

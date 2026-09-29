@@ -128,9 +128,19 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 12, 'двенадцать вкладок: шесть готовых разделов и шесть запланированных');
+  check((await p.locator('.tabs [role="tab"]').count()) === 7, 'семь вкладок: шесть разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
-  check(await p.isDisabled('[data-tab="truss"]'), 'запланированные разделы недоступны');
+  const beforeMap = JSON.stringify(await state(p));
+  await p.click('[data-tab="roadmap"]');
+  check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
+  check((await p.locator('.rm-done').count()) === 6, 'готово шесть пунктов');
+  check((await p.textContent('[data-rm="inclined"] .rm-badge')) === 'следующий', 'следующий раздел — наклонные элементы');
+  check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
+  await p.keyboard.press('Control+z');
+  await p.click('[data-rm="composite"] .rm-open');
+  check((await p.getAttribute('[data-tab="composite"]', 'aria-selected')) === 'true', '«Открыть» ведёт во вкладку раздела');
+  await p.click('[data-tab="frames"]');
+  check(JSON.stringify(await state(p)) === beforeMap, 'Ctrl+Z на дорожной карте не меняет схему');
   const v1 = JSON.parse(text);
   delete v1.module;
   v1.version = 1;

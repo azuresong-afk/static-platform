@@ -6,11 +6,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { readEnvelope } from '../shared/projectFile';
 import { download, FileBar, type FileActions } from './FileBar';
 import type { PlannedModule, StatikaModule } from './module';
+import { ROADMAP_TAB } from './roadmap';
+import { RoadmapScreen } from './RoadmapScreen';
 
 const TAB_KEY = 'statika.tab';
 
 function initialTab(modules: StatikaModule[]): string {
-  const ids = modules.map((m) => m.id);
+  const ids = [...modules.map((m) => m.id), ROADMAP_TAB];
   const hash = location.hash.slice(1);
   if (ids.includes(hash)) return hash;
   try {
@@ -24,6 +26,9 @@ function initialTab(modules: StatikaModule[]): string {
 
 export function Shell({ modules, planned }: { modules: StatikaModule[]; planned: PlannedModule[] }) {
   const [active, setActive] = useState(() => initialTab(modules));
+  // На вкладке «Дорожная карта» своего проекта нет: сохранять и отменять нечего, а сообщения об ошибках
+  // при открытии файла показывает первый раздел.
+  const onMap = active === ROADMAP_TAB;
   const m = modules.find((x) => x.id === active) ?? modules[0];
 
   const switchTo = useCallback((id: string) => {
@@ -44,24 +49,28 @@ export function Shell({ modules, planned }: { modules: StatikaModule[]; planned:
       if (!target) {
         const p = planned.find((x) => x.id === env.module);
         const why = p ? `раздел «${p.tab}» ещё в разработке` : `раздела «${env.module}» нет в этой версии приложения`;
+        if (onMap) switchTo(m.id);
         m.store.notify(`Не удалось открыть${name ? ` «${name}»` : ' файл'}: ${why}.`, 'bad');
         return;
       }
-      if (target !== m) switchTo(target.id);
+      if (target !== m || onMap) switchTo(target.id);
       target.store.importProject(text, name);
       return;
     }
+    if (onMap) switchTo(m.id);
     m.store.importProject(text, name);
   };
 
   const actions: FileActions = {
     openFile: (f) => void f.text().then((t) => openText(t, f.name)),
     save: () => {
+      if (onMap) return;
       const { name, text } = m.store.exportProject();
       download(name, text);
       m.store.notify(`Проект сохранён в файл «${name}».`, 'ok');
     },
     print: () => {
+      if (onMap) return;
       // Имя PDF в диалоге печати берётся из заголовка страницы.
       const prev = document.title;
       document.title = `${m.store.projectTitle()} — решение`;
@@ -72,8 +81,8 @@ export function Shell({ modules, planned }: { modules: StatikaModule[]; planned:
   const openDialog = useRef<() => void>(() => {});
   const act = useRef(actions);
   act.current = actions;
-  const store = useRef(m.store);
-  store.current = m.store;
+  const store = useRef<StatikaModule['store'] | null>(m.store);
+  store.current = onMap ? null : m.store;
 
   // Ctrl+S — сохранить, Ctrl+O — открыть (работают и в полях ввода).
   // Ctrl+Z — отменить, Ctrl+Shift+Z и Ctrl+Y — повторить. В текстовом поле работает отмена браузера.
@@ -94,10 +103,10 @@ export function Shell({ modules, planned }: { modules: StatikaModule[]; planned:
       if (el && el.tagName === 'INPUT' && el.type === 'text') return;
       if (e.code === 'KeyZ' && !e.shiftKey) {
         e.preventDefault();
-        store.current.undo();
+        store.current?.undo();
       } else if ((e.code === 'KeyZ' && e.shiftKey) || e.code === 'KeyY') {
         e.preventDefault();
-        store.current.redo();
+        store.current?.redo();
       }
     };
     document.addEventListener('keydown', onKey);
@@ -126,18 +135,17 @@ export function Shell({ modules, planned }: { modules: StatikaModule[]; planned:
   const tabs = (
     <nav className="tabs" role="tablist" aria-label="Разделы">
       {modules.map((x) => (
-        <button key={x.id} type="button" role="tab" data-tab={x.id} aria-selected={x.id === m.id} onClick={() => switchTo(x.id)}>
+        <button key={x.id} type="button" role="tab" data-tab={x.id} aria-selected={!onMap && x.id === m.id} onClick={() => switchTo(x.id)}>
           {x.tab}
         </button>
       ))}
-      {planned.map((p) => (
-        <button key={p.id} type="button" role="tab" data-tab={p.id} aria-selected={false} disabled title={`Этап ${p.stage} дорожной карты — в разработке`}>
-          {p.tab}
-          <small>этап {p.stage}</small>
-        </button>
-      ))}
+      <button type="button" role="tab" className="tab-map" data-tab={ROADMAP_TAB} aria-selected={onMap} onClick={() => switchTo(ROADMAP_TAB)}>
+        Дорожная карта
+        <small>{planned.length} впереди</small>
+      </button>
     </nav>
   );
   const files = <FileBar actions={actions} register={(f) => (openDialog.current = f)} />;
+  if (onMap) return <RoadmapScreen chrome={{ tabs, files: null, goto: switchTo }} />;
   return <m.Screen key={m.id} chrome={{ tabs, files, goto: switchTo }} />;
 }
