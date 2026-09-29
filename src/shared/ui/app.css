@@ -357,3 +357,38 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .lkind{font-size:12.5px;color:var(--ink-2)}
 @media (max-width:520px){.lrow{grid-template-columns:1fr 1fr;}}
 @media print{.sp-print{display:grid;grid-template-columns:1fr 1fr;gap:3mm}}
+
+/* Составное сечение */
+.cs-part{stroke:var(--ink);stroke-width:1.4}
+.cs-p0{fill:color-mix(in srgb,var(--react) 16%,transparent)}
+.cs-p1{fill:color-mix(in srgb,var(--ok) 18%,transparent)}
+.cs-p2{fill:color-mix(in srgb,var(--warn) 18%,transparent)}
+.cs-p3{fill:color-mix(in srgb,var(--load) 14%,transparent)}
+.cs-pc{fill:var(--ink-2)}
+.cs-pl{font-family:"Golos Text",system-ui,sans-serif;font-size:12.5px;fill:var(--ink-2)}
+.cs-axis{stroke:var(--ink-2);stroke-width:1;stroke-dasharray:10 4 2 4}
+.cs-neutral{stroke:var(--react);stroke-width:1.8;stroke-dasharray:10 4 2 4}
+.cs-principal{stroke:var(--ok);stroke-width:1.4;stroke-dasharray:6 4}
+.cs-at{font-family:"PT Serif",Georgia,serif;font-style:italic;font-weight:700;font-size:16px;fill:var(--ink)}
+.cs-nt{font-family:"Golos Text",system-ui,sans-serif;font-size:12px;fill:var(--react)}
+.cs-c{fill:var(--sheet);stroke:var(--ink);stroke-width:2}
+.cs-ct{font-family:"PT Serif",Georgia,serif;font-style:italic;font-weight:700;font-size:17px;fill:var(--ink)}
+.cs-dim{stroke:var(--ink-3);stroke-width:1}
+.cs-dt{font-family:"Golos Text",system-ui,sans-serif;font-size:13px;fill:var(--react)}
+.cs-base{stroke:var(--ink);stroke-width:1.4}
+.cs-guide{stroke:var(--ink-3);stroke-width:.8;stroke-dasharray:3 4}
+.cs-sig{stroke-width:1.6}
+.cs-comp{fill:color-mix(in srgb,var(--react) 12%,transparent);stroke:var(--react)}
+.cs-ten{fill:color-mix(in srgb,var(--load) 11%,transparent);stroke:var(--load)}
+.cs-hatch{stroke:var(--ink-3);stroke-width:.7}
+.cs-sv{font-family:"Golos Text",system-ui,sans-serif;font-size:13px;fill:var(--ink);font-variant-numeric:tabular-nums}
+.cs-sn{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:16px;fill:var(--ink)}
+.cs-crit{fill:none;stroke:var(--bad);stroke-width:2}
+.cs-critt{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:14px;fill:var(--bad)}
+.cs-note{font-family:"Golos Text",system-ui,sans-serif;font-size:12px;fill:var(--ink-3)}
+.cprow{display:grid;grid-template-columns:18px 88px 1fr 64px 30px 72px 72px 26px;gap:5px;align-items:center}
+.cphead span{font-size:11.5px;color:var(--ink-3)}
+.cpsize{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.cpmir{display:flex;align-items:center;gap:2px;font-size:13px}
+.cprow .inp input{padding-right:22px}
+@media (max-width:520px){.cprow{grid-template-columns:18px 1fr 1fr;}}

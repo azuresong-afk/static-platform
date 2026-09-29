@@ -128,7 +128,7 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 11, 'одиннадцать вкладок: пять готовых разделов и шесть запланированных');
+  check((await p.locator('.tabs [role="tab"]').count()) === 12, 'двенадцать вкладок: шесть готовых разделов и шесть запланированных');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   check(await p.isDisabled('[data-tab="truss"]'), 'запланированные разделы недоступны');
   const v1 = JSON.parse(text);
@@ -295,6 +295,31 @@ async function main() {
   await p.emulateMedia({ media: 'print' });
   const s3rep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
   check(s3rep.svgs === 4 && s3rep.text.includes('Опасное сечение'), 'отчёт по пространственному брусу');
+  await p.emulateMedia({ media: 'screen' });
+
+  // 13. Вкладка «Составное сечение».
+  await p.click('[data-tab="composite"]');
+  await p.selectOption('#cpreset', 's7');
+  let cs = await p.innerText('#csolution');
+  check(cs.includes('7,672 см') && cs.includes('4609,91') && cs.includes('32·(−6,872)²'), 'задача 6, схема 7: центр тяжести и I_X', cs.slice(0, 200));
+  await p.fill('#c-M', '10');
+  await p.locator('#c-M').blur();
+  check((await p.innerText('#csolution')).includes('σ = −34,12 МПа'), 'напряжение в наиболее нагруженной точке при M = 10 кН·м');
+  await p.selectOption('.cprow:not(.cphead) select[aria-label="Разворот"] >> nth=2', '270');
+  check((await p.innerText('#csolution')).includes('косой') === false, 'разворот швеллера на 270° — сечение остаётся симметричным');
+  await p.selectOption('.cprow:not(.cphead) select[aria-label="Вид"] >> nth=2', 'angle');
+  check((await p.innerText('#csolution')).includes('изгиб косой'), 'несимметричное сечение — косой изгиб и главные оси');
+  await p.click('.hist button[title^="Отменить"]');
+  await p.click('.hist button[title^="Отменить"]');
+  const [dl7] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const cText = await (await dl7.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(cText).module === 'composite' && JSON.parse(cText).parts.length === 3, 'файл сечения');
+  await p.click('[data-tab="frames"]');
+  await openText('sec.json', cText, 'ok');
+  check((await p.getAttribute('[data-tab="composite"]', 'aria-selected')) === 'true', 'файл сечения открывается в своей вкладке');
+  await p.emulateMedia({ media: 'print' });
+  const crep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
+  check(crep.svgs === 1 && crep.text.includes('Моменты сопротивления'), 'отчёт по сечению');
   await p.emulateMedia({ media: 'screen' });
 
   await browser.close();
