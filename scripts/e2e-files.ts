@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 8, 'восемь вкладок: семь разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 9, 'девять вкладок: восемь разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 9, 'готово девять пунктов');
-  check((await p.textContent('[data-rm="spacebody"] .rm-badge')) === 'следующий', 'следующий раздел — пространственное тело');
+  check((await p.locator('.rm-done').count()) === 10, 'готово десять пунктов');
+  check((await p.textContent('[data-rm="centroid"] .rm-badge')) === 'следующий', 'следующий раздел — центр тяжести');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('spacebody.json', JSON.stringify({ ...JSON.parse(text), module: 'spacebody' }), 'bad');
-  check(fric.includes('раздел «Пространственное тело на опорах» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('centroid.json', JSON.stringify({ ...JSON.parse(text), module: 'centroid' }), 'bad');
+  check(fric.includes('раздел «Центр тяжести» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -383,6 +383,24 @@ async function main() {
   const [dl10] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const cr = JSON.parse(await (await dl10.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8')));
   check(cr.structure.items.filter((i: { oneSided?: boolean }) => i.oneSided).length === 2, 'в файле — односторонние связи');
+
+  // 16. Вкладка «Пространственное тело».
+  await p.click('[data-tab="spacebody"]');
+  let bs = await p.innerText('#bsolution');
+  check(bs.includes('статически определимо') && bs.includes('T = 20 кН') && bs.includes('8,66'), 'Мещерский 8.24: натяжение и реакции', bs.slice(0, 200));
+  await p.selectOption('#bpreset', 'm826');
+  bs = await p.innerText('#bsolution');
+  check(bs.includes('2,165') && bs.includes('−3,428'), 'Мещерский 8.26: реакция острия и подшипника', bs.slice(-300));
+  await p.click('#bsups .del >> nth=2');
+  check((await p.innerText('#bsolution')).includes('равновесие невозможно'), 'без острия пластинка поворачивается — равновесие невозможно');
+  await p.click('.hist button[title^="Отменить"]');
+  const [dl11] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const bText = await (await dl11.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(bText).module === 'spacebody' && JSON.parse(bText).body.supports.length === 3, 'файл тела');
+  const bSol = await p.innerText('#bsolution');
+  await p.click('[data-tab="frames"]');
+  await openText('body.json', bText, 'ok');
+  check((await p.getAttribute('[data-tab="spacebody"]', 'aria-selected')) === 'true' && (await p.innerText('#bsolution')) === bSol, 'файл тела открывается в своей вкладке без потерь');
 
   // 15. Вкладка «Фермы».
   await p.click('[data-tab="truss"]');

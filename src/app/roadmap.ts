@@ -58,7 +58,8 @@ export const ROADMAP: RoadmapBlock[] = [
         title: 'Пространственное тело на опорах',
         what: 'Вал со шкивами на подшипниках, плита на стержнях, подпятник и сферический шарнир.',
         refs: 'Мещерский §8',
-        status: 'planned',
+        status: 'done',
+        tab: 'spacebody',
       },
       {
         id: 'centroid',

@@ -439,3 +439,19 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 /* Колонки не шире экрана: поля ввода не распирают сетку на телефоне. */
 .cols>*{min-width:0}
 .inp input{min-width:0}
+
+/* Пространственное тело */
+.sb-axis{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:6 4}
+.sb-axt{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:16px;fill:var(--ink-3)}
+.sb-face{fill:color-mix(in srgb,var(--react) 8%,transparent);stroke:var(--ink);stroke-width:2.2;stroke-linejoin:round}
+.sb-edge{stroke:var(--ink);stroke-width:2;stroke-dasharray:none}
+.sb-ball{fill:var(--sheet);stroke:var(--ink);stroke-width:2}
+.sb-bear{fill:var(--sheet);stroke:var(--ink);stroke-width:1.8}
+.sb-rod{stroke:var(--ink-2);stroke-width:2.4}
+.sb-tip{fill:var(--sheet);stroke:var(--ink);stroke-width:1.7}
+.sb-pt{fill:var(--ink)}
+.sbrow{display:grid;grid-template-columns:40px 1fr 1fr 1fr 26px;gap:5px;align-items:center}
+.sbsup{display:grid;grid-template-columns:1.5fr 1fr 1fr 26px;gap:5px;align-items:center}
+.sbload{display:grid;grid-template-columns:52px 64px 1fr 1fr 1fr 26px;gap:5px;align-items:center}
+.sbrow .inp input,.sbload .inp input{padding-right:20px;min-width:0}
+@media (max-width:520px){.sbload{grid-template-columns:52px 1fr 1fr 26px}}
