@@ -10,8 +10,10 @@ import { firstViolated, pickCheck, residual } from './check';
 import { gauss } from '../../../shared/gauss';
 import type { Model } from './model';
 import { rankOf } from '../../../shared/rank';
+import { isFrictionModel, solveFriction, type FrictionResult } from './friction';
 
-export type Status = 'ok' | 'indeterminate' | 'mechanism' | 'noequilibrium' | 'nosupport';
+/** friction — равновесие с трением или односторонними связями: ответ — условия (интервал), а не одно решение. */
+export type Status = 'ok' | 'indeterminate' | 'mechanism' | 'noequilibrium' | 'nosupport' | 'friction';
 
 export interface SolveStep {
   e: Eq;
@@ -32,6 +34,8 @@ export interface Solution {
   check: { e: Eq; r: number } | null;
   badEq?: Eq;
   badR?: number;
+  /** Расчёт с трением и односторонними связями. */
+  friction?: FrictionResult;
 }
 
 export function solve(m: Model): Solution {
@@ -40,6 +44,10 @@ export function solve(m: Model): Solution {
   const out: Solution = { status: 'ok', n, steps: [], joint: null, vals: {}, check: null };
   if (!m.supports.length && !n) return { ...out, status: 'nosupport' };
   if (n === 0) return { ...out, status: 'nosupport' };
+  if (isFrictionModel(m)) {
+    const fr = solveFriction(m);
+    return { ...out, status: fr.feasible && !fr.tooMany ? 'friction' : 'noequilibrium', friction: fr };
+  }
   out.rank = rankOf(m.cands.map((e) => keys.map((k) => e.coeffs[k] || 0)));
   // Независимых уравнений столько, каков ранг. Если неизвестных больше:
   // ранг 3 — связи закрепляют тело, но лишние (неопределимость степени n − 3);

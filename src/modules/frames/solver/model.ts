@@ -178,7 +178,7 @@ export function buildModel(s: Structure): Model {
     return kk;
   };
   for (const it of items) {
-    if (it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod') {
+    if (it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough') {
       const P = g.name[it.at],
         list: Unknown[] = [];
       const add = (letter: string, props: Pick<Action, 'kind'> & Partial<Action>) => {
@@ -211,6 +211,16 @@ export function buildModel(s: Structure): Model {
         const angle = it.angle as number;
         const named = it.angleName && (it.type === 'rod' || it.side === 'tilt') ? { angleName: it.angleName, userAngle: angle } : {};
         add(it.type === 'roller' ? 'R' : 'S', { kind: 'f', ...dirOf(angle), angle, ...named });
+      }
+      if (it.type === 'rough') {
+        // Нормальная реакция — по углу поверхности, сила трения — вдоль поверхности (нормаль, повёрнутая на −90°),
+        // момент сопротивления качению — против часовой стрелки.
+        const angle = it.angle as number,
+          ta = (((angle - 90) % 360) + 360) % 360;
+        const named = it.angleName && it.side === 'tilt' ? { angleName: it.angleName, userAngle: angle } : {};
+        add('N', { kind: 'f', ...dirOf(angle), angle, ...named });
+        add('Fтр', { kind: 'f', ...dirOf(ta), angle: ta });
+        if ((it.k ?? 0) > 0) add('Mк', { kind: 'm', s: 1 });
       }
       supports.push({ it, P, list });
       labels[it.id] = { type: it.type, S: '', P };

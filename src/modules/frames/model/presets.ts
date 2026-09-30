@@ -36,6 +36,8 @@ export const PRESET_TITLES = {
   arch3: 'Трёхшарнирная рама (арка)',
   ladder: 'Лестница у гладкой стены (наклонная)',
   rafter: 'Стропила: ветер перпендикулярно скату',
+  incline: 'Брус на наклонной плоскости: трение',
+  crane: 'Кран на рельсах: груз, при котором не опрокинется',
   blank: 'Пустой шаблон — собрать по шагам',
 } as const;
 
@@ -165,6 +167,29 @@ export const PRESETS: Record<PresetKey, Preset> = {
       { type: 'roller', at: 2, side: 'below' },
       { type: 'weight', at: 1, G: 10 },
       { type: 'dist', from: 0, to: 1, q1: 0.4 / Math.sqrt(3), q2: 0.4 / Math.sqrt(3), dir: 'nd' },
+    ],
+  },
+  // Брус весом 10 на плоскости под 30°, f = 0,2; сила вдоль плоскости — в каких пределах держит брус.
+  incline: {
+    pts: [[0, 0], { l: 0.5, a: 30 }],
+    items: [
+      { type: 'rough', at: 0, side: 'tilt', angle: 120, f: 0.2 },
+      { type: 'weight', at: 0, G: 10 },
+      // Сила приложена в B, но её линия действия идёт вдоль AB и проходит через A — как у силы в точке A.
+      { type: 'force', at: 1, F: 5, ref: 'right', rot: 'ccw', alpha: 30, unknown: true },
+    ],
+  },
+  // Мещерский 3.23: рельсы — односторонние связи; наибольший груз Q на вылете.
+  crane: {
+    pts: [[0, 0], [0.25, 0], [0.9, 0], [1, 0], [1.75, 0], [2, 0], [3, 0]],
+    items: [
+      { type: 'weight', at: 0, G: 2 },
+      { type: 'roller', at: 1, side: 'below', oneSided: true },
+      { type: 'weight', at: 2, G: 1 },
+      { type: 'weight', at: 3, G: 3 },
+      { type: 'roller', at: 4, side: 'below', oneSided: true },
+      { type: 'weight', at: 5, G: 0.5 },
+      { type: 'force', at: 6, F: 1, ref: 'down', rot: 'cw', alpha: 0, unknown: true },
     ],
   },
   blank: { pts: [[0, 0], [4, 0]], items: [] },

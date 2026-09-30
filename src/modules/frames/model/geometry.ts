@@ -238,7 +238,7 @@ export function resolve(s: Structure): Resolved {
       return it;
     }
     if (!(it.at in g.pos)) it.at = first;
-    if ((it.type === 'roller' && it.side !== 'tilt') || it.type === 'pin' || it.type === 'fixed')
+    if (((it.type === 'roller' || it.type === 'rough') && it.side !== 'tilt') || it.type === 'pin' || it.type === 'fixed')
       it.angle = SIDES[(it.side as keyof typeof SIDES) || 'below'].ang;
     const [x, y] = g.pos[it.at];
     const r: PointItem = { ...it, x, y };

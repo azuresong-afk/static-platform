@@ -29,6 +29,13 @@ export const SUPPORT_ICONS = {
       <path d="M18 24h12" />
     </svg>
   ),
+  rough: (
+    <svg viewBox="0 0 36 26" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="11" y="5" width="14" height="10" />
+      <path d="M5 16h26" />
+      <path d="M8 16l-3 5M12 16l-3 5M16 16l-3 5M20 16l-3 5M24 16l-3 5M28 16l-3 5M32 16l-3 5" strokeWidth="1.1" />
+    </svg>
+  ),
 };
 
 export const LOAD_ICONS = {

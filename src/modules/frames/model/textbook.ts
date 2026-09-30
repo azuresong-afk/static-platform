@@ -592,3 +592,69 @@ export const TEXTBOOK_INCLINED: TextbookProblem[] = [
     note: 'Ферма как одно тело: контур A–C–B книги (конёк C — наша точка B, опора B — C). Вес приложен на оси симметрии. Ветер перпендикулярен AC, q = 0,8/AC.',
   },
 ];
+
+/** Задача с трением или односторонними связями: ответ — границы искомой нагрузки. */
+export interface FrictionProblem {
+  id: string;
+  page: number;
+  title: string;
+  preset: Preset;
+  /** Наименьшее и наибольшее значения искомой нагрузки из книги (Infinity — границы нет). */
+  min?: number;
+  max?: number;
+  note?: string;
+}
+
+export const TEXTBOOK_FRICTION: FrictionProblem[] = [
+  {
+    id: '3.23 (94)',
+    page: 32,
+    title: 'Железнодорожный кран: наибольший груз, при котором кран не опрокинется',
+    preset: {
+      pts: [[0, 0], [0.25, 0], [0.9, 0], [1, 0], [1.75, 0], [2, 0], [3, 0]],
+      items: [
+        { type: 'weight', at: 0, G: 2 },
+        { type: 'roller', at: 1, side: 'below', oneSided: true },
+        { type: 'weight', at: 2, G: 1 },
+        { type: 'weight', at: 3, G: 3 },
+        { type: 'roller', at: 4, side: 'below', oneSided: true },
+        { type: 'weight', at: 5, G: 0.5 },
+        { type: 'force', at: 6, F: 1, ref: 'down', rot: 'cw', alpha: 0, unknown: true },
+      ],
+    },
+    max: 5.18,
+    note: 'Рельсы — односторонние катки в 0,75 м от оси KL (точка A книги, здесь x = 1): противовес D в 1 м левее, лебёдка C в 0,1 м левее, укосина H в 1 м правее, груз Q на вылете 2 м.',
+  },
+  {
+    id: '3.25 (96)',
+    page: 33,
+    title: 'Лебёдка с колонной: вес, при котором груз её не опрокидывает',
+    preset: {
+      pts: [[0, 0], [1, 0], [2, 0], [6, 0]],
+      items: [
+        { type: 'roller', at: 0, side: 'below', oneSided: true },
+        { type: 'force', at: 1, F: 1, ref: 'down', rot: 'cw', alpha: 0, unknown: true },
+        { type: 'roller', at: 2, side: 'below', oneSided: true },
+        { type: 'weight', at: 3, G: 1.5 },
+      ],
+    },
+    min: 6,
+    max: Infinity,
+    note: 'Колёса в 1 м от оси OA, груз Q = 1,5 т в 5 м от оси; искомый вес P — сила вниз на оси.',
+  },
+  {
+    id: '4.79 (191)',
+    page: 60,
+    title: 'Каток: сила, необходимая для равномерного качения',
+    preset: {
+      pts: [[0, 0], [0, 0.3]],
+      items: [
+        { type: 'rough', at: 0, side: 'below', f: 0.5, k: 0.005 },
+        { type: 'weight', at: 1, G: 300 },
+        { type: 'force', at: 1, F: 1, ref: 'right', rot: 'ccw', alpha: 30, unknown: true },
+      ],
+    },
+    max: 5.72,
+    note: 'Каток — отрезок от точки касания A до центра O (r = 0,3 м); k = 0,5 см. Коэффициент трения скольжения в книге не дан, взят 0,5 — каток не проскальзывает.',
+  },
+];

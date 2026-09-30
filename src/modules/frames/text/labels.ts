@@ -13,6 +13,7 @@ export const STATUS: Record<Status, [string, 'b-ok' | 'b-warn' | 'b-bad', 'st-ok
   mechanism: ['геометрически изменяема', 'b-bad', 'st-bad'],
   noequilibrium: ['равновесие невозможно', 'b-bad', 'st-bad'],
   nosupport: ['нет опор', 'b-bad', 'st-bad'],
+  friction: ['равновесие с трением', 'b-ok', 'st-ok'],
 };
 
 export const STATUS_TONE: Record<Status, 'ok' | 'warn' | 'bad'> = {
@@ -21,6 +22,7 @@ export const STATUS_TONE: Record<Status, 'ok' | 'warn' | 'bad'> = {
   mechanism: 'bad',
   noequilibrium: 'bad',
   nosupport: 'bad',
+  friction: 'ok',
 };
 
 export function forceDirText(it: Pick<ForceItem, 'alpha' | 'ref' | 'rot'> & { angleName?: string }): string {
@@ -53,6 +55,7 @@ export function itemTitle(l: ItemLabel): Inline[] {
     case 'pin':
     case 'roller':
     case 'rod':
+    case 'rough':
       return [TYPES[l.type].name + ' ', v(l.P || '')];
     case 'force':
       return ['Сила ', sym({ L: 'F', S: l.S }), ...at(l.P)];

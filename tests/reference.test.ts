@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { analyze } from '../src/modules/frames/analyze';
 import { loadPreset, type PresetKey } from '../src/modules/frames/model/presets';
 
-const REF: Record<Exclude<PresetKey, 'indet' | 'blank' | 'gerber' | 'arch3'>, Record<string, number>> = {
+const REF: Record<Exclude<PresetKey, 'indet' | 'blank' | 'gerber' | 'arch3' | 'incline' | 'crane'>, Record<string, number>> = {
   simple: { X_A: 5, Y_A: 6.274, R_E: 8.387 },
   cantilever: { X_A: 0, Y_A: 12, M_A: 29.667 },
   rod: { X_A: 2.057, Y_A: 8.437, S_D: 10.114 },

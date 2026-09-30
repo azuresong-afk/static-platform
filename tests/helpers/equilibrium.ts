@@ -92,6 +92,16 @@ export function wrenches(s: Structure, vals: Record<string, number>, unknowns: U
         out.push({ x, y, fx: ux * R, fy: uy * R, m: 0 });
         break;
       }
+      case 'rough': {
+        // Своя тригонометрия: нормаль по углу опоры, трение — нормаль, повёрнутая на −90°.
+        const a = it.side === 'tilt' ? (it.angle as number) : SIDE_ANG[it.side];
+        const [nx, ny] = unit(a),
+          [tx, ty] = unit(a - 90);
+        const N = unk(it.id, 'N'),
+          T = unk(it.id, 'Fтр');
+        out.push({ x, y, fx: nx * N + tx * T, fy: ny * N + ty * T, m: (it.k ?? 0) > 0 ? unk(it.id, 'Mк') : 0 });
+        break;
+      }
       case 'rod': {
         const [ux, uy] = unit(it.angle);
         const S = unk(it.id, 'S');

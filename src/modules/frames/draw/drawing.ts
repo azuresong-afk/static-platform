@@ -102,6 +102,11 @@ function drawSupport(it: PointItem, px: number, py: number) {
     inner = `<polygon points="${px},${py + 5} ${px - 14},${py + 29} ${px + 14},${py + 29}" class="sup"/><circle cx="${px - 7}" cy="${py + 34}" r="4.5" class="hinge"/><circle cx="${px + 7}" cy="${py + 34}" r="4.5" class="hinge"/>${ground(px, py + 39, 48)}`;
   if (it.type === 'rod')
     inner = `<line x1="${px}" y1="${py}" x2="${px}" y2="${py + 82}" class="sup" stroke-width="2.4"/><circle cx="${px}" cy="${py + 82}" r="4.5" class="hinge"/>${ground(px, py + 87, 40)}`;
+  // Опора с трением: тело касается шероховатой поверхности (частая штриховка), подпись f.
+  if (it.type === 'rough') {
+    inner = `<line x1="${px - 36}" y1="${py + 3}" x2="${px + 36}" y2="${py + 3}" class="sup" stroke-width="2.4"/>`;
+    for (let x = px - 32; x <= px + 36; x += 5) inner += `<line x1="${x}" y1="${py + 3}" x2="${x - 7}" y2="${py + 11}" class="hatch"/>`;
+  }
   if (it.type === 'fixed') {
     inner = `<line x1="${px - 40}" y1="${py}" x2="${px + 40}" y2="${py}" class="sup" stroke-width="2.4"/>`;
     for (let x = px - 36; x <= px + 40; x += 8) inner += `<line x1="${x}" y1="${py}" x2="${x - 9}" y2="${py + 9}" class="hatch"/>`;

@@ -14,6 +14,7 @@ import type { Solution } from '../solver/solve';
 import { b, join, sub, sup, sym, v, type AnswerRow, type Block, type Doc, type Inline } from '../../../shared/doc';
 import { roman } from '../model/geometry';
 import { STATUS, STATUS_TONE, forceDirText, loadDirText } from './labels';
+import { frictionDoc } from './friction';
 
 export interface SolutionOptions {
   /** Искомые, отмеченные как промежуточные («что найти» снято). */
@@ -84,6 +85,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   const P = (name: string) => v(name);
   const explain = (...c: Inline[]): Block => ({ k: 'p', cls: 'explain', c });
 
+  if (sol.friction) return frictionDoc(m, sol, opts);
   if (sol.status === 'nosupport') {
     step('Опоры', [
       { k: 'p', c: ['Добавьте хотя бы одну опору или отметьте искомую нагрузку — без связей конструкция ничем не удерживается.'] },

@@ -133,8 +133,8 @@ async function main() {
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 8, 'готово восемь пунктов');
-  check((await p.textContent('[data-rm="friction"] .rm-badge')) === 'следующий', 'следующий раздел — трение');
+  check((await p.locator('.rm-done').count()) === 9, 'готово девять пунктов');
+  check((await p.textContent('[data-rm="spacebody"] .rm-badge')) === 'следующий', 'следующий раздел — пространственное тело');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('friction.json', JSON.stringify({ ...JSON.parse(text), module: 'friction' }), 'bad');
-  check(fric.includes('раздел «Трение и односторонние связи» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('spacebody.json', JSON.stringify({ ...JSON.parse(text), module: 'spacebody' }), 'bad');
+  check(fric.includes('раздел «Пространственное тело на опорах» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -364,6 +364,25 @@ async function main() {
   await p.click('[data-normal="135"]');
   check((await p.inputValue('.item[data-kind="sup"] >> nth=1 >> [data-f="angle"]')) === '135', 'каток: реакция перпендикулярно участку одной кнопкой');
   if (out) await p.screenshot({ path: pathResolve(out, 'inclined.png'), fullPage: true });
+
+  // 14а. Трение и односторонние связи.
+  await p.selectOption('#preset', 'incline');
+  let frs = await p.innerText('#solution');
+  check(frs.includes('3,268 ≤') && frs.includes('≤ 6,732') && frs.includes('готова скользить'), 'брус на наклонной плоскости: интервал силы и предельное скольжение', frs.slice(-300));
+  await p.fill('.item[data-kind="sup"] [data-f="f"]', '0,6');
+  await p.locator('.item[data-kind="sup"] [data-f="f"]').blur();
+  frs = await p.innerText('#solution');
+  check(frs.includes('−0,196 ≤') || frs.includes('−0,196'), 'при f = 0,6 брус держится и без силы: нижняя граница отрицательна', frs.slice(-200));
+  await p.selectOption('#preset', 'crane');
+  frs = await p.innerText('#solution');
+  check(frs.includes('F ≤ 5,18') || frs.includes('≤ 5,18 кН'), 'кран 3.23: наибольший груз 5,18', frs.slice(-200));
+  check(frs.includes('опрокинуться вокруг точки E'), 'кран: опрокидывание вокруг рельса');
+  await p.click('[data-add="rough"]');
+  check((await p.locator('.item[data-kind="sup"] [data-f="f"]').count()) === 1, 'палитра: опора с трением');
+  await p.click('#undo');
+  const [dl10] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const cr = JSON.parse(await (await dl10.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8')));
+  check(cr.structure.items.filter((i: { oneSided?: boolean }) => i.oneSided).length === 2, 'в файле — односторонние связи');
 
   // 15. Вкладка «Фермы».
   await p.click('[data-tab="truss"]');

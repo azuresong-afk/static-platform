@@ -28,7 +28,14 @@ export function givenData(items: Item[], m: Model): Given {
       case 'pin':
         return [...head, `, опорная поверхность ${SIDES[it.side].name}`];
       case 'roller':
-        return [...head, it.side === 'tilt' ? `, наклонная поверхность, реакция под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle ?? 90, 2)}° к оси x` : `, опорная поверхность ${SIDES[it.side].name}`];
+        return [...head, it.oneSided ? ' (односторонняя связь)' : '', it.side === 'tilt' ? `, наклонная поверхность, реакция под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle ?? 90, 2)}° к оси x` : `, опорная поверхность ${SIDES[it.side].name}`];
+      case 'rough':
+        return [
+          ...head,
+          it.side === 'tilt' ? `, наклонная поверхность, нормаль под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle ?? 90, 2)}° к оси x` : `, опорная поверхность ${SIDES[it.side].name}`,
+          `, коэффициент трения f = ${fmt(it.f)}`,
+          ...((it.k ?? 0) > 0 ? [`, трения качения k = ${fmt(it.k!)} м`] : []),
+        ];
       case 'rod':
         return [...head, `, стержень под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle, 2)}° к оси x`];
       case 'force':

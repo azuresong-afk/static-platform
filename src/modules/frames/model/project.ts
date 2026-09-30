@@ -49,7 +49,9 @@ function cleanItem(it: Item): Item {
     case 'pin':
       return pick('at', 'side');
     case 'roller':
-      return pick('at', 'side', 'angle', 'angleName');
+      return pick('at', 'side', 'angle', 'angleName', 'oneSided');
+    case 'rough':
+      return pick('at', 'side', 'angle', 'angleName', 'f', 'k');
     case 'rod':
       return pick('at', 'angle', 'angleName');
     case 'force':
@@ -74,6 +76,7 @@ const TYPE_NAMES: Record<string, string> = {
   fixed: 'заделка',
   pin: 'шарнирно-неподвижная опора',
   roller: 'каток',
+  rough: 'опора с трением',
   rod: 'опорный стержень',
   force: 'сила',
   weight: 'груз',
@@ -170,6 +173,11 @@ export function parseProject(text: string): ParseResult {
         break;
       case 'roller':
         ok = node('at') && oneOf('side', [...SIDES, 'tilt'], 'опорная поверхность') && (it.side !== 'tilt' || num('angle', 'угол'));
+        if (ok && it.oneSided !== undefined && typeof it.oneSided !== 'boolean') ok = !bad('признак односторонней связи должен быть true или false.');
+        break;
+      case 'rough':
+        ok = node('at') && oneOf('side', [...SIDES, 'tilt'], 'опорная поверхность') && (it.side !== 'tilt' || num('angle', 'угол')) && num('f', 'коэффициент трения');
+        if (ok && ((it.f as number) < 0 || (it.k !== undefined && !(typeof it.k === 'number' && it.k >= 0)))) ok = !bad('коэффициенты трения не могут быть отрицательными.');
         break;
       case 'rod':
         ok = node('at') && num('angle', 'угол');

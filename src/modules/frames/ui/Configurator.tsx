@@ -272,7 +272,7 @@ function Hinges({ model }: { model: Model }) {
 }
 
 /** Каток на наклонном участке: реакция перпендикулярно участку — в одну или другую сторону. */
-function NormalButtons({ it, model }: { it: Item & { type: 'roller' }; model: Model }) {
+function NormalButtons({ it, model }: { it: Item & { type: 'roller' | 'rough' }; model: Model }) {
   const [, store] = useStore();
   const g = model.g;
   const segs = g.segOrder.filter((q) => q.dir === 'a' && (q.a === it.at || q.b === it.at));
@@ -296,12 +296,12 @@ function NormalButtons({ it, model }: { it: Item & { type: 'roller' }; model: Mo
   );
 }
 
-function Palette({ items, icons }: { items: [ItemType, string][]; icons: Record<string, React.ReactNode> }) {
+function Palette({ items, icons, portOnly = [] }: { items: [ItemType, string][]; icons: Record<string, React.ReactNode>; portOnly?: ItemType[] }) {
   const [, store] = useStore();
   return (
     <div className="palette">
       {items.map(([t, label]) => (
-        <button key={t} className="pal" type="button" data-add={t} onClick={() => store.addItem(t)}>
+        <button key={t} className="pal" type="button" data-add={t} {...(portOnly.includes(t) ? { 'data-port-only': '' } : {})} onClick={() => store.addItem(t)}>
           {icons[t]}
           {label}
         </button>
@@ -333,7 +333,7 @@ function Field({ it, f, label, unit, disabled }: { it: Item; f: string; label: s
     <label className="field">
       <span>{label}</span>
       <NumField
-        value={(it as unknown as Record<string, number>)[f]}
+        value={(it as unknown as Record<string, number>)[f] ?? 0}
         data={{ 'data-id': it.id, 'data-f': f }}
         unit={unit}
         disabled={disabled}
@@ -414,7 +414,23 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
           <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(true)} />
           {it.side === 'tilt' && <Field it={it} f="angle" label="Угол реакции к оси x" unit="°" />}
           <NormalButtons it={it} model={model} />
+          <label className="chk wide" data-port-only="">
+            <input type="checkbox" data-id={it.id} data-f="oneSided" checked={!!it.oneSided} onChange={(e) => store.setItemField(it.id, 'oneSided', e.target.checked || undefined)} /> Односторонняя связь: опора может только давить (отрыв, опрокидывание)
+          </label>
           {it.side === 'tilt' && <AngleName it={it} />}
+        </>
+      );
+      break;
+    case 'rough':
+      fields = (
+        <>
+          {P}
+          <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(true)} />
+          {it.side === 'tilt' && <Field it={it} f="angle" label="Угол нормали к оси x" unit="°" />}
+          {it.side === 'tilt' && <AngleName it={it} />}
+          <NormalButtons it={it} model={model} />
+          <Field it={it} f="f" label="Коэффициент трения f" unit="" />
+          <Field it={it} f="k" label="Трение качения k (0 — нет)" unit="м" />
         </>
       );
       break;
@@ -509,7 +525,7 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
       break;
     }
   }
-  const sup = it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod';
+  const sup = it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough';
   return (
     <div className={'item' + (it.id === st.sel ? ' sel' : '')} data-item={it.id} data-kind={sup ? 'sup' : 'load'} onClick={() => store.select(it.id)}>
       <div className="item-head">
@@ -577,7 +593,9 @@ export function Configurator({ model }: { model: Model }) {
             ['pin', 'Шарнир'],
             ['roller', 'Каток'],
             ['rod', 'Стержень'],
+            ['rough', 'Трение'],
           ]}
+          portOnly={['rough']}
         />
       </div>
       <div hidden={!show3}>

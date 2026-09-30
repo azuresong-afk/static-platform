@@ -255,7 +255,7 @@ export class Store {
   /** Каток с реакцией под заданным углом (например, перпендикулярно наклонному участку). */
   setRollerAngle = (id: string, angle: number) => {
     const it = this.st.s.items.find((i) => i.id === id);
-    if (!it || it.type !== 'roller' || (it.side === 'tilt' && Math.abs((it.angle ?? 0) - angle) < 1e-9)) return;
+    if (!it || (it.type !== 'roller' && it.type !== 'rough') || (it.side === 'tilt' && Math.abs((it.angle ?? 0) - angle) < 1e-9)) return;
     this.commit();
     this.patchItem(id, { side: 'tilt', angle } as Partial<Item>);
   };

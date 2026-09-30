@@ -50,7 +50,8 @@ export const ROADMAP: RoadmapBlock[] = [
         title: 'Трение и односторонние связи',
         what: 'Предельное равновесие, опрокидывание, предельный груз; ответ — интервал значений.',
         refs: 'Мещерский §3–4',
-        status: 'planned',
+        status: 'done',
+        tab: 'frames',
       },
       {
         id: 'spacebody',

@@ -192,6 +192,8 @@ export function defaults<T extends ItemType>(s: Structure, type: T): NewItem<T> 
         return { at: last, side: pinSide(g, last), angle: 90 };
       case 'rod':
         return { at: last, angle: 90 };
+      case 'rough':
+        return { at: first, side: pinSide(g, first), angle: 90, f: 0.3, k: 0 };
       case 'force':
         return { at: mid, F: 10, ref: 'down', rot: 'cw', alpha: 0, unknown: false };
       case 'weight':

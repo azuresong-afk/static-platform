@@ -62,6 +62,23 @@ export interface RollerItem extends AtItem {
   angle?: number;
   /** Обозначение угла наклонной поверхности (α, β…) — в решении углы пишутся буквой. */
   angleName?: string;
+  /** Односторонняя связь: реакция может только давить (R ≥ 0), каток может оторваться. */
+  oneSided?: boolean;
+}
+/**
+ * Опора с трением (шероховатая поверхность): нормальная реакция N ≥ 0 и сила трения |Fтр| ≤ f·N вдоль поверхности;
+ * при k > 0 — ещё момент сопротивления качению |Mк| ≤ k·N. Связь всегда односторонняя.
+ */
+export interface RoughItem extends AtItem {
+  type: 'rough';
+  side: Side | 'tilt';
+  /** Угол нормальной реакции к оси x, град (как у катка). */
+  angle?: number;
+  angleName?: string;
+  /** Коэффициент трения скольжения. */
+  f: number;
+  /** Коэффициент трения качения, м (0 — не учитывать). */
+  k?: number;
 }
 export interface RodItem extends AtItem {
   type: 'rod';
@@ -100,7 +117,7 @@ export interface DistItem {
   dir: LoadDir;
 }
 
-export type SupportItem = FixedItem | PinItem | RollerItem | RodItem;
+export type SupportItem = FixedItem | PinItem | RollerItem | RodItem | RoughItem;
 export type LoadItem = ForceItem | WeightItem | MomentItem | DistItem;
 export type Item = SupportItem | LoadItem;
 export type ItemType = Item['type'];
@@ -113,7 +130,7 @@ export interface Structure {
 }
 
 export const isSupport = (it: Item): it is SupportItem =>
-  it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod';
+  it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough';
 
 /** Omit, применённый к каждому варианту объединения по отдельности. */
 export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
