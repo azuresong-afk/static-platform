@@ -5,12 +5,12 @@
  * - Состояние конструкции всегда хранится после resolve(): элементы на существующих узлах,
  *   углы опор синхронизированы — как прототип, который правит состояние при каждом пересчёте.
  */
-import { addItem, addSeg, removeSeg, setSegDir, setSegLen, splitSeg, type EditResult } from '../model/edit';
+import { addItem, addSeg, addSegXY, removeSeg, setSegAng, setSegDir, setSegLen, splitSeg, type EditResult } from '../model/edit';
 import { resolve } from '../model/geometry';
 import { createIdGen, type IdGen } from '../../../shared/ids';
 import { loadPreset, PRESET_TITLES, type PresetKey } from '../model/presets';
 import { parseProject, projectFileName, remapIds, serializeProject } from '../model/project';
-import type { Dir, Item, ItemType, RefDir, Structure } from '../model/types';
+import type { Item, ItemType, RefDir, SegDir, Structure } from '../model/types';
 import type { View } from '../draw/drawing';
 import { clamp } from '../../../shared/format';
 import { History } from '../../../shared/history';
@@ -182,10 +182,24 @@ export class Store {
     this.set({ s: r.s });
     return true;
   }
-  addSeg = (from: string, dir: Dir, len: number) => this.applyEdit(addSeg(this.st.s, from, dir, len, this.ids));
+  addSeg = (from: string, dir: SegDir, len: number, ang?: number) => this.applyEdit(addSeg(this.st.s, from, dir, len, this.ids, ang));
+  /** Участок по проекциям на оси (наклонный — с точной длиной √(dx² + dy²)). */
+  addSegXY = (from: string, dx: number, dy: number) => this.applyEdit(addSegXY(this.st.s, from, dx, dy, this.ids));
   splitSeg = (segId: string, t: number) => this.applyEdit(splitSeg(this.st.s, segId, t, this.ids));
   removeSeg = (segId: string) => this.applyEdit(removeSeg(this.st.s, segId));
-  setSegDir = (segId: string, dir: Dir) => this.applyEdit(setSegDir(this.st.s, segId, dir));
+  setSegDir = (segId: string, dir: SegDir, ang?: number) => this.applyEdit(setSegDir(this.st.s, segId, dir, ang));
+  /** Угол наклонного участка из поля списка: вся правка поля — одна запись истории. */
+  typeSegAng = (segId: string, ang: number): boolean => {
+    const r = setSegAng(this.st.s, segId, ang);
+    if (!r.ok) {
+      if (r.reason === 'noop') return true;
+      if (r.msg) this.flash(r.msg);
+      return false;
+    }
+    this.touch('segang:' + segId);
+    this.set({ s: r.s });
+    return true;
+  };
   /** Длина из поля списка участков: каждая корректная правка сразу применяется, вся правка поля — одна запись. */
   typeSegLen = (segId: string, v: number): boolean => {
     const r = setSegLen(this.st.s, segId, v);
@@ -237,6 +251,13 @@ export class Store {
   setItemField = (id: string, f: string, v: unknown) => {
     this.commit();
     this.patchItem(id, { [f]: v } as Partial<Item>);
+  };
+  /** Каток с реакцией под заданным углом (например, перпендикулярно наклонному участку). */
+  setRollerAngle = (id: string, angle: number) => {
+    const it = this.st.s.items.find((i) => i.id === id);
+    if (!it || it.type !== 'roller' || (it.side === 'tilt' && Math.abs((it.angle ?? 0) - angle) < 1e-9)) return;
+    this.commit();
+    this.patchItem(id, { side: 'tilt', angle } as Partial<Item>);
   };
   /** Кнопки «Без угла»: направление силы без наклона. */
   setForceDir = (id: string, ref: RefDir) => {

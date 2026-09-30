@@ -133,8 +133,8 @@ async function main() {
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 6, 'готово шесть пунктов');
-  check((await p.textContent('[data-rm="inclined"] .rm-badge')) === 'следующий', 'следующий раздел — наклонные элементы');
+  check((await p.locator('.rm-done').count()) === 7, 'готово семь пунктов');
+  check((await p.textContent('[data-rm="truss"] .rm-badge')) === 'следующий', 'следующий раздел — фермы');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -331,6 +331,39 @@ async function main() {
   const crep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
   check(crep.svgs === 1 && crep.text.includes('Моменты сопротивления'), 'отчёт по сечению');
   await p.emulateMedia({ media: 'screen' });
+
+  // 14. Наклонные участки в «Балках и рамах».
+  await p.click('[data-tab="frames"]');
+  await p.selectOption('#preset', 'rafter');
+  let fs = await p.innerText('#solution');
+  check(fs.includes('перпендикулярно участку') && fs.includes('5,231') && fs.includes('5,462'), 'стропила: ветер по нормали к скату, реакции 4.21', fs.slice(0, 300));
+  check((await stampStatus()) === 'статически определима' && (await p.locator('#svg .angarc').count()) >= 2, 'на чертеже — углы наклона участков');
+  await p.selectOption('#preset', 'blank');
+  await p.click('#wexit');
+  await p.click('[data-asdir="ur"]');
+  await p.click('#asByXY');
+  await p.fill('#asDx', '4');
+  await p.fill('#asDy', '3');
+  await p.click('#asGo');
+  check((await p.inputValue('[data-segang]')) === '36,8699' && (await p.locator('[data-seg]').nth(1).inputValue()) === '5', 'участок по проекциям 4 × 3: длина 5, угол 36,87°');
+  await p.fill('[data-segang]', '45');
+  await p.locator('[data-segang]').blur();
+  check((await p.innerText('#asFrom')).includes('C (7,54; 3,54)'), 'угол 45°: точка C сдвинулась', await p.innerText('#asFrom'));
+  await p.click('#undo');
+  check((await p.inputValue('[data-segang]')) === '36,8699', 'отмена возвращает угол');
+  const [dl8] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const iText = await (await dl8.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const iseg = JSON.parse(iText).structure.segs[1];
+  check(iseg.dir === 'a' && Math.abs(iseg.ang - 36.8698976) < 1e-6 && Math.abs(iseg.len - 5) < 1e-12, 'в файле — наклонный участок с углом', JSON.stringify(iseg));
+  const incState = await state(p);
+  await p.selectOption('#preset', 'simple');
+  await openText('incl.json', iText, 'ok');
+  check(JSON.stringify(await state(p)) === JSON.stringify(incState), 'наклонный участок сохраняется и открывается');
+  await p.selectOption('#preset', 'ladder');
+  await p.selectOption('.item[data-kind="sup"] >> nth=1 >> select[data-f="side"]', 'below');
+  await p.click('[data-normal="135"]');
+  check((await p.inputValue('.item[data-kind="sup"] >> nth=1 >> [data-f="angle"]')) === '135', 'каток: реакция перпендикулярно участку одной кнопкой');
+  if (out) await p.screenshot({ path: pathResolve(out, 'inclined.png'), fullPage: true });
 
   await browser.close();
   await new Promise<void>((r) => server.httpServer.close(() => r()));

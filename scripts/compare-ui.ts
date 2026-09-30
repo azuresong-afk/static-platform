@@ -26,7 +26,7 @@ function chromiumPath(): string | undefined {
 // Код передаётся строкой: tsx добавляет в функции служебный __name, которого нет в странице.
 const SNAPSHOT = `(() => {
   const q = (s) => document.querySelector(s);
-  // Новое в порте (внутренние шарниры) в прототипе отсутствует — не сравниваем.
+  // Новое в порте (внутренние шарниры, наклонные направления участков) в прототипе отсутствует — не сравниваем.
   const extra = [...document.querySelectorAll('[data-port-only]')];
   extra.forEach((e) => (e.style.display = 'none'));
   const visible = (e) => e.offsetParent !== null;
@@ -36,10 +36,11 @@ const SNAPSHOT = `(() => {
     svg: q('#svg').innerHTML.replace(/>\\s+</g, '><'),
     solution: visible(q('#solution')) ? q('#solution').innerText : '(скрыто)',
     solwait: q('#solwait') ? visible(q('#solwait')) : false,
-    config: conf.innerText,
+    // Пункты ↗ ↖ ↙ ↘ в списках направлений участков innerText показывает и у скрытых <option>.
+    config: conf.innerText.replace(/\\n[↗↖↙↘]/g, ''),
     fields: [...conf.querySelectorAll('input, select')].filter(visible).map((i) =>
       (i.type === 'checkbox' ? String(i.checked) : i.value) + (i.disabled ? ' disabled' : '') + (i.classList.contains('bad') ? ' bad' : '')),
-    asdir: [...document.querySelectorAll('[data-asdir]')].map((b) => b.disabled + '/' + b.getAttribute('aria-pressed')),
+    asdir: [...document.querySelectorAll('[data-asdir]:not([data-port-only])')].map((b) => b.disabled + '/' + b.getAttribute('aria-pressed')),
     sel: [...document.querySelectorAll('.item.sel')].map((e) => e.dataset.item),
     msg: q('#segmsg').textContent,
     preset: q('#preset').value,

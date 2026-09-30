@@ -37,7 +37,8 @@ function coords(s: Structure): Record<string, [number, number]> {
     const id = queue.shift()!;
     for (const q of s.segs)
       if (q.a === id) {
-        const d = DV[q.dir];
+        // Наклонный участок: угол ang к оси x (своя тригонометрия, без модулей приложения).
+        const d = q.dir === 'a' ? unit(q.ang as number) : DV[q.dir];
         pos[q.b] = [pos[id][0] + d[0] * q.len, pos[id][1] + d[1] * q.len];
         queue.push(q.b);
       }
@@ -62,7 +63,11 @@ export function wrenches(s: Structure, vals: Record<string, number>, unknowns: U
       if (skipDist.has(it.id)) continue;
       const P = pos[it.from],
         Q = pos[it.to];
-      const [nx, ny] = unit(LOAD_ANG[it.dir]);
+      // Нормаль к участку: прямая PQ под углом θ ∈ (−90°; 90°], nu — θ + 90°, nd — θ − 90°.
+      let th = (Math.atan2(Q[1] - P[1], Q[0] - P[0]) * 180) / Math.PI;
+      if (th > 90) th -= 180;
+      if (th <= -90) th += 180;
+      const [nx, ny] = unit(it.dir === 'nu' ? th + 90 : it.dir === 'nd' ? th - 90 : LOAD_ANG[it.dir]);
       // Симпсон по 2 интервалам точен для кубики; подынтегральные выражения — не выше квадратичных.
       const N = 2;
       const L = Math.hypot(Q[0] - P[0], Q[1] - P[1]);

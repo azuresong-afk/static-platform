@@ -38,6 +38,18 @@ export function PrintReport({ s, a, notTarget, title }: { s: Structure; a: Analy
           ))}
           .
         </p>
+        {given.inclined.length > 0 && (
+          <p>
+            Наклонные участки:{' '}
+            {given.inclined.map((p, i) => (
+              <span key={i}>
+                {i ? '; ' : ''}
+                <InlineView c={p} />
+              </span>
+            ))}
+            .
+          </p>
+        )}
         {given.hinges.length > 0 && (
           <p>
             <InlineView c={given.hinges} />.

@@ -3,8 +3,10 @@
  * Производные величины (координаты, углы сил) сюда не входят: их считает resolve().
  */
 
-/** Направление участка: вправо, влево, вверх, вниз. */
+/** Направление участка по оси: вправо, влево, вверх, вниз. */
 export type Dir = 'r' | 'l' | 'u' | 'd';
+/** Направление участка: по оси или под углом (a) — тогда угол задаёт поле ang. */
+export type SegDir = Dir | 'a';
 
 export interface Node {
   id: string;
@@ -17,8 +19,11 @@ export interface Seg {
   id: string;
   a: string;
   b: string;
-  dir: Dir;
+  dir: SegDir;
+  /** Длина по оси участка, м. */
   len: number;
+  /** Для dir = 'a': угол участка к оси x (от a к b), град, против часовой стрелки, 0…360, не кратен 90°. */
+  ang?: number;
 }
 
 /** Где лежит опорная поверхность относительно точки. */
@@ -27,8 +32,11 @@ export type Side = 'below' | 'above' | 'left' | 'right';
 export type RefDir = 'right' | 'left' | 'up' | 'down';
 /** Сторона отсчёта угла / направление момента. */
 export type Rot = 'cw' | 'ccw';
-/** Направление распределённой нагрузки. */
-export type LoadDir = 'down' | 'up' | 'right' | 'left';
+/**
+ * Направление распределённой нагрузки: по осям или перпендикулярно наклонному участку
+ * (nu — в сторону, где выше, nd — в сторону, где ниже).
+ */
+export type LoadDir = 'down' | 'up' | 'right' | 'left' | 'nu' | 'nd';
 
 interface AtItem {
   id: string;

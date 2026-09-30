@@ -2,11 +2,11 @@
  * Операции редактирования конструкции. Чистые функции: принимают конструкцию и возвращают новую,
  * исходную не меняют. Правила и сообщения — как в прототипе.
  */
-import { OPP } from './constants';
+import { AXANG, axisDir, normAng, segAngle } from './constants';
 import { r3 } from '../../../shared/format';
 import { geom, geomOK, resolve, type Geom } from './geometry';
 import type { IdGen } from '../../../shared/ids';
-import type { Dir, Item, ItemType, Side, Structure } from './types';
+import type { Item, ItemType, Seg, SegDir, Side, Structure } from './types';
 
 export type EditResult =
   | { ok: true; s: Structure }
@@ -16,6 +16,22 @@ const clone = (s: Structure): Structure => structuredClone(s);
 
 export const MAX_LEN = 1000;
 const lenValid = (v: number) => !(isNaN(v) || v <= 0 || v > MAX_LEN);
+/** Длина, заданная с точностью до миллиметра (у участков по проекциям длина бывает иррациональной). */
+const mmExact = (v: number) => Math.abs(r3(v) - v) < 1e-12;
+/** Совпадают ли направления (углы в градусах). */
+const sameAng = (a: number, b: number) => Math.abs(normAng(a - b + 180) - 180) < 1e-9;
+
+/** Записать направление участка: угол, кратный 90°, превращается в направление по оси. */
+function setDirAng(q: Seg, dir: SegDir, ang?: number) {
+  const ax = dir === 'a' ? axisDir(ang ?? 0) : dir;
+  if (ax) {
+    q.dir = ax;
+    delete q.ang;
+  } else {
+    q.dir = 'a';
+    q.ang = normAng(ang ?? 0);
+  }
+}
 
 /** Поставить новую точку на участке на расстоянии t от его начала. */
 export function splitSeg(src: Structure, segId: string, t: number, ids: IdGen): EditResult {
@@ -24,7 +40,8 @@ export function splitSeg(src: Structure, segId: string, t: number, ids: IdGen): 
   t = r3(t);
   if (!q || t <= 0.0005 || t >= q.len - 0.0005) return { ok: false, reason: 'invalid' };
   const n = { id: ids.node() },
-    ns = { id: ids.seg(), a: n.id, b: q.b, dir: q.dir, len: r3(q.len - t) };
+    ns: Seg = { id: ids.seg(), a: n.id, b: q.b, dir: q.dir, len: mmExact(q.len) ? r3(q.len - t) : q.len - t };
+  if (q.dir === 'a') ns.ang = q.ang;
   q.b = n.id;
   q.len = t;
   s.nodes.push(n);
@@ -39,19 +56,10 @@ export function removeSeg(src: Structure, segId: string): EditResult {
   if (!q || s.segs.length < 2) return { ok: false, reason: 'invalid' };
   const a = q.a,
     b = q.b;
-  const aDirs = new Set<Dir>();
-  s.segs.forEach((p) => {
-    if (p === q) return;
-    if (p.a === a) aDirs.add(p.dir);
-    if (p.b === a) aDirs.add(OPP[p.dir]);
-  });
-  const bDirs: Dir[] = [];
-  s.segs.forEach((p) => {
-    if (p === q) return;
-    if (p.a === b) bDirs.push(p.dir);
-    if (p.b === b) bDirs.push(OPP[p.dir]);
-  });
-  if (bDirs.some((d) => aDirs.has(d)))
+  // Направления участков из точек a и b (без убираемого): после слияния совпавшие направления наложатся.
+  const raysAt = (id: string) => s.segs.filter((p) => p !== q && (p.a === id || p.b === id)).map((p) => (p.a === id ? segAngle(p) : normAng(segAngle(p) + 180)));
+  const aDirs = raysAt(a);
+  if (raysAt(b).some((d) => aDirs.some((e) => sameAng(d, e))))
     return { ok: false, reason: 'overlap', msg: 'Этот участок нельзя убрать: соседние участки наложатся друг на друга.' };
   s.segs.forEach((p) => {
     if (p.a === b) p.a = a;
@@ -72,16 +80,34 @@ export function removeSeg(src: Structure, segId: string): EditResult {
   return { ok: true, s };
 }
 
-/** Новый участок из точки from в направлении dir. */
-export function addSeg(src: Structure, from: string, dir: Dir, len: number, ids: IdGen): EditResult {
+/** Новый участок из точки from в направлении dir (для наклонного — под углом ang к оси x). */
+export function addSeg(src: Structure, from: string, dir: SegDir, len: number, ids: IdGen, ang?: number): EditResult {
   if (!lenValid(len)) return { ok: false, reason: 'invalid', msg: 'Длина должна быть больше нуля.' };
+  if (dir === 'a' && !Number.isFinite(ang)) return { ok: false, reason: 'invalid', msg: 'Укажите угол наклона участка.' };
+  return pushSeg(src, from, dir, r3(len), ids, ang);
+}
+
+/** Новый участок из точки from по проекциям на оси: dx вправо, dy вверх (со знаком). */
+export function addSegXY(src: Structure, from: string, dx: number, dy: number, ids: IdGen): EditResult {
+  dx = r3(dx);
+  dy = r3(dy);
+  const len = Math.hypot(dx, dy);
+  if (!(len > 0) || len > MAX_LEN) return { ok: false, reason: 'invalid', msg: 'Длина должна быть больше нуля.' };
+  if (!dy) return pushSeg(src, from, dx > 0 ? 'r' : 'l', Math.abs(dx), ids);
+  if (!dx) return pushSeg(src, from, dy > 0 ? 'u' : 'd', Math.abs(dy), ids);
+  return pushSeg(src, from, 'a', len, ids, (Math.atan2(dy, dx) * 180) / Math.PI);
+}
+
+function pushSeg(src: Structure, from: string, dir: SegDir, len: number, ids: IdGen, ang?: number): EditResult {
+  const q: Seg = { id: '', a: from, b: '', dir, len };
+  setDirAng(q, dir, ang);
   const g = geom(src);
-  if (g.adj[from] && g.adj[from].has(dir))
+  if (g.rays[from] && g.rays[from].some((d) => sameAng(d, segAngle(q))))
     return { ok: false, reason: 'occupied', msg: 'Из этой точки в этом направлении уже идёт участок.' };
   const s = clone(src);
   const n = { id: ids.node() };
   s.nodes.push(n);
-  s.segs.push({ id: ids.seg(), a: from, b: n.id, dir, len: r3(len) });
+  s.segs.push({ ...q, id: ids.seg(), b: n.id });
   if (!geomOK(s)) return { ok: false, reason: 'overlap', msg: 'Новый участок пересёк бы существующие.' };
   return { ok: true, s };
 }
@@ -97,28 +123,53 @@ export function setSegLen(src: Structure, segId: string, v: number): EditResult 
   return { ok: true, s };
 }
 
-/** Изменить направление участка. */
-export function setSegDir(src: Structure, segId: string, dir: Dir): EditResult {
+/** Изменить направление участка (для наклонного — угол к оси x, град). */
+export function setSegDir(src: Structure, segId: string, dir: SegDir, ang?: number): EditResult {
   const s = clone(src);
   const q = s.segs.find((x) => x.id === segId);
   if (!q) return { ok: false, reason: 'invalid' };
-  q.dir = dir;
+  if (dir === 'a' && !Number.isFinite(ang)) return { ok: false, reason: 'invalid' };
+  setDirAng(q, dir, ang);
   if (!geomOK(s)) return { ok: false, reason: 'overlap', msg: 'В этом направлении участок наложится на другой.' };
   return { ok: true, s };
 }
 
+/** Изменить угол наклонного участка к оси x, град (угол, кратный 90°, делает участок осевым). */
+export function setSegAng(src: Structure, segId: string, ang: number): EditResult {
+  const q0 = src.segs.find((x) => x.id === segId);
+  if (!q0 || !Number.isFinite(ang)) return { ok: false, reason: 'invalid' };
+  if (q0.dir === 'a' && sameAng(q0.ang ?? 0, ang)) return { ok: false, reason: 'noop' };
+  return setSegDir(src, segId, 'a', ang);
+}
+
+/** Угол наклона по умолчанию при переходе от направления по оси к наклонному: на 30° против часовой. */
+export const defaultTilt = (q: Pick<Seg, 'dir' | 'ang'>): number => normAng((q.dir === 'a' ? (q.ang ?? 0) : AXANG[q.dir]) + 30);
+
 /* ---------- значения по умолчанию для новых элементов ---------- */
 
-/** Сторона опорной поверхности, свободная от участков. */
+/** Где опорная поверхность (стена) относительно точки: направление от точки к ней, град. */
+const WALL: [Side, number][] = [
+  ['below', 270],
+  ['left', 180],
+  ['right', 0],
+  ['above', 90],
+];
+/** Угловое расстояние между направлениями, 0…180°. */
+const angDist = (a: number, b: number) => Math.abs(normAng(a - b + 180) - 180);
+
+/** Сторона опорной поверхности, свободная от участков (наклонный участок занимает сторону в пределах 25°). */
 export function pinSide(g: Geom, id: string): Side {
-  const a = g.adj[id];
-  return !a.has('d') ? 'below' : !a.has('l') ? 'left' : !a.has('r') ? 'right' : 'above';
+  const r = g.rays[id] ?? [];
+  return (WALL.find(([, w]) => r.every((d) => angDist(d, w) > 25)) ?? WALL[3])[0];
 }
 
 /** Для заделки на конце участка — стена с противоположной стороны. */
 export function fixedSide(g: Geom, id: string): Side {
-  const a = g.adj[id];
-  if (a.size === 1) return ({ r: 'left', l: 'right', u: 'below', d: 'above' } as const)[[...a][0]];
+  const r = g.rays[id] ?? [];
+  if (r.length === 1) {
+    const back = normAng(r[0] + 180);
+    return WALL.reduce((b, w) => (angDist(back, w[1]) < angDist(back, b[1]) - 1e-9 ? w : b))[0];
+  }
   return pinSide(g, id);
 }
 
@@ -155,7 +206,7 @@ export function defaults<T extends ItemType>(s: Structure, type: T): NewItem<T> 
           if ((h && !bh) || (h === bh && q.len > best.len)) best = q;
         });
         const h = best.dir === 'r' || best.dir === 'l';
-        return { from: best.a, to: best.b, q1: 2, q2: 2, dir: h ? 'down' : 'right' };
+        return { from: best.a, to: best.b, q1: 2, q2: 2, dir: h || best.dir === 'a' ? 'down' : 'right' };
       }
     }
     throw new Error('Неизвестный тип элемента: ' + type);

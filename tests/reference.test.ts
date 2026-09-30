@@ -12,6 +12,8 @@ const REF: Record<Exclude<PresetKey, 'indet' | 'blank' | 'gerber' | 'arch3'>, Re
   pframe: { X_A: -9, Y_A: 3.464, R_E: 15.464 },
   post: { X_A: 2.4, Y_A: 4, R_C: 3.6 },
   bracket: { X_A: -5, Y_A: 5, S_C: 7.071 },
+  ladder: { X_A: 30, Y_A: 80, R_D: 30 },
+  rafter: { X_A: -0.4, Y_A: 5.462, R_C: 5.231 },
 };
 
 describe('эталонные ответы', () => {

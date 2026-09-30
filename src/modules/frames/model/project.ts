@@ -6,11 +6,12 @@
  *   "structure": { "nodes": [...], "segs": [...], "items": [...] },
  *   "notTarget": ["X_A", …]
  * }
- * Поля конструкции — те же, что в model/types.ts. Лишние поля игнорируются.
+ * Поля конструкции — те же, что в model/types.ts (у наклонного участка dir = "a" и угол ang). Лишние поля игнорируются.
  * Файлы версии 1 (без поля module) открываются этим модулем.
  * Загрузка проверяет всё, от чего зависит расчёт, и сообщает понятные ошибки по-русски.
  */
 import { isNum, isObj, isStr, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
+import { axisDir, normAng } from './constants';
 import { geomOK } from './geometry';
 import type { IdGen } from '../../../shared/ids';
 import type { Dir, Item, Node, Seg, Structure } from './types';
@@ -30,7 +31,7 @@ export interface Project {
 export function serializeProject(p: Project, now = new Date()): string {
   const structure = {
     nodes: p.structure.nodes.map((n) => (n.hinge ? { id: n.id, hinge: true } : { id: n.id })),
-    segs: p.structure.segs.map(({ id, a, b, dir, len }) => ({ id, a, b, dir, len })),
+    segs: p.structure.segs.map(({ id, a, b, dir, len, ang }) => (dir === 'a' ? { id, a, b, dir, len, ang } : { id, a, b, dir, len })),
     items: p.structure.items.map(cleanItem),
   };
   return writeEnvelope(FRAMES_MODULE, p.title, { structure, notTarget: [...p.notTarget] }, now);
@@ -68,7 +69,7 @@ const DIRS = ['r', 'l', 'u', 'd'];
 const SIDES = ['below', 'above', 'left', 'right'];
 const REFS = ['right', 'left', 'up', 'down'];
 const ROTS = ['cw', 'ccw'];
-const LOADDIRS = ['down', 'up', 'right', 'left'];
+const LOADDIRS = ['down', 'up', 'right', 'left', 'nu', 'nd'];
 const TYPE_NAMES: Record<string, string> = {
   fixed: 'заделка',
   pin: 'шарнирно-неподвижная опора',
@@ -111,8 +112,15 @@ export function parseProject(text: string): ParseResult {
     if (segIds.has(q.id)) return errors.push(`Участок «${q.id}» встречается дважды.`);
     segIds.add(q.id);
     if (!isStr(q.a) || !nodeIds.has(q.a) || !isStr(q.b) || !nodeIds.has(q.b)) return errors.push(`${where}: ссылается на несуществующую точку.`);
-    if (!DIRS.includes(q.dir as string)) return errors.push(`${where}: неизвестное направление «${String(q.dir)}».`);
+    if (!DIRS.includes(q.dir as string) && q.dir !== 'a') return errors.push(`${where}: неизвестное направление «${String(q.dir)}».`);
     if (!isNum(q.len) || q.len <= 0 || q.len > 1000) return errors.push(`${where}: длина должна быть числом от 0 до 1000 м.`);
+    if (q.dir === 'a') {
+      if (!isNum(q.ang)) return errors.push(`${where}: у наклонного участка должен быть угол ang — число, градусы.`);
+      // Угол, кратный 90°, — это участок по оси.
+      const ax = axisDir(q.ang);
+      segs.push(ax ? { id: q.id, a: q.a, b: q.b, dir: ax, len: q.len } : { id: q.id, a: q.a, b: q.b, dir: 'a', len: q.len, ang: normAng(q.ang) });
+      return;
+    }
     segs.push({ id: q.id, a: q.a, b: q.b, dir: q.dir as Dir, len: q.len });
   });
 

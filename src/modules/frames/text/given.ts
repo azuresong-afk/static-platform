@@ -1,14 +1,17 @@
 /** «Дано» для отчёта: точки, участки и элементы конструкции словами. */
-import { LOADDIR, SIDES, TYPES } from '../model/constants';
+import { SIDES, TYPES, loadAngle } from '../model/constants';
 import { fmt } from '../../../shared/format';
+import { distGeom } from '../model/geometry';
 import type { Item } from '../model/types';
 import type { Model } from '../solver/model';
 import { sym, v, type Inline } from '../../../shared/doc';
-import { forceDirText, itemTitle, sizeText } from './labels';
+import { forceDirText, itemTitle, loadDirText, segText, sizeText } from './labels';
 
 export interface Given {
   size: string;
   points: Inline[][];
+  /** Наклонные участки: «A–B: длина 4 м, под углом 60° к горизонту…» — пусто, если их нет. */
+  inclined: Inline[][];
   items: Inline[][];
   /** «Внутренние шарниры: D, H» — пусто, если шарниров нет. */
   hinges: Inline[];
@@ -36,13 +39,15 @@ export function givenData(items: Item[], m: Model): Given {
         return [...head, it.unknown ? ': величину ищем' : `: ${fmt(it.M)} кН·м`, it.dir === 'ccw' ? ', против часовой стрелки' : ', по часовой стрелке'];
       case 'dist': {
         const q = it.q1 === it.q2 ? `${fmt(it.q1)} кН/м` : `от ${fmt(it.q1)} до ${fmt(it.q2)} кН/м`;
-        return [...head, ' на участке ', v(g.name[it.from] ?? '?'), '–', v(g.name[it.to] ?? '?'), `: ${q}, направлена ${LOADDIR[it.dir].name}`];
+        const dg = distGeom(g, it);
+        return [...head, ' на участке ', v(g.name[it.from] ?? '?'), '–', v(g.name[it.to] ?? '?'), `: ${q}, направлена ${loadDirText(it.dir, loadAngle(it.dir, dg.ok ? dg.ang : 0))}`];
       }
     }
   });
   const hn = m.parts.hinges.map((h) => g.name[h]);
   const hinges: Inline[] = hn.length ? [`Внутренн${hn.length > 1 ? 'ие шарниры' : 'ий шарнир'}: `, ...hn.flatMap((n, i) => (i ? [', ', v(n)] : [v(n)]))] : [];
-  return { size: sizeText(m), points, items: rows, hinges };
+  const inclined = g.segOrder.filter((q) => q.dir === 'a').map((q): Inline[] => [v(g.name[q.a]), '–', v(g.name[q.b]), `: ${segText(q)}`]);
+  return { size: sizeText(m), points, inclined, items: rows, hinges };
 }
 
 /** Искомые величины для отчёта. */

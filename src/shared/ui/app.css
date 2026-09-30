@@ -411,3 +411,10 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .rm-open{font:inherit;font-size:12.5px;padding:4px 10px;border:1px solid var(--rule);border-radius:5px;background:transparent;color:var(--ink);cursor:pointer}
 .rm-open:hover{background:var(--paper)}
 @media print{.wrap.rm-page{display:block !important}.rm-open{display:none}}
+
+/* Наклонные участки в конфигураторе */
+.seglen{display:grid;grid-template-columns:minmax(0,1fr) 62px;gap:4px}
+.seglen .inp input{padding-left:6px;padding-right:18px}
+.seglen .inp em{right:5px}
+.addseg .asincl{grid-template-columns:1fr 1fr}
+.addseg .asincl .seg{grid-column:1/-1;justify-self:start}

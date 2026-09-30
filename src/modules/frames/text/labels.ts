@@ -1,7 +1,7 @@
 /** Подписи для интерфейса: статусы, заголовки карточек, описание направления силы. */
-import { REFS, TYPES, forceAngle } from '../model/constants';
+import { LOADDIR, QUADS, REFS, TYPES, forceAngle, quadOf, segAngle } from '../model/constants';
 import { fmt } from '../../../shared/format';
-import type { ForceItem } from '../model/types';
+import type { ForceItem, LoadDir, Seg } from '../model/types';
 import type { ItemLabel, Model } from '../solver/model';
 import type { Status } from '../solver/solve';
 import { inlineHTML, sym, v, type Inline } from '../../../shared/doc';
@@ -29,6 +29,16 @@ export function forceDirText(it: Pick<ForceItem, 'alpha' | 'ref' | 'rot'> & { an
   return Math.abs(a % 360) < 1e-9
     ? `направлена ${r.short}`
     : `под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(a, 2)}° к направлению «${r.short}», отсчёт ${it.rot === 'ccw' ? 'против часовой стрелки' : 'по часовой стрелке'}`;
+}
+
+/** Направление распределённой нагрузки словами; ang — угол нагрузки к оси x (нужен для нормали к участку). */
+export const loadDirText = (dir: LoadDir, ang: number): string =>
+  dir === 'nu' || dir === 'nd' ? `перпендикулярно участку (под углом ${fmt(ang, 2)}° к оси x)` : LOADDIR[dir].name;
+
+/** Наклонный участок словами: «длина 4 м, под углом 60° к горизонту (вправо и вверх)». */
+export function segText(q: Seg): string {
+  const { quad, alpha } = quadOf(segAngle(q));
+  return `длина ${fmt(q.len, 3)} м, под углом ${fmt(alpha, 2)}° к горизонту (${QUADS[quad].name})`;
 }
 
 /** Подсказка под полями силы: «Сила … (к оси x: 240°)». */

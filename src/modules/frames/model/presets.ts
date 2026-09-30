@@ -1,15 +1,22 @@
 import { r3 } from '../../../shared/format';
 import { createIdGen, type IdGen } from '../../../shared/ids';
-import type { Dir, DistItem, Item, Structure } from './types';
+import { axisDir, normAng } from './constants';
+import type { Dir, DistItem, Item, Seg, Structure } from './types';
 
 type DistPresetItem<T> = T extends DistItem ? Omit<T, 'id' | 'from' | 'to'> & { from: number; to: number } : never;
 type PointPresetItem<T> = T extends { at: string } ? Omit<T, 'id' | 'at'> & { at: number } : never;
 /** Элемент готовой задачи: узлы заданы индексом точки в pts. */
 export type PresetItem = PointPresetItem<Item> | DistPresetItem<Item>;
 
+/**
+ * Точка ломаной: координаты [x, y] или участок от предыдущей точки — длина l и угол a к оси x, град
+ * (так наклонные участки задаются точно, без округления координат).
+ */
+export type PresetPt = [number, number] | { l: number; a: number };
+
 export interface Preset {
-  /** Точки ломаной по порядку; соседние соединяются участками. */
-  pts: [number, number][];
+  /** Точки ломаной по порядку; соседние соединяются участками. Первая — всегда координаты. */
+  pts: PresetPt[];
   items: PresetItem[];
   /** Индексы точек с внутренним шарниром. */
   hinges?: number[];
@@ -27,6 +34,8 @@ export const PRESET_TITLES = {
   indet: 'Статически неопределимая балка',
   gerber: 'Составная балка с шарниром',
   arch3: 'Трёхшарнирная рама (арка)',
+  ladder: 'Лестница у гладкой стены (наклонная)',
+  rafter: 'Стропила: ветер перпендикулярно скату',
   blank: 'Пустой шаблон — собрать по шагам',
 } as const;
 
@@ -138,18 +147,49 @@ export const PRESETS: Record<PresetKey, Preset> = {
       { type: 'weight', at: 5, G: 4 },
     ],
   },
+  // Мещерский 4.13: лестница под 45°, человек на трети длины, гладкая стена.
+  ladder: {
+    pts: [[0, 0], { l: 1, a: 45 }, { l: 0.5, a: 45 }, { l: 1.5, a: 45 }],
+    items: [
+      { type: 'pin', at: 0, side: 'below' },
+      { type: 'weight', at: 1, G: 60 },
+      { type: 'weight', at: 2, G: 20 },
+      { type: 'roller', at: 3, side: 'right' },
+    ],
+  },
+  // Мещерский 4.21: стропильная ферма как одно тело, ветер перпендикулярен скату AC (равнодействующая 0,8).
+  rafter: {
+    pts: [[0, 0], { l: 2 * Math.sqrt(3), a: 30 }, { l: 2 * Math.sqrt(3), a: 330 }],
+    items: [
+      { type: 'pin', at: 0, side: 'below' },
+      { type: 'roller', at: 2, side: 'below' },
+      { type: 'weight', at: 1, G: 10 },
+      { type: 'dist', from: 0, to: 1, q1: 0.4 / Math.sqrt(3), q2: 0.4 / Math.sqrt(3), dir: 'nd' },
+    ],
+  },
   blank: { pts: [[0, 0], [4, 0]], items: [] },
 };
 
 /** Конструкция из описания готовой задачи (как loadPreset в прототипе). */
 export function presetStructure(p: Preset, ids: IdGen = createIdGen()): Structure {
   const nodes = p.pts.map((_, i) => (p.hinges?.includes(i) ? { id: ids.node(), hinge: true } : { id: ids.node() }));
-  const segs = p.pts.slice(1).map((q, i) => {
-    const P = p.pts[i],
-      dx = q[0] - P[0],
+  // Координаты точек, заданных участком, нужны следующей точке, заданной координатами.
+  const xy: [number, number][] = [];
+  const segs = p.pts.slice(1).map((q, i): Seg => {
+    const P = i ? xy[i - 1] : (p.pts[0] as [number, number]);
+    const base = { id: ids.seg(), a: nodes[i].id, b: nodes[i + 1].id };
+    if (!Array.isArray(q)) {
+      const t = (q.a * Math.PI) / 180;
+      xy.push([P[0] + q.l * Math.cos(t), P[1] + q.l * Math.sin(t)]);
+      const ax = axisDir(q.a);
+      return ax ? { ...base, dir: ax, len: r3(q.l) } : { ...base, dir: 'a', len: q.l, ang: normAng(q.a) };
+    }
+    xy.push(q);
+    const dx = q[0] - P[0],
       dy = q[1] - P[1];
+    if (Math.abs(dx) > 1e-9 && Math.abs(dy) > 1e-9) return { ...base, dir: 'a', len: Math.hypot(dx, dy), ang: normAng((Math.atan2(dy, dx) * 180) / Math.PI) };
     const dir: Dir = Math.abs(dx) > 1e-9 ? (dx > 0 ? 'r' : 'l') : dy > 0 ? 'u' : 'd';
-    return { id: ids.seg(), a: nodes[i].id, b: nodes[i + 1].id, dir, len: r3(Math.abs(dx) + Math.abs(dy)) };
+    return { ...base, dir, len: r3(Math.abs(dx) + Math.abs(dy)) };
   });
   const N = (i: number) => nodes[i].id;
   const items = p.items.map((it) => {

@@ -33,7 +33,8 @@ export function RoadmapScreen({ chrome }: { chrome: Chrome }) {
         <div>
           <h1>Дорожная карта</h1>
           <p className="lede">
-            Готово {done} из {all.length}. Блоки идут в порядке работы: сначала статика, затем динамика, кинематика и аналитическая механика. Эталоны — задачник Мещерского (1975) и «Прикладная механика» Антонова и др.; правила знаков, которые различаются между учебниками, настраиваются в самих разделах.
+            Готово {done} из {all.length}. Блоки идут в порядке работы: сначала статика, затем динамика, кинематика и аналитическая механика. Эталоны — задачник
+            Мещерского (1975) и «Прикладная механика» Антонова и др.; правила знаков, которые различаются между учебниками, настраиваются в самих разделах.
           </p>
         </div>
       </header>
@@ -41,7 +42,10 @@ export function RoadmapScreen({ chrome }: { chrome: Chrome }) {
         {ROADMAP.map((b) => (
           <section key={b.title} className="panel rm-block" aria-label={b.title}>
             <h2>
-              {b.title} <span className="rm-count">{b.items.filter((i) => i.status === 'done').length}/{b.items.length}</span>
+              {b.title}{' '}
+              <span className="rm-count">
+                {b.items.filter((i) => i.status === 'done').length}/{b.items.length}
+              </span>
             </h2>
             <p className="rm-note">{b.note}</p>
             <ol className="rm-list">{b.items.map(row)}</ol>

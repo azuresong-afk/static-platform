@@ -2,7 +2,7 @@
  * Расчётная модель: неизвестные реакции, известные нагрузки, равнодействующие распределённых
  * нагрузок и уравнения-кандидаты. Аналог buildModel() прототипа без HTML.
  */
-import { LOADDIR, REFS } from '../model/constants';
+import { OPPLOAD, REFS, loadAngle } from '../model/constants';
 import { dirOf, type RefAxis } from '../../../shared/format';
 import { distGeom, pathNodes, partsOf, resolve, roman, type Geom, type Parts, type PointItem, type Pt } from '../model/geometry';
 import type { DistItem, ForceItem, LoadDir, MomentItem, Structure, SupportItem, SupportType } from '../model/types';
@@ -64,8 +64,11 @@ export interface DistInfo {
   piece: { index: number; of: number } | null;
   q1: number;
   q2: number;
-  /** Длина участка под нагрузкой. */
+  /** Длина участка под нагрузкой (у наклонного — по его оси). */
   l: number;
+  /** Прямая под нагрузкой: горизонтальная, вертикальная или наклонная, и её угол к оси x (−90°; 90°]. */
+  axis: 'h' | 'v' | 'a';
+  lineAng: number;
   /** Равнодействующая. */
   Q: number;
   /** Доля длины от начала до точки приложения Q. */
@@ -96,7 +99,6 @@ export interface DistPart {
   o: Known;
 }
 
-const OPPLOAD: Record<LoadDir, LoadDir> = { down: 'up', up: 'down', left: 'right', right: 'left' };
 
 export interface BadDist {
   it: DistItem;
@@ -259,7 +261,7 @@ export function buildModel(s: Structure): Model {
         continue;
       }
       const addPiece = (from: string, to: string, P0: Pt, P1: Pt, l: number, q1: number, q2: number, S: string, part: number, piece: DistInfo['piece']) => {
-        const ang = LOADDIR[it.dir].ang;
+        const ang = loadAngle(it.dir, dg.ang);
         const force = (L: string, val: number, dist: number, a: number): Known => {
           const t = l > 0 ? dist / l : 0;
           return {
@@ -285,18 +287,18 @@ export function buildModel(s: Structure): Model {
           const tri = (L: string, q: number, len: number, d: number): DistPart => {
             const dir = q > 0 ? it.dir : OPPLOAD[it.dir];
             const Q = (Math.abs(q) * len) / 2;
-            return { q, l: len, Q, d, dir, o: force(L, Q, d, LOADDIR[dir].ang) };
+            return { q, l: len, Q, d, dir, o: force(L, Q, d, loadAngle(dir, dg.ang)) };
           };
           const halves: [DistPart, DistPart] = [tri('Q′', q1, l1, l1 / 3), tri('Q″', q2, l2, l1 + (2 * l2) / 3)];
           halves.forEach((p) => knowns.push(p.o));
-          dists.push({ it, from, to, part, piece, q1, q2, l, Q: halves[0].Q, f: halves[0].d / l, d: halves[0].d, S, o: halves[0].o, split: { l1, parts: halves } });
+          dists.push({ it, from, to, part, piece, q1, q2, l, axis: dg.axis, lineAng: dg.ang, Q: halves[0].Q, f: halves[0].d / l, d: halves[0].d, S, o: halves[0].o, split: { l1, parts: halves } });
           return;
         }
         const Q = ((q1 + q2) / 2) * l,
           f = Math.abs(q1 + q2) < 1e-12 ? 0.5 : (q1 + 2 * q2) / (3 * (q1 + q2));
         const o = force('Q', Q, f * l, ang);
         knowns.push(o);
-        dists.push({ it, from, to, part, piece, q1, q2, l, Q, f, d: f * l, S, o, split: null });
+        dists.push({ it, from, to, part, piece, q1, q2, l, axis: dg.axis, lineAng: dg.ang, Q, f, d: f * l, S, o, split: null });
       };
       // Шарниры внутри нагруженного участка делят нагрузку на куски — по одному на каждую часть.
       const path = pathNodes(g, it.from, it.to);

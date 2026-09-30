@@ -4,7 +4,7 @@
  * положения размерных надписей) — они нужны интерфейсу для перетаскивания, двойного щелчка и правки размеров.
  * Разметка совпадает с прототипом (проверяется golden-тестами).
  */
-import { LOADDIR, REFS, TYPES } from '../model/constants';
+import { REFS, TYPES, loadAngle, quadOf, segAngle } from '../model/constants';
 import { fmt, r1 } from '../../../shared/format';
 import { distGeom, pathNodes, resolve, type Geom, type PointItem } from '../model/geometry';
 import type { Seg, Structure } from '../model/types';
@@ -152,7 +152,7 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
     const A = G.pos[q.a],
       B = G.pos[q.b];
     if (q.dir === 'r' || q.dir === 'l') hs.push({ s: q, lo: Math.min(A[0], B[0]), hi: Math.max(A[0], B[0]), y: A[1] });
-    else (A[0] > w / 2 + 1e-9 ? vr : vl).push({ s: q, lo: Math.min(A[1], B[1]), hi: Math.max(A[1], B[1]), x: A[0] });
+    else if (q.dir === 'u' || q.dir === 'd') (A[0] > w / 2 + 1e-9 ? vr : vl).push({ s: q, lo: Math.min(A[1], B[1]), hi: Math.max(A[1], B[1]), x: A[0] });
   });
   const nH = pack(hs),
     nL = pack(vl),
@@ -229,6 +229,75 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
   };
   vl.forEach((iv) => vdim(iv, X(0) - 95 - 28 * iv.row!));
   vr.forEach((iv) => vdim(iv, X(w) + 95 + 28 * iv.row!));
+  // Наклонные участки: размер вдоль участка (со стороны, дальней от середины рамы) и угол к горизонту
+  // в начале прямого отрезка.
+  const [cxm, cym] = [X(w / 2), Y(h / 2)];
+  s.segs
+    .filter((q) => q.dir === 'a')
+    .forEach((q) => {
+      const [ax, ay] = sp(q.a),
+        [bx, by] = sp(q.b);
+      const L = Math.hypot(bx - ax, by - ay) || 1,
+        ux = (bx - ax) / L,
+        uy = (by - ay) / L;
+      let nx = uy,
+        ny = -ux;
+      if (nx * ((ax + bx) / 2 - cxm) + ny * ((ay + by) / 2 - cym) < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+      // Эпюра распределённой нагрузки рисуется со стороны, откуда нагрузка действует, — размер ставим с другой.
+      const ld = m.dists.find((d) => {
+        const path = pathNodes(G, d.from, d.to);
+        return path.includes(q.a) && path.includes(q.b);
+      });
+      if (ld) {
+        const t = (loadAngle(ld.it.dir, ld.lineAng) * Math.PI) / 180;
+        if (-Math.cos(t) * nx + Math.sin(t) * ny > 0) {
+          nx = -nx;
+          ny = -ny;
+        }
+      }
+      const off = 30,
+        p1 = [ax + nx * off, ay + ny * off],
+        p2 = [bx + nx * off, by + ny * off];
+      o.push(
+        `<line x1="${r1(ax + nx * 8)}" y1="${r1(ay + ny * 8)}" x2="${r1(p1[0] + nx * 6)}" y2="${r1(p1[1] + ny * 6)}" class="ext"/><line x1="${r1(bx + nx * 8)}" y1="${r1(by + ny * 8)}" x2="${r1(p2[0] + nx * 6)}" y2="${r1(p2[1] + ny * 6)}" class="ext"/>`,
+      );
+      const tk = (x: number, y: number) => `<line x1="${r1(x - (ux - nx) * 5)}" y1="${r1(y - (uy - ny) * 5)}" x2="${r1(x + (ux - nx) * 5)}" y2="${r1(y + (uy - ny) * 5)}" class="dim" stroke-width="1.6"/>`;
+      o.push(`<line x1="${r1(p1[0])}" y1="${r1(p1[1])}" x2="${r1(p2[0])}" y2="${r1(p2[1])}" class="dim"/>` + tk(p1[0], p1[1]) + tk(p2[0], p2[1]));
+      // Надпись читается слева направо: угол поворота в пределах ±90°.
+      let rot = (Math.atan2(uy, ux) * 180) / Math.PI;
+      if (rot > 90) rot -= 180;
+      if (rot < -90) rot += 180;
+      const tx = (p1[0] + p2[0]) / 2 + nx * 8,
+        ty = (p1[1] + p2[1]) / 2 + ny * 8,
+        hw = Math.max(14, Math.min(34, L / 2));
+      o.push(
+        `<g transform="rotate(${r1(rot)} ${r1(tx)} ${r1(ty)})"><text x="${r1(tx)}" y="${r1(ty + 5)}" text-anchor="middle" class="t-dimed"${L < 28 ? ' font-size="11"' : ''}>${fmt(q.len, 2)}</text><rect x="${r1(tx - hw)}" y="${r1(ty - 12)}" width="${r1(2 * hw)}" height="24" class="dimhit" data-dim="${q.id}"><title>Изменить длину участка</title></rect></g>`,
+      );
+      dimPos[q.id] = [tx, ty];
+      // Угол к горизонту — если участок не продолжает предыдущий по прямой.
+      const prev = G.parent[q.a];
+      if (prev && prev.dir === 'a' && Math.abs(segAngle(prev) - segAngle(q)) < 1e-9) return;
+      const t = segAngle(q),
+        { alpha } = quadOf(t),
+        h0 = t < 90 || t > 270 ? 0 : 180,
+        R = 30;
+      const P = (d: number, r: number) => [ax + r * Math.cos((d * Math.PI) / 180), ay - r * Math.sin((d * Math.PI) / 180)];
+      // Дуга от горизонтали к участку кратчайшим путём; на экране ось y вниз, поэтому «против часовой» — флаг 0.
+      const delta = ((t - h0 + 540) % 360) - 180,
+        [x0, y0] = P(h0, R),
+        [x1, y1] = P(t, R),
+        sweep = delta > 0 ? 0 : 1,
+        [lx, ly] = P(h0 + delta / 2, R + 16);
+      if (!G.adj[q.a].has(h0 === 0 ? 'r' : 'l')) {
+        const [ex, ey] = P(h0, 52);
+        o.push(`<line x1="${r1(ax)}" y1="${r1(ay)}" x2="${r1(ex)}" y2="${r1(ey)}" class="angref"/>`);
+      }
+      o.push(`<path d="M${r1(x0)} ${r1(y0)} A${R} ${R} 0 0 ${sweep} ${r1(x1)} ${r1(y1)}" class="angarc"/>`);
+      o.push(`<text x="${r1(lx)}" y="${r1(ly + 5)}" text-anchor="middle" class="t-ang">${fmt(alpha, 2)}°</text>`);
+    });
   // опоры
   const pointItems = items.filter((it): it is PointItem => it.type !== 'dist');
   o.push(
@@ -244,7 +313,7 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
   for (const d of m.dists) {
     const [ax, ay] = sp(d.from),
       [bx, by] = sp(d.to),
-      t = (LOADDIR[d.it.dir].ang * Math.PI) / 180,
+      t = (loadAngle(d.it.dir, d.lineAng) * Math.PI) / 180,
       u = [Math.cos(t), -Math.sin(t)],
       n = [-u[0], -u[1]];
     const hq = (q: number) => (54 * Math.abs(q)) / qmax,
@@ -279,7 +348,7 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
       if (d.split)
         // Знакопеременная нагрузка: две равнодействующие, каждая со своей стороны.
         for (const p of d.split.parts) {
-          const tp = (LOADDIR[p.dir].ang * Math.PI) / 180;
+          const tp = (loadAngle(p.dir, d.lineAng) * Math.PI) / 180;
           o.push(forceArrow(X(p.o.x), Y(p.o.y), p.o.angle, [-Math.cos(tp), Math.sin(tp)], 'ld', false, ssym(p.o, ` = ${fmt(p.Q)}`), 't-ld', 62));
         }
       else o.push(forceArrow(X(d.o.x), Y(d.o.y), d.o.angle, n, 'ld', false, ssym(d.o, ` = ${fmt(d.Q)}`), 't-ld', 62));
@@ -398,11 +467,19 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
   // имена точек — в самом свободном из восьми направлений
   const occ: Record<string, number[][]> = {};
   G.order.forEach((id) => (occ[id] = [...G.adj[id]].map((d) => ({ r: [1, 0], l: [-1, 0], u: [0, -1], d: [0, 1] })[d])));
+  // Наклонные участки тоже занимают направления у своих концов.
+  s.segs
+    .filter((q) => q.dir === 'a')
+    .forEach((q) => {
+      const t = (segAngle(q) * Math.PI) / 180;
+      occ[q.a]?.push([Math.cos(t), -Math.sin(t)]);
+      occ[q.b]?.push([-Math.cos(t), Math.sin(t)]);
+    });
   for (const it of items) {
     if (it.type === 'dist') {
       const g = distGeom(G, it);
       if (!g.ok) continue;
-      const t = (LOADDIR[it.dir].ang * Math.PI) / 180,
+      const t = (loadAngle(it.dir, g.ang) * Math.PI) / 180,
         n = [-Math.cos(t), Math.sin(t)];
       pathNodes(G, it.from, it.to).forEach((id) => occ[id].push(n));
       continue;
@@ -450,7 +527,8 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
     if (it.type === 'dist') {
       const [ax, ay] = sp(it.from),
         [bx, by] = sp(it.to),
-        t = (LOADDIR[it.dir].ang * Math.PI) / 180,
+        dg = distGeom(G, it),
+        t = (loadAngle(it.dir, dg.ok ? dg.ang : 0) * Math.PI) / 180,
         n = [-Math.cos(t), Math.sin(t)];
       const xs = [ax, bx, ax + n[0] * 64, bx + n[0] * 64],
         ys = [ay, by, ay + n[1] * 64, by + n[1] * 64];

@@ -1,4 +1,4 @@
-import { DIRV, OPP, SIDES, ptName, forceAngle } from './constants';
+import { OPP, SIDES, ptName, forceAngle, segAngle, segVec, normAng } from './constants';
 import { r3 } from '../../../shared/format';
 import type { Dir, DistItem, Item, Seg, Structure } from './types';
 
@@ -13,12 +13,19 @@ export interface Geom {
   name: Record<string, string>;
   /** Участок, ведущий в узел из его родителя. */
   parent: Record<string, Seg>;
-  /** Направления участков, выходящих из узла. */
+  /** Направления участков по осям, выходящих из узла (наклонные сюда не входят — они в rays). */
   adj: Record<string, Set<Dir>>;
+  /** Углы к оси x всех участков, выходящих из узла, град (0…360). */
+  rays: Record<string, number[]>;
+  /** Есть наклонные участки. */
+  inclined: boolean;
   root: string;
   /** Участки в порядке обхода (по узлу-потомку). */
   segOrder: Seg[];
 }
+
+/** Округление координат с наклонными участками: только шум вычислений (1e-12 м), не миллиметры. */
+const r12 = (v: number) => Math.round(v * 1e12) / 1e12 + 0;
 
 /** Координаты узлов обходом дерева участков от корня (узла, в который не входит ни один участок). */
 export function geom(s: Pick<Structure, 'nodes' | 'segs'>): Geom {
@@ -26,25 +33,33 @@ export function geom(s: Pick<Structure, 'nodes' | 'segs'>): Geom {
   const root = (s.nodes.find((n) => !inc.has(n.id)) || s.nodes[0]).id;
   const kids: Record<string, Seg[]> = {};
   const adj: Record<string, Set<Dir>> = {};
+  const rays: Record<string, number[]> = {};
   const pos: Record<string, Pt> = {};
   const parent: Record<string, Seg> = {};
   const order: string[] = [];
   s.nodes.forEach((n) => {
     adj[n.id] = new Set();
+    rays[n.id] = [];
     kids[n.id] = [];
   });
   s.segs.forEach((q) => {
     if (kids[q.a]) kids[q.a].push(q);
-    if (adj[q.a]) adj[q.a].add(q.dir);
-    if (adj[q.b]) adj[q.b].add(OPP[q.dir]);
+    if (q.dir !== 'a') {
+      if (adj[q.a]) adj[q.a].add(q.dir);
+      if (adj[q.b]) adj[q.b].add(OPP[q.dir]);
+    }
+    const t = segAngle(q);
+    if (rays[q.a]) rays[q.a].push(t);
+    if (rays[q.b]) rays[q.b].push(normAng(t + 180));
   });
+  const inclined = s.segs.some((q) => q.dir === 'a');
   const visit = (id: string, x: number, y: number): void => {
     if (id in pos) return;
     pos[id] = [x, y];
     order.push(id);
     (kids[id] || []).forEach((q) => {
       parent[q.b] = q;
-      const d = DIRV[q.dir];
+      const d = segVec(q);
       visit(q.b, x + d[0] * q.len, y + d[1] * q.len);
     });
   };
@@ -55,11 +70,34 @@ export function geom(s: Pick<Structure, 'nodes' | 'segs'>): Geom {
     mx = Math.min(mx, x);
     my = Math.min(my, y);
   });
-  Object.keys(pos).forEach((k) => (pos[k] = [r3(pos[k][0] - mx), r3(pos[k][1] - my)]));
+  // Рамы из участков по осям — с точностью до миллиметра, как в прототипе; с наклонными — без огрубления.
+  const rr = inclined ? r12 : r3;
+  Object.keys(pos).forEach((k) => (pos[k] = [rr(pos[k][0] - mx), rr(pos[k][1] - my)]));
   const name: Record<string, string> = {};
   order.forEach((id, i) => (name[id] = ptName(i)));
   const segOrder = order.filter((id) => parent[id]).map((id) => parent[id]);
-  return { pos, order, name, parent, adj, root, segOrder };
+  return { pos, order, name, parent, adj, rays, inclined, root, segOrder };
+}
+
+const EPS = 1e-7;
+/** Расстояние от точки P до отрезка AB. */
+function distToSeg(P: Pt, A: Pt, B: Pt): number {
+  const ux = B[0] - A[0],
+    uy = B[1] - A[1],
+    l2 = ux * ux + uy * uy;
+  const t = l2 > 0 ? Math.max(0, Math.min(1, ((P[0] - A[0]) * ux + (P[1] - A[1]) * uy) / l2)) : 0;
+  return Math.hypot(P[0] - A[0] - t * ux, P[1] - A[1] - t * uy);
+}
+/** Расстояние со знаком от точки P до прямой AB. */
+const side = (A: Pt, B: Pt, P: Pt) => ((B[0] - A[0]) * (P[1] - A[1]) - (B[1] - A[1]) * (P[0] - A[0])) / (Math.hypot(B[0] - A[0], B[1] - A[1]) || 1);
+/** Отрезки AB и CD имеют общую точку (пересекаются или касаются). */
+function touch(A: Pt, B: Pt, C: Pt, D: Pt): boolean {
+  const d1 = side(A, B, C),
+    d2 = side(A, B, D),
+    d3 = side(C, D, A),
+    d4 = side(C, D, B);
+  if (((d1 > EPS && d2 < -EPS) || (d1 < -EPS && d2 > EPS)) && ((d3 > EPS && d4 < -EPS) || (d3 < -EPS && d4 > EPS))) return true;
+  return distToSeg(C, A, B) < EPS || distToSeg(D, A, B) < EPS || distToSeg(A, C, D) < EPS || distToSeg(B, C, D) < EPS;
 }
 
 /** Все узлы достижимы, участки не пересекаются и не накладываются (касаться можно только общим концом). */
@@ -71,6 +109,26 @@ export function geomOK(s: Pick<Structure, 'nodes' | 'segs'>): boolean {
     for (let j = i + 1; j < S.length; j++) {
       const p = S[i],
         q = S[j];
+      if (p.s.dir === 'a' || q.s.dir === 'a') {
+        // Наклонный участок: с общим концом участки не должны идти из него в одну сторону,
+        // без общего конца — не должны иметь ни одной общей точки.
+        const common = [p.s.a, p.s.b].find((n) => n === q.s.a || n === q.s.b);
+        if (common) {
+          const O = g.pos[common],
+            U = p.s.a === common ? p.B : p.A,
+            V = q.s.a === common ? q.B : q.A;
+          const ux = U[0] - O[0],
+            uy = U[1] - O[1],
+            vx = V[0] - O[0],
+            vy = V[1] - O[1];
+          const lu = Math.hypot(ux, uy),
+            lv = Math.hypot(vx, vy);
+          if (Math.abs(ux * vy - uy * vx) / (lu * lv) < 1e-9 && ux * vx + uy * vy > 0) return false;
+          continue;
+        }
+        if (touch(p.A, p.B, q.A, q.B)) return false;
+        continue;
+      }
       const ix0 = Math.max(Math.min(p.A[0], p.B[0]), Math.min(q.A[0], q.B[0])),
         ix1 = Math.min(Math.max(p.A[0], p.B[0]), Math.max(q.A[0], q.B[0]));
       const iy0 = Math.max(Math.min(p.A[1], p.B[1]), Math.min(q.A[1], q.B[1])),
@@ -105,7 +163,18 @@ export function pathNodes(g: Geom, a: string, b: string): string[] {
 
 export type DistGeom =
   | { ok: false; why: 'zero' | 'line' }
-  | { ok: true; horiz: boolean; P: Pt; Q: Pt; len: number };
+  | {
+      ok: true;
+      /** Прямая горизонтальна (h), вертикальна (v) или наклонна (a). */
+      axis: 'h' | 'v' | 'a';
+      horiz: boolean;
+      P: Pt;
+      Q: Pt;
+      /** Длина по оси участка. */
+      len: number;
+      /** Угол прямой к оси x в пределах (−90°; 90°]: 0 — горизонталь, 90 — вертикаль. */
+      ang: number;
+    };
 
 /** Участок под распределённой нагрузкой: начало и конец должны лежать на одной прямой по раме. */
 export function distGeom(g: Geom, it: Pick<DistItem, 'from' | 'to'>): DistGeom {
@@ -114,12 +183,19 @@ export function distGeom(g: Geom, it: Pick<DistItem, 'from' | 'to'>): DistGeom {
   if (!P || !Q || it.from === it.to) return { ok: false, why: 'zero' };
   const horiz = Math.abs(P[1] - Q[1]) < 1e-9,
     vert = Math.abs(P[0] - Q[0]) < 1e-9;
-  if (!horiz && !vert) return { ok: false, why: 'line' };
+  if (!horiz && !vert) {
+    // Наклонная прямая: все точки пути по раме — на прямой PQ.
+    for (const id of pathNodes(g, it.from, it.to)) if (Math.abs(side(P, Q, g.pos[id])) > EPS) return { ok: false, why: 'line' };
+    let ang = (Math.atan2(Q[1] - P[1], Q[0] - P[0]) * 180) / Math.PI;
+    if (ang > 90) ang -= 180;
+    if (ang <= -90) ang += 180;
+    return { ok: true, axis: 'a', horiz, P, Q, len: Math.hypot(Q[0] - P[0], Q[1] - P[1]), ang };
+  }
   for (const id of pathNodes(g, it.from, it.to)) {
     const R = g.pos[id];
     if ((horiz && Math.abs(R[1] - P[1]) > 1e-9) || (vert && Math.abs(R[0] - P[0]) > 1e-9)) return { ok: false, why: 'line' };
   }
-  return { ok: true, horiz, P, Q, len: horiz ? Math.abs(Q[0] - P[0]) : Math.abs(Q[1] - P[1]) };
+  return { ok: true, axis: horiz ? 'h' : 'v', horiz, P, Q, len: horiz ? Math.abs(Q[0] - P[0]) : Math.abs(Q[1] - P[1]), ang: horiz ? 0 : 90 };
 }
 
 /** Элемент с координатами точки и углом (для опор — угол реакции, для силы — угол к оси x). */
@@ -137,7 +213,8 @@ export interface Resolved {
  * Аналог resolve() прототипа, но без мутаций: возвращает поправленную копию конструкции
  * и элементы с координатами. Поправки те же, что прототип вносит в состояние:
  * - элемент, привязанный к исчезнувшему узлу, переезжает в первую точку (распределённая — от первой до последней);
- * - направление распределённой нагрузки приводится к перпендикуляру участка;
+ * - направление распределённой нагрузки приводится к перпендикуляру участка (у наклонных участков
+ *   допустимы и направления по осям, и нормали; у горизонтальных и вертикальных нормаль заменяется осью);
  * - угол опор (кроме наклонного катка) берётся по опорной поверхности.
  */
 export function resolve(s: Structure): Resolved {
@@ -152,8 +229,10 @@ export function resolve(s: Structure): Resolved {
       if (!(it.to in g.pos)) it.to = last;
       const dg = distGeom(g, it);
       if (dg.ok) {
-        if (dg.horiz && (it.dir === 'left' || it.dir === 'right')) it.dir = 'down';
-        if (!dg.horiz && (it.dir === 'up' || it.dir === 'down')) it.dir = 'right';
+        if (dg.axis === 'h' && (it.dir === 'left' || it.dir === 'right')) it.dir = 'down';
+        if (dg.axis === 'v' && (it.dir === 'up' || it.dir === 'down')) it.dir = 'right';
+        if (dg.axis === 'h' && (it.dir === 'nu' || it.dir === 'nd')) it.dir = it.dir === 'nu' ? 'up' : 'down';
+        if (dg.axis === 'v' && (it.dir === 'nu' || it.dir === 'nd')) it.dir = it.dir === 'nu' ? 'left' : 'right';
       }
       items.push(it);
       return it;

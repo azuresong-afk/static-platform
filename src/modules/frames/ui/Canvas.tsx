@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { nearestNode, type Drawing } from '../draw/drawing';
 import { fmtIn, parseNum, r1 } from '../../../shared/format';
+import { segVec } from '../model/constants';
 import type { Geom } from '../model/geometry';
 import { useStore } from './useStore';
 
@@ -104,7 +105,9 @@ export function Canvas({ drawing, g }: { drawing: Drawing; g: Geom }) {
     const ax = L.OX + g.pos[s.a][0] * L.SC,
       ay = L.OY + (L.MAXY - g.pos[s.a][1]) * L.SC;
     const [px, py] = svgPt(ev);
-    const t = r1({ r: px - ax, l: ax - px, u: ay - py, d: py - ay }[s.dir] / L.SC);
+    // Расстояние от начала участка вдоль его оси (на экране ось y направлена вниз).
+    const [ux, uy] = segVec(s);
+    const t = r1(((px - ax) * ux + (ay - py) * uy) / L.SC);
     if (t < 0.05 || t > s.len - 0.05) return;
     store.splitSeg(s.id, t);
   };

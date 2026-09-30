@@ -1,6 +1,6 @@
 /** Конфигуратор: участки, опоры, нагрузки, карточки элементов, «Что найти» — как в прототипе. */
 import { useEffect, useState } from 'react';
-import { DGL, LOADDIR, REFS, SIDES } from '../model/constants';
+import { DGL, LOADDIR, QUADS, REFS, SIDES, normAng, quadOf, segAngle, type Quad } from '../model/constants';
 import { fmt, parseNum } from '../../../shared/format';
 import { distGeom, type Geom } from '../model/geometry';
 import type { Dir, Item, ItemType, LoadDir } from '../model/types';
@@ -10,6 +10,11 @@ import { InlineView } from '../../../shared/ui/DocView';
 import { LOAD_ICONS, SUPPORT_ICONS } from './icons';
 import { NumField } from './NumField';
 import { useStore } from './useStore';
+
+/** Для показа в поле: иррациональные длины и углы наклонных участков — с четырьмя знаками. */
+const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+const AXDIRS: Dir[] = ['r', 'l', 'u', 'd'];
+const isQuad = (v: string): v is Quad => v in QUADS;
 
 const nodeLabel = (g: Geom, id: string) => `${g.name[id]} (${fmt(g.pos[id][0], 2)}; ${fmt(g.pos[id][1], 2)})`;
 
@@ -27,30 +32,57 @@ function Segments({ model }: { model: Model }) {
     <div id="segs">
       {g.segOrder.map((s) => {
         const name = `${g.name[s.a]}–${g.name[s.b]}`;
+        const qd = s.dir === 'a' ? quadOf(segAngle(s)) : null;
+        const len = (
+          <NumField
+            value={qd ? r4(s.len) : s.len}
+            data={{ 'data-seg': s.id }}
+            unit="м"
+            label={`Длина участка ${name}`}
+            onValue={(v) => (isNaN(v) || v <= 0 || v > 1000 ? false : store.typeSegLen(s.id, v))}
+            onBlur={() => store.endSession('seg:' + s.id)}
+          />
+        );
         return (
           <div className="segrow" key={s.id}>
             <span className="segname">{name}</span>
             <select
               className="dirsel"
               data-segdir={s.id}
-              value={s.dir}
+              value={qd ? qd.quad : s.dir}
               aria-label={`Направление участка ${name}`}
-              onChange={(e) => store.setSegDir(s.id, e.target.value as Dir)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (isQuad(v)) store.setSegDir(s.id, 'a', QUADS[v].ang(qd ? qd.alpha : 30));
+                else store.setSegDir(s.id, v as Dir);
+              }}
             >
-              {(['r', 'l', 'u', 'd'] as Dir[]).map((d) => (
+              {AXDIRS.map((d) => (
                 <option key={d} value={d}>
                   {DGL[d]}
                 </option>
               ))}
+              {(Object.keys(QUADS) as Quad[]).map((k) => (
+                <option key={k} value={k} title={`под углом, ${QUADS[k].name}`} data-port-only="">
+                  {QUADS[k].glyph}
+                </option>
+              ))}
             </select>
-            <NumField
-              value={s.len}
-              data={{ 'data-seg': s.id }}
-              unit="м"
-              label={`Длина участка ${name}`}
-              onValue={(v) => (isNaN(v) || v <= 0 || v > 1000 ? false : store.typeSegLen(s.id, v))}
-              onBlur={() => store.endSession('seg:' + s.id)}
-            />
+            {qd ? (
+              <div className="seglen">
+                {len}
+                <NumField
+                  value={r4(qd.alpha)}
+                  data={{ 'data-segang': s.id }}
+                  unit="°"
+                  label={`Угол участка ${name} к горизонту`}
+                  onValue={(v) => (isNaN(v) || v <= 0 || v >= 90 ? false : store.typeSegAng(s.id, QUADS[qd.quad].ang(v)))}
+                  onBlur={() => store.endSession('segang:' + s.id)}
+                />
+              </div>
+            ) : (
+              len
+            )}
             <button type="button" className="mini" data-split={s.id} title="Поставить новую точку посередине участка" onClick={() => store.splitSeg(s.id, s.len / 2)}>
               Разделить
             </button>
@@ -72,8 +104,12 @@ function AddSegment({ g }: { g: Geom }) {
   const [, store] = useStore();
   const last = g.order[g.order.length - 1];
   const [from, setFrom] = useState(last);
-  const [dir, setDir] = useState<Dir>('u');
+  const [dir, setDir] = useState<Dir | Quad>('u');
   const [len, setLen] = useState('2');
+  const [alpha, setAlpha] = useState('30');
+  const [byXY, setByXY] = useState(false);
+  const [dx, setDx] = useState('4');
+  const [dy, setDy] = useState('3');
   const [bad, setBad] = useState(false);
   // Точка пропала (или появилась новая схема) — берём последнюю, как прототип.
   const fromId = g.order.includes(from) ? from : last;
@@ -82,7 +118,9 @@ function AddSegment({ g }: { g: Geom }) {
   }, [fromId, from]);
   const occupied = g.adj[fromId] || new Set<Dir>();
   // Выбранное направление занято — берём первое свободное из вверх/вниз/вправо/влево и запоминаем его (как прототип).
-  const curDir = occupied.has(dir) ? ((['u', 'd', 'r', 'l'] as Dir[]).find((d) => !occupied.has(d)) ?? dir) : dir;
+  const curDir = !isQuad(dir) && occupied.has(dir) ? ((['u', 'd', 'r', 'l'] as Dir[]).find((d) => !occupied.has(d)) ?? dir) : dir;
+  const quad = isQuad(curDir) ? curDir : null;
+  const xy = quad !== null && byXY;
   if (curDir !== dir) setDir(curDir);
   const DN: Record<Dir, string> = { r: 'вправо', l: 'влево', u: 'вверх', d: 'вниз' };
   return (
@@ -114,25 +152,89 @@ function AddSegment({ g }: { g: Geom }) {
                 {DGL[d]}
               </button>
             ))}
+            {(Object.keys(QUADS) as Quad[]).map((k) => (
+              <button key={k} type="button" data-asdir={k} data-port-only="" aria-label={`под углом, ${QUADS[k].name}`} aria-pressed={k === curDir ? 'true' : 'false'} onClick={() => setDir(k)}>
+                {QUADS[k].glyph}
+              </button>
+            ))}
           </div>
         </div>
-        <label className="field">
-          <span>Длина</span>
-          <div className="inp">
-            <input id="asLen" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={len} onChange={(e) => setLen(e.target.value)} />
-            <em>м</em>
-          </div>
-        </label>
+        {!xy && (
+          <label className="field">
+            <span>Длина</span>
+            <div className="inp">
+              <input id="asLen" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={len} onChange={(e) => setLen(e.target.value)} />
+              <em>м</em>
+            </div>
+          </label>
+        )}
       </div>
+      {quad && (
+        <div className="asrow asincl">
+          <div className="seg" role="group" aria-label="Как задать наклонный участок">
+            <button type="button" id="asByAng" aria-pressed={!byXY} onClick={() => setByXY(false)}>
+              по углу
+            </button>
+            <button type="button" id="asByXY" aria-pressed={byXY} onClick={() => setByXY(true)}>
+              по проекциям
+            </button>
+          </div>
+          {byXY ? (
+            <>
+              <label className="field">
+                <span>по горизонтали</span>
+                <div className="inp">
+                  <input id="asDx" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={dx} onChange={(e) => setDx(e.target.value)} />
+                  <em>м</em>
+                </div>
+              </label>
+              <label className="field">
+                <span>по вертикали</span>
+                <div className="inp">
+                  <input id="asDy" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={dy} onChange={(e) => setDy(e.target.value)} />
+                  <em>м</em>
+                </div>
+              </label>
+            </>
+          ) : (
+            <label className="field">
+              <span>угол α к горизонту</span>
+              <div className="inp">
+                <input id="asAng" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={alpha} onChange={(e) => setAlpha(e.target.value)} />
+                <em>°</em>
+              </div>
+            </label>
+          )}
+        </div>
+      )}
       <button
         type="button"
         id="asGo"
         className="addbtn"
         onClick={() => {
-          const v = parseNum(len);
-          const invalid = isNaN(v) || v <= 0 || v > 1000;
+          if (!quad) {
+            const v = parseNum(len);
+            const invalid = isNaN(v) || v <= 0 || v > 1000;
+            setBad(invalid);
+            store.addSeg(fromId, curDir as Dir, v);
+            return;
+          }
+          // Знаки проекций — по выбранной четверти.
+          const sx = quad === 'ur' || quad === 'dr' ? 1 : -1,
+            sy = quad === 'ur' || quad === 'ul' ? 1 : -1;
+          if (byXY) {
+            const x = parseNum(dx),
+              y = parseNum(dy);
+            const invalid = !(x > 0 && y > 0 && Math.hypot(x, y) <= 1000);
+            setBad(invalid);
+            if (!invalid) store.addSegXY(fromId, sx * x, sy * y);
+            return;
+          }
+          const v = parseNum(len),
+            a = parseNum(alpha);
+          const invalid = isNaN(v) || v <= 0 || v > 1000 || !(a > 0 && a < 90);
           setBad(invalid);
-          store.addSeg(fromId, curDir, v);
+          if (!invalid) store.addSeg(fromId, 'a', v, QUADS[quad].ang(a));
         }}
       >
         Добавить участок
@@ -145,7 +247,7 @@ function AddSegment({ g }: { g: Geom }) {
 function Hinges({ model }: { model: Model }) {
   const [st, store] = useStore();
   const g = model.g;
-  const inner = g.order.filter((id) => g.adj[id].size >= 2);
+  const inner = g.order.filter((id) => g.rays[id].length >= 2);
   const hinge = new Set(st.s.nodes.filter((n) => n.hinge).map((n) => n.id));
   return (
     <div data-port-only="">
@@ -165,6 +267,31 @@ function Hinges({ model }: { model: Model }) {
       ) : (
         <p className="empty">Шарнир можно поставить в точке между участками — сначала разделите участок.</p>
       )}
+    </div>
+  );
+}
+
+/** Каток на наклонном участке: реакция перпендикулярно участку — в одну или другую сторону. */
+function NormalButtons({ it, model }: { it: Item & { type: 'roller' }; model: Model }) {
+  const [, store] = useStore();
+  const g = model.g;
+  const segs = g.segOrder.filter((q) => q.dir === 'a' && (q.a === it.at || q.b === it.at));
+  if (!segs.length) return null;
+  return (
+    <div className="field wide">
+      <span>Реакция перпендикулярно участку</span>
+      <div className="quick">
+        {segs.flatMap((q) =>
+          [90, -90].map((d) => {
+            const a = Math.round(normAng(segAngle(q) + d) * 1e9) / 1e9;
+            return (
+              <button key={q.id + d} type="button" data-normal={a} aria-pressed={it.side === 'tilt' && Math.abs((it.angle ?? 0) - a) < 1e-6 ? 'true' : 'false'} onClick={() => store.setRollerAngle(it.id, a)}>
+                ⊥ {g.name[q.a]}–{g.name[q.b]}: {fmt(a, 2)}°
+              </button>
+            );
+          }),
+        )}
+      </div>
     </div>
   );
 }
@@ -286,6 +413,7 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
           {P}
           <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(true)} />
           {it.side === 'tilt' && <Field it={it} f="angle" label="Угол реакции к оси x" unit="°" />}
+          <NormalButtons it={it} model={model} />
           {it.side === 'tilt' && <AngleName it={it} />}
         </>
       );
@@ -367,7 +495,7 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
       break;
     case 'dist': {
       const dg = distGeom(g, it);
-      const dirs: LoadDir[] = !dg.ok ? ['down', 'up', 'right', 'left'] : dg.horiz ? ['down', 'up'] : ['right', 'left'];
+      const dirs: LoadDir[] = !dg.ok ? ['down', 'up', 'right', 'left'] : dg.axis === 'h' ? ['down', 'up'] : dg.axis === 'v' ? ['right', 'left'] : ['nd', 'nu', 'down', 'up', 'right', 'left'];
       fields = (
         <>
           <NodeSelect it={it} f="from" label="От точки" g={g} />
@@ -375,7 +503,7 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
           <Field it={it} f="q1" label="q в начале" unit="кН/м" />
           <Field it={it} f="q2" label="q в конце" unit="кН/м" />
           <Select it={it} f="dir" wide label="Нагрузка направлена" options={dirs.map((d) => [d, LOADDIR[d].name] as [string, string])} />
-          {!dg.ok && <p className="calc s-bad">Точки должны лежать на одном прямом участке (горизонтальном или вертикальном).</p>}
+          {!dg.ok && <p className="calc s-bad">{g.inclined ? 'Точки должны лежать на одной прямой по раме.' : 'Точки должны лежать на одном прямом участке (горизонтальном или вертикальном).'}</p>}
         </>
       );
       break;

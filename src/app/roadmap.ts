@@ -41,7 +41,8 @@ export const ROADMAP: RoadmapBlock[] = [
         title: 'Наклонные элементы',
         what: 'Участки под любым углом, нагрузка по нормали к участку: лестницы, стропила, кронштейны.',
         refs: 'Мещерский §4',
-        status: 'planned',
+        status: 'done',
+        tab: 'frames',
       },
       { id: 'truss', title: 'Фермы', what: 'Вырезание узлов и сечения Риттера, нулевые стержни.', refs: 'Мещерский §4', status: 'planned' },
       {
@@ -173,7 +174,14 @@ export const ROADMAP: RoadmapBlock[] = [
     title: 'Сопротивление материалов',
     note: 'Антонов и др., «Прикладная механика», РХТУ, 2004',
     items: [
-      { id: 'bending', title: 'Изгиб', what: 'Эпюры Q и M для прямых балок, правила знаков разных учебников.', refs: 'Антонов, гл. 8', status: 'done', tab: 'bending' },
+      {
+        id: 'bending',
+        title: 'Изгиб',
+        what: 'Эпюры Q и M для прямых балок, правила знаков разных учебников.',
+        refs: 'Антонов, гл. 8',
+        status: 'done',
+        tab: 'bending',
+      },
       {
         id: 'sections',
         title: 'Подбор сечения',
@@ -182,7 +190,14 @@ export const ROADMAP: RoadmapBlock[] = [
         status: 'done',
         tab: 'sections',
       },
-      { id: 'axial', title: 'Растяжение-сжатие', what: 'Ступенчатый брус с одной или двумя заделками.', refs: 'Антонов, задачи 1.1 и 1.2', status: 'done', tab: 'axial' },
+      {
+        id: 'axial',
+        title: 'Растяжение-сжатие',
+        what: 'Ступенчатый брус с одной или двумя заделками.',
+        refs: 'Антонов, задачи 1.1 и 1.2',
+        status: 'done',
+        tab: 'axial',
+      },
       {
         id: 'space3',
         title: 'Пространственный брус',
@@ -206,7 +221,13 @@ export const ROADMAP: RoadmapBlock[] = [
         refs: 'Антонов, задача 4',
         status: 'planned',
       },
-      { id: 'framediag', title: 'Эпюры N, Q, M для плоских рам', what: 'В том числе для рам с наклонными стержнями.', refs: 'сопротивление материалов', status: 'planned' },
+      {
+        id: 'framediag',
+        title: 'Эпюры N, Q, M для плоских рам',
+        what: 'В том числе для рам с наклонными стержнями.',
+        refs: 'сопротивление материалов',
+        status: 'planned',
+      },
       { id: 'torsion', title: 'Кручение', what: 'Эпюра крутящих моментов, диаметр вала по прочности и жёсткости.', refs: 'Антонов, гл. 7', status: 'planned' },
       {
         id: 'joints',

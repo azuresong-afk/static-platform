@@ -12,7 +12,7 @@ import { addSeg, setSegDir, setSegLen, splitSeg } from '../src/modules/frames/mo
 import { geom, geomOK, resolve } from '../src/modules/frames/model/geometry';
 import { checkPasses } from '../src/modules/frames/solver/check';
 import { residuals, wrenches } from './helpers/equilibrium';
-import { frameArb, structureArb } from './helpers/random';
+import { frameArb, inclinedStructureArb, structureArb } from './helpers/random';
 
 describe('случайные определимые конструкции', () => {
   it('реакции уравновешивают тело; проверочное уравнение сходится', () => {
@@ -38,6 +38,32 @@ describe('случайные определимые конструкции', () 
     );
     // Генератор должен давать в основном определимые системы, иначе проверка ничего не стоит.
     expect(stats.ok ?? 0).toBeGreaterThan(900);
+  });
+
+  it('с наклонными участками: реакции уравновешивают тело, распределённая нагрузка учтена на любой прямой', () => {
+    const stats: Record<string, number> = {};
+    let dists = 0;
+    fc.assert(
+      fc.property(inclinedStructureArb, (s) => {
+        const { model, solution } = analyze(s);
+        stats[solution.status] = (stats[solution.status] || 0) + 1;
+        expect(geomOK(s)).toBe(true);
+        // Нагрузка на одном участке всегда лежит на одной прямой, в том числе наклонной.
+        expect(model.badDists).toHaveLength(0);
+        if (solution.status !== 'ok') return;
+        dists += model.dists.length;
+        const ws = wrenches(resolve(s).structure, solution.vals, model.unknowns, new Set());
+        const r = residuals(ws, [[0, 0], [7, -3], ...model.pts.map((p) => [p.x, p.y] as [number, number])]);
+        const tol = 1e-9 * r.scale;
+        expect(Math.abs(r.fx)).toBeLessThan(tol);
+        expect(Math.abs(r.fy)).toBeLessThan(tol);
+        r.ms.forEach((m) => expect(Math.abs(m)).toBeLessThan(tol));
+        if (solution.check) expect(checkPasses(solution.check.r, solution.vals)).toBe(true);
+      }),
+      { numRuns: 1500, seed: 20260930 },
+    );
+    expect(stats.ok ?? 0).toBeGreaterThan(900);
+    expect(dists).toBeGreaterThan(500);
   });
 
   it('статус «равновесие невозможно» — только когда нагрузку действительно нельзя уравновесить', () => {

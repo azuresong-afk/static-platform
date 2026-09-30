@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { analyze } from '../src/modules/frames/analyze';
 import { resolve } from '../src/modules/frames/model/geometry';
 import { presetStructure } from '../src/modules/frames/model/presets';
-import { TEXTBOOK } from '../src/modules/frames/model/textbook';
+import { TEXTBOOK, TEXTBOOK_INCLINED } from '../src/modules/frames/model/textbook';
 import { residuals, wrenches } from './helpers/equilibrium';
 
 /**
@@ -21,7 +21,7 @@ function printedUnit(v: number): number {
 }
 
 describe('Мещерский: задачи на одно тело', () => {
-  for (const p of TEXTBOOK)
+  for (const p of [...TEXTBOOK, ...TEXTBOOK_INCLINED])
     it(`${p.id} — ${p.title}`, () => {
       const s = presetStructure(p.preset);
       const { solution, model } = analyze(s);

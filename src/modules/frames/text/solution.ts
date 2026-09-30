@@ -4,7 +4,7 @@
  * При explain = true добавляются пояснения к ходу решения (абзацы с классом explain);
  * числа, уравнения и правила знаков при этом не меняются.
  */
-import { LOADDIR, REFS, SIDES, TYPES } from '../model/constants';
+import { REFS, SIDES, TYPES } from '../model/constants';
 import { acuteExpr, fmt, trigFactor, trigText } from '../../../shared/format';
 import type { ForceItem } from '../model/types';
 import { checkPasses } from '../solver/check';
@@ -13,7 +13,7 @@ import type { Action, Model, Unknown } from '../solver/model';
 import type { Solution } from '../solver/solve';
 import { b, join, sub, sup, sym, v, type AnswerRow, type Block, type Doc, type Inline } from '../../../shared/doc';
 import { roman } from '../model/geometry';
-import { STATUS, STATUS_TONE, forceDirText } from './labels';
+import { STATUS, STATUS_TONE, forceDirText, loadDirText } from './labels';
 
 export interface SolutionOptions {
   /** Искомые, отмеченные как промежуточные («что найти» снято). */
@@ -230,12 +230,20 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
           'а приложена она в центре тяжести эпюры (для прямоугольника — в середине, для треугольника — на трети длины от большего края).',
         ),
       );
+    if (ex && m.dists.some((d) => d.axis === 'a'))
+      rows.push(
+        explain(
+          'На наклонном участке интенсивность q отнесена к его длине: Q = q·l, где l — длина участка по его оси, а не проекция. ',
+          'Если нагрузка задана на единицу горизонтальной проекции (например, снеговая), то на единицу длины участка приходится q·cos α, где α — угол участка с горизонтом. ',
+          'Равнодействующую, как и любую наклонную силу, в уравнениях раскладываем на составляющие по осям.',
+        ),
+      );
     for (const d of m.dists) {
       const q = sym({ L: 'q', S: d.piece ? (m.labels[d.it.id]?.S ?? '') : d.S }),
         Q = sym(d.o),
         A = m.g.name[d.from],
         B = m.g.name[d.to];
-      const where: Inline[] = [`на расстоянии ${fmt(d.d)} м от точки `, v(A), `, направлена ${LOADDIR[d.it.dir].name}`];
+      const where: Inline[] = [`на расстоянии ${fmt(d.d)} м от точки `, v(A), `, направлена ${loadDirText(d.it.dir, d.o.angle)}`];
       const lq: Inline[] = [v('l'), ` = ${fmt(d.l)} м (участок `, v(A), '–', v(B), ')'];
       if (d.piece && d.piece.index === 0) {
         const all = m.dists.filter((x) => x.it === d.it);
@@ -286,7 +294,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
             },
             {
               num: true,
-              c: [v(lname), ` = ${fmt(p.l)} м; на трети длины треугольника от большего края: на расстоянии ${fmt(p.d)} м от точки `, v(A), `, направлена ${LOADDIR[p.dir].name}`],
+              c: [v(lname), ` = ${fmt(p.l)} м; на трети длины треугольника от большего края: на расстоянии ${fmt(p.d)} м от точки `, v(A), `, направлена ${loadDirText(p.dir, p.o.angle)}`],
             },
           ],
         });
