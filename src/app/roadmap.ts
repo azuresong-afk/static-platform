@@ -44,7 +44,7 @@ export const ROADMAP: RoadmapBlock[] = [
         status: 'done',
         tab: 'frames',
       },
-      { id: 'truss', title: 'Фермы', what: 'Вырезание узлов и сечения Риттера, нулевые стержни.', refs: 'Мещерский §4', status: 'planned' },
+      { id: 'truss', title: 'Фермы', what: 'Вырезание узлов и сечения Риттера, нулевые стержни.', refs: 'Мещерский §4–5', status: 'done', tab: 'truss' },
       {
         id: 'friction',
         title: 'Трение и односторонние связи',

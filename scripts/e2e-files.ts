@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 7, 'семь вкладок: шесть разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 8, 'восемь вкладок: семь разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 7, 'готово семь пунктов');
-  check((await p.textContent('[data-rm="truss"] .rm-badge')) === 'следующий', 'следующий раздел — фермы');
+  check((await p.locator('.rm-done').count()) === 8, 'готово восемь пунктов');
+  check((await p.textContent('[data-rm="friction"] .rm-badge')) === 'следующий', 'следующий раздел — трение');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const truss = await openText('truss.json', JSON.stringify({ ...JSON.parse(text), module: 'truss' }), 'bad');
-  check(truss.includes('раздел «Фермы» ещё в разработке'), 'файл неготового раздела — понятное сообщение', truss);
+  const fric = await openText('friction.json', JSON.stringify({ ...JSON.parse(text), module: 'friction' }), 'bad');
+  check(fric.includes('раздел «Трение и односторонние связи» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -364,6 +364,35 @@ async function main() {
   await p.click('[data-normal="135"]');
   check((await p.inputValue('.item[data-kind="sup"] >> nth=1 >> [data-f="angle"]')) === '135', 'каток: реакция перпендикулярно участку одной кнопкой');
   if (out) await p.screenshot({ path: pathResolve(out, 'inclined.png'), fullPage: true });
+
+  // 15. Вкладка «Фермы».
+  await p.click('[data-tab="truss"]');
+  let ts = await p.innerText('#tsolution');
+  check(ts.includes('ферма статически определима') && ts.includes('1,299') && ts.includes('−3,5') && ts.includes('совпадает с вырезанием узлов'), 'Мещерский 5.7: усилия и проверка Риттера', ts.slice(0, 200));
+  check((await p.locator('#tsvg .tb-ten').count()) === 3 && (await p.locator('#tsvg .tb-comp').count()) === 4, 'растянутые и сжатые стержни на чертеже');
+  await p.selectOption('#tpreset', 'm511');
+  ts = await p.innerText('#tsolution');
+  check(!ts.includes('Нулевые стержни') && ts.includes('не нагружен') && ts.includes('−2,6'), 'Мещерский 5.11: стержень 7 не нагружен (по расчёту, не по признакам)', ts.slice(0, 200));
+  await p.click('#taddbar');
+  check((await p.innerText('#tsolution')).includes('статически неопределима'), 'лишний стержень — неопределима');
+  await p.click('#tbars .trow:last-child .del');
+  await p.locator('#tnodes .trow:nth-child(4) input').first().fill('6');
+  await p.locator('#tnodes .trow:nth-child(4) input').first().blur();
+  check((await p.innerText('#tsolution')).includes('ферма статически определима'), 'узел сдвинут — ферма по-прежнему решается');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.inputValue('#tnodes .trow:nth-child(4) input >> nth=0')) === '5', 'отмена возвращает координату');
+  const [dl9] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const tText = await (await dl9.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(tText).module === 'truss' && JSON.parse(tText).truss.bars.length === 9, 'файл фермы');
+  const tSol = await p.innerText('#tsolution');
+  await p.click('[data-tab="frames"]');
+  await openText('truss.json', tText, 'ok');
+  check((await p.getAttribute('[data-tab="truss"]', 'aria-selected')) === 'true' && (await p.innerText('#tsolution')) === tSol, 'файл фермы открывается в своей вкладке без потерь');
+  await p.emulateMedia({ media: 'print' });
+  const trep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
+  check(trep.svgs === 1 && trep.text.includes('Метод вырезания узлов'), 'отчёт по ферме');
+  await p.emulateMedia({ media: 'screen' });
+  if (out) await p.screenshot({ path: pathResolve(out, 'truss.png'), fullPage: true });
 
   await browser.close();
   await new Promise<void>((r) => server.httpServer.close(() => r()));

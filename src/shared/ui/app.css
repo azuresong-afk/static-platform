@@ -418,3 +418,24 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .seglen .inp em{right:5px}
 .addseg .asincl{grid-template-columns:1fr 1fr}
 .addseg .asincl .seg{grid-column:1/-1;justify-self:start}
+
+/* Фермы */
+.trow{display:grid;grid-template-columns:24px 1fr 1fr 26px;gap:5px;align-items:center}
+.trow.trow4{grid-template-columns:64px 1fr 1fr 26px}
+.tload{display:grid;grid-template-columns:64px 1fr 1fr 26px;gap:5px;align-items:center}
+.tload .quick{grid-column:1/4;grid-row:2}
+.trow .inp input,.tload .inp input{padding-right:26px}
+.tb-bar{stroke:var(--ink);stroke-width:4;stroke-linecap:round}
+.tb-ten{stroke:var(--react)}
+.tb-comp{stroke:var(--load)}
+.tb-zero{stroke:var(--ink-3);stroke-width:2.5;stroke-dasharray:8 6}
+.tb-cut{stroke:color-mix(in srgb,var(--warn) 45%,transparent);stroke-width:14;stroke-linecap:round}
+.tb-num{fill:var(--sheet);stroke:var(--ink-3);stroke-width:1}
+.tb-numt{font-family:"Golos Text",system-ui,sans-serif;font-size:12px;fill:var(--ink)}
+.tb-val{font-family:"Golos Text",system-ui,sans-serif;font-size:12.5px;fill:var(--ink-2);font-variant-numeric:tabular-nums}
+.tb-k{fill:var(--warn)}
+.tb-kt{font-family:"PT Serif",Georgia,serif;font-style:italic;font-weight:700;font-size:17px;fill:var(--warn)}
+.tb-note{font-family:"Golos Text",system-ui,sans-serif;font-size:12px;fill:var(--ink-3)}
+/* Колонки не шире экрана: поля ввода не распирают сетку на телефоне. */
+.cols>*{min-width:0}
+.inp input{min-width:0}
