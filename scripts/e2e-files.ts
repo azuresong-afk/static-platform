@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 13, 'тринадцать вкладок: двенадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 14, 'четырнадцать вкладок: тринадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 14, 'готово четырнадцать пунктов');
-  check((await p.textContent('[data-rm="rotation"] .rm-badge')) === 'следующий', 'следующий раздел — вращение тела вокруг оси');
+  check((await p.locator('.rm-done').count()) === 15, 'готово пятнадцать пунктов');
+  check((await p.textContent('[data-rm="dalembert"] .rm-badge')) === 'следующий', 'следующий раздел — принцип Даламбера');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('rotation.json', JSON.stringify({ ...JSON.parse(text), module: 'rotation' }), 'bad');
-  check(fric.includes('раздел «Вращение тела вокруг оси» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('dalembert.json', JSON.stringify({ ...JSON.parse(text), module: 'dalembert' }), 'bad');
+  check(fric.includes('раздел «Принцип Даламбера» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -491,6 +491,27 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('en.json', enText, 'ok');
   check((await p.getAttribute('[data-tab="energy"]', 'aria-selected')) === 'true' && (await p.innerText('#esolution')) === enSol, 'файл кинетической энергии открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 21. Вкладка «Вращение тела».
+  await p.click('[data-tab="rotation"]');
+  const rtS = await p.innerText('#rsolution');
+  check(rtS.includes('Дифференциальное уравнение вращения') && rtS.includes('ω∞'), 'Мещерский 37.45: уравнение с вязким сопротивлением', rtS.slice(-300));
+  await p.selectOption('#rpreset', 'm377');
+  check((await p.innerText('#rsolution')).includes('66,5647'), 'Мещерский 37.7: время остановки 66,56 с');
+  await p.selectOption('#rpreset', 'm3740');
+  check((await p.innerText('#rsolution')).includes('период малых колебаний'), 'Мещерский 37.40: период малых колебаний');
+  await p.selectOption('#rpreset', 'm3754');
+  check((await p.innerText('#rsolution')).includes('100 об/мин'), 'Мещерский 37.54: скамейка Жуковского, 100 об/мин');
+  await p.click('#raddpoint');
+  check((await p.locator('#ritems .cvrow').count()) === 2, 'добавлена точка');
+  const [dl16] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const rtText = await (await dl16.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(rtText).module === 'rotation' && JSON.parse(rtText).problem.K.length === 2, 'файл задачи о вращении');
+  const rtSol = await p.innerText('#rsolution');
+  await p.click('[data-tab="frames"]');
+  await openText('rt.json', rtText, 'ok');
+  check((await p.getAttribute('[data-tab="rotation"]', 'aria-selected')) === 'true' && (await p.innerText('#rsolution')) === rtSol, 'файл вращения открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».

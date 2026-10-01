@@ -478,7 +478,7 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .in-axt{fill:var(--bad);font-size:14px}
 .in-d{stroke:var(--react);stroke-width:1.2;stroke-dasharray:3 3}
 .in-dt{fill:var(--react);font-size:13px}
-.cg0{margin-left:0}
+.cgpar.cg0{margin-left:0}
 .en-ground{stroke:var(--ink);stroke-width:1.8}
 .en-hatch{stroke:var(--ink-3);stroke-width:1}
 .en-rope{stroke:var(--ink-2);stroke-width:1.5;fill:none}
@@ -492,6 +492,13 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .en-vt{fill:var(--react);font-size:14px}
 .en-name{font-weight:700;font-size:15px;fill:var(--ink)}
 .en-link{margin-bottom:2px}
+.rt-grid{stroke:var(--rule);stroke-width:1}
+.rt-axis{stroke:var(--ink-3);stroke-width:1.2}
+.rt-tick{font-family:"Golos Text",system-ui,sans-serif;font-size:12px;fill:var(--ink-3);font-variant-numeric:tabular-nums}
+.rt-title{font-family:"Golos Text",system-ui,sans-serif;font-size:14px;fill:var(--ink-2);font-weight:600}
+.rt-line{fill:none;stroke:var(--react);stroke-width:2;stroke-linejoin:round}
+.rt-end{fill:var(--react);stroke:var(--sheet);stroke-width:2}
+.rt-val{font-family:"Golos Text",system-ui,sans-serif;font-size:13px;fill:var(--ink);font-variant-numeric:tabular-nums}
 .cv-t{paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
 .cv-rope{stroke:var(--ink-2);stroke-width:1.4}
 .cv-axis{stroke:var(--bad);stroke-width:1.2;stroke-dasharray:10 5 2 5}
