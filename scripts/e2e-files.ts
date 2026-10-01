@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 15, 'пятнадцать вкладок: четырнадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 16, 'шестнадцать вкладок: пятнадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 16, 'готово шестнадцать пунктов');
-  check((await p.textContent('[data-rm="pointdyn"] .rm-badge')) === 'следующий', 'следующий раздел — динамика точки');
+  check((await p.locator('.rm-done').count()) === 17, 'готово семнадцать пунктов');
+  check((await p.textContent('[data-rm="masscenter"] .rm-badge')) === 'следующий', 'следующий раздел — движение центра масс');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('pointdyn.json', JSON.stringify({ ...JSON.parse(text), module: 'pointdyn' }), 'bad');
-  check(fric.includes('раздел «Динамика точки» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('masscenter.json', JSON.stringify({ ...JSON.parse(text), module: 'masscenter' }), 'bad');
+  check(fric.includes('раздел «Движение центра масс и плоское движение» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -532,6 +532,25 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('da.json', daText, 'ok');
   check((await p.getAttribute('[data-tab="dalembert"]', 'aria-selected')) === 'true' && (await p.innerText('#dsolution')) === daSol, 'файл принципа Даламбера открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 23. Вкладка «Динамика точки».
+  await p.click('[data-tab="pointdyn"]');
+  const pdS = await p.innerText('#psolution');
+  check(pdS.includes('19,5497') && pdS.includes('2,6066'), 'Мещерский 27.7: путь 19,55 м и время 2,61 с до остановки', pdS.slice(-300));
+  await p.selectOption('#ppreset', 'm279');
+  check((await p.innerText('#psolution')).includes('Предельная (установившаяся) скорость'), 'Мещерский 27.9: предельная скорость');
+  await p.selectOption('#pask', 'x');
+  await p.locator('#p-x1').fill('100');
+  await p.locator('#p-x1').blur();
+  check((await p.innerText('#psolution')).includes('до x = 100 м'), 'вопрос по пути');
+  const [dl18] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const pdText = await (await dl18.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(pdText).module === 'pointdyn' && JSON.parse(pdText).problem.ask === 'x', 'файл задачи динамики точки');
+  const pdSol = await p.innerText('#psolution');
+  await p.click('[data-tab="frames"]');
+  await openText('pd.json', pdText, 'ok');
+  check((await p.getAttribute('[data-tab="pointdyn"]', 'aria-selected')) === 'true' && (await p.innerText('#psolution')) === pdSol, 'файл динамики точки открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».

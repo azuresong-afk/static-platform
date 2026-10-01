@@ -12,6 +12,7 @@ import { createInertiaModule } from '../modules/inertia';
 import { createEnergyModule } from '../modules/energy';
 import { createRotationModule } from '../modules/rotation';
 import { createDalembertModule } from '../modules/dalembert';
+import { createPointModule } from '../modules/pointdyn';
 import { createTrussModule } from '../modules/truss';
 import { ConventionsStore } from '../shared/conventions';
 import type { PlannedModule, StatikaModule } from './module';
@@ -20,7 +21,7 @@ import { ROADMAP } from './roadmap';
 export function createModules(): StatikaModule[] {
   const frames = createFramesModule();
   const conventions = new ConventionsStore();
-  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createBendingModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createSpaceModule(conventions), createCompositeModule()];
+  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createBendingModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createSpaceModule(conventions), createCompositeModule()];
 }
 
 export const PLANNED: PlannedModule[] = ROADMAP.flatMap((b) => b.items)

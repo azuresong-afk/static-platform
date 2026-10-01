@@ -50,9 +50,11 @@ export interface RotEq {
   phi0: number;
   omega0: number;
   /** Что ищем: состояние в момент t или когда ω станет равной omega1. */
-  ask: 't' | 'omega';
+  ask: 't' | 'omega' | 'phi';
   t: number;
   omega1: number;
+  /** Целевой угол (координата) — для ask = 'phi'. */
+  phi1?: number;
 }
 export interface KItem {
   name: string;
@@ -197,10 +199,13 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
       k4w = a(t0 + dt, p0 + dt * k3p, w0 + dt * k3w);
     return [p0 + (dt / 6) * (k1p + 2 * k2p + 2 * k3p + k4p), w0 + (dt / 6) * (k1w + 2 * k2w + 2 * k3w + k4w)];
   };
-  const target = e.omega1;
+  const byPhi = e.ask === 'phi';
+  const target = byPhi ? (e.phi1 ?? 0) : e.omega1;
   const crossed = (a: number, b: number) => (a - target) * (b - target) <= 0 && a !== b;
+  /** Величина, по которой ищем момент: ω или φ. */
+  const val = (p: number, ww: number) => (byPhi ? p : ww);
   let tStop: number | null = null;
-  let found = e.ask === 'omega' && Math.abs(w - target) < 1e-15;
+  let found = e.ask !== 't' && Math.abs(val(phi, w) - target) < 1e-15;
   for (let n = 0; n < 2_000_000 && !found; n++) {
     let dt = Math.min(h, tEnd - t);
     if (dt <= 0) break;
@@ -221,6 +226,22 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
           else hi = mid;
         }
         const [pm] = step(t, phi, w, lo);
+        if (byPhi && crossed(phi, pm)) {
+          let a = 0,
+            bb = lo;
+          for (let it = 0; it < 100; it++) {
+            const mid = (a + bb) / 2;
+            const [pp] = step(t, phi, w, mid);
+            if (crossed(phi, pp)) bb = mid;
+            else a = mid;
+          }
+          const [pp, ww] = step(t, phi, w, bb);
+          t += bb;
+          phi = pp;
+          w = ww;
+          found = true;
+          break;
+        }
         if (e.ask === 'omega' && crossed(w, 0)) {
           t += lo;
           phi = pm;
@@ -238,13 +259,13 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
         dt /= 2;
         continue;
       }
-      if (e.ask === 'omega' && crossed(w, w2)) {
+      if (e.ask !== 't' && crossed(val(phi, w), val(p2, w2))) {
         let lo = 0,
           hi = dt;
         for (let it = 0; it < 100; it++) {
           const mid = (lo + hi) / 2;
-          const [, wm] = step(t, phi, w, mid);
-          if (crossed(w, wm)) hi = mid;
+          const [pmid, wmid] = step(t, phi, w, mid);
+          if (crossed(val(phi, w), val(pmid, wmid))) hi = mid;
           else lo = mid;
         }
         const [pm, wm] = step(t, phi, w, hi);
@@ -268,14 +289,15 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
       }
       break;
     }
-    if (e.ask === 'omega' && t > 1e7) break;
-    // Установившийся режим (момент зависит только от ω): скорость больше не меняется — цель недостижима.
-    if (e.ask === 'omega' && !timeDep && !phiDep && Math.abs(acc(t, phi, w)) < 1e-10 * (1 + Math.abs(w))) break;
+    if (e.ask !== 't' && t > 1e7) break;
+    // Установившийся режим (момент зависит только от ω): скорость больше не меняется — цель недостижима
+    // (для поиска по углу — только если тело при этом стоит).
+    if (e.ask !== 't' && !timeDep && !phiDep && Math.abs(acc(t, phi, w)) < 1e-10 * (1 + Math.abs(w)) && (!byPhi || Math.abs(w) < 1e-12)) break;
   }
-  if (e.ask === 'omega' && !found) return { ...empty, ok: true, errors: [], t, phi, w, eps: acc(t, phi, w), note: tStop != null ? 'stuck' : 'never', tStop, curve };
+  if (e.ask !== 't' && !found) return { ...empty, ok: true, errors: [], t, phi, w, eps: acc(t, phi, w), note: tStop != null ? 'stuck' : 'never', tStop, curve };
   curve.push({ t, phi, w });
   // Для вопроса «когда ω = …» кривую строим повторным проходом до найденного момента — с равномерным шагом.
-  const fine = e.ask === 'omega' && t > 0 && curve.length < 300 ? solveEq({ ...e, ask: 't', t }, byWeight).curve : curve;
+  const fine = e.ask !== 't' && t > 0 && curve.length < 300 ? solveEq({ ...e, ask: 't', t }, byWeight).curve : curve;
   return { ...empty, ok: true, errors: [], t, phi: clean(phi), w: clean(w), eps: clean(acc(t, phi, w)), note: 'ok', tStop, curve: fine };
 }
 

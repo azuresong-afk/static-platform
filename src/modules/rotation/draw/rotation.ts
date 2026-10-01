@@ -54,7 +54,15 @@ function plot(x0: number, y0: number, w: number, h: number, pts: [number, number
   return out.join('');
 }
 
-export function renderEq(r: EqResult): { svg: string; viewBox: string } {
+/** Подписи графиков: по умолчанию — вращение (ω, φ), у точки — v, x. */
+export interface CurveLabels {
+  w: [string, string];
+  phi: [string, string];
+  note: string;
+}
+const ROT_LABELS: CurveLabels = { w: ['ω', 'рад/с'], phi: ['φ', 'рад'], note: 'Угловая скорость и угол поворота по времени; точка — искомое состояние (наведите, чтобы увидеть значения).' };
+
+export function renderEq(r: EqResult, lab: CurveLabels = ROT_LABELS): { svg: string; viewBox: string } {
   const out: string[] = [`<rect width="${W}" height="${H}" fill="var(--sheet)"/>`];
   if (!r.ok || r.curve.length < 2) {
     out.push(`<text class="tb-note" x="16" y="${H / 2}">Нет данных для графиков.</text>`);
@@ -62,9 +70,9 @@ export function renderEq(r: EqResult): { svg: string; viewBox: string } {
   }
   const pw = 380,
     ph = 330;
-  out.push(plot(80, 60, pw, ph, r.curve.map((c) => [c.t, c.w]), 'ω', 'рад/с', 'с'));
-  out.push(plot(80 + pw + 110, 60, pw, ph, r.curve.map((c) => [c.t, c.phi]), 'φ', 'рад', 'с'));
-  out.push(`<text class="tb-note" x="16" y="${H - 14}">Угловая скорость и угол поворота по времени; точка — искомое состояние (наведите, чтобы увидеть значения).</text>`);
+  out.push(plot(80, 60, pw, ph, r.curve.map((c) => [c.t, c.w]), lab.w[0], lab.w[1], 'с'));
+  out.push(plot(80 + pw + 110, 60, pw, ph, r.curve.map((c) => [c.t, c.phi]), lab.phi[0], lab.phi[1], 'с'));
+  out.push(`<text class="tb-note" x="16" y="${H - 14}">${lab.note}</text>`);
   return { svg: out.join(''), viewBox: `0 0 ${W} ${H}` };
 }
 
