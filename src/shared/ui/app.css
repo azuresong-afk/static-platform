@@ -469,6 +469,17 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .cg-c{fill:var(--sheet);stroke:var(--bad);stroke-width:2.4}
 .cg-cx{stroke:var(--bad);stroke-width:1.6}
 .cg-ct{font-family:"PT Serif",Georgia,serif;font-style:italic;font-weight:700;font-size:16px;fill:var(--bad)}
+.cv-t{paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
+.cv-rope{stroke:var(--ink-2);stroke-width:1.4}
+.cv-axis{stroke:var(--bad);stroke-width:1.2;stroke-dasharray:10 5 2 5}
+.cv-r{stroke:var(--bad);stroke-width:2.6;fill:none}
+.cv-r-f{fill:var(--bad)}
+.t-cvr{fill:var(--bad);font-weight:700}
+.cv-pair{fill:none;stroke:var(--bad);stroke-width:1.6}
+.cv-pairl{fill:none;stroke:var(--load);stroke-width:1.8}
+.cvrow{display:grid;grid-template-columns:72px 1fr 88px 26px;gap:8px;align-items:center}
+.cvrow2{grid-template-columns:72px 1fr 26px}
+.cv-name input{min-width:0;width:100%}
 .cgrow{display:grid;grid-template-columns:22px 1fr auto 26px;gap:8px;align-items:center}
 .cgrow .chk{margin:0;white-space:nowrap;grid-column:auto}
 .cgpar{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:5px;margin:4px 0 10px 27px}

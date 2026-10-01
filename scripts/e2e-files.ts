@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 10, 'десять вкладок: девять разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 11, 'одиннадцать вкладок: десять разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 11, 'готово одиннадцать пунктов');
-  check((await p.textContent('[data-rm="converging"] .rm-badge')) === 'следующий', 'следующий раздел — сходящиеся силы');
+  check((await p.locator('.rm-done').count()) === 12, 'готово двенадцать пунктов: вся статика и четыре раздела сопромата');
+  check((await p.textContent('[data-rm="inertia"] .rm-badge')) === 'следующий', 'следующий раздел — геометрия масс');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('converging.json', JSON.stringify({ ...JSON.parse(text), module: 'converging' }), 'bad');
-  check(fric.includes('раздел «Сходящиеся силы и приведение системы сил» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('inertia.json', JSON.stringify({ ...JSON.parse(text), module: 'inertia' }), 'bad');
+  check(fric.includes('раздел «Геометрия масс» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -421,6 +421,31 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('cg.json', gText, 'ok');
   check((await p.getAttribute('[data-tab="centroid"]', 'aria-selected')) === 'true' && (await p.innerText('#gsolution')) === gSol, 'файл открывается в своей вкладке без потерь');
+
+  // 18. Вкладка «Сходящиеся силы».
+  await p.click('[data-tab="converging"]');
+  let vs = await p.innerText('#vsolution');
+  check(vs.includes('866,025') && vs.includes('−500') && vs.includes('стержень сжат') && vs.includes('теореме Лами'), 'Мещерский 2.7: S_A = 866, S_B = −500', vs.slice(-300));
+  await p.selectOption('#vpreset', 'm615');
+  check((await p.innerText('#vsolution')).includes('−3,849') && (await p.innerText('#vsolution')).includes('три уравнения'), 'Мещерский 6.15: тренога, −3,85');
+  await p.click('#vadd');
+  check((await p.innerText('#vsolution')).includes('статически неопределима'), 'пятая сила — неопределима');
+  await p.click('.hist button[title^="Отменить"]');
+  await p.selectOption('#vpreset', 'm712');
+  vs = await p.innerText('#vsolution');
+  check(vs.includes('динамическому винту') && vs.includes('R = 15 кН') && vs.includes('x = 2,2') && vs.includes('y = 2'), 'Мещерский 7.12: динама, ось через (2,2; 2)', vs.slice(-300));
+  await p.selectOption('#vpreset', 'plane');
+  check((await p.innerText('#vsolution')).includes('приводится к равнодействующей'), 'плоская система — равнодействующая');
+  await p.click('#vaddp');
+  check((await p.locator('#vsys .cgpar').count()) === 6, 'добавлена пара');
+  const [dl13] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const vText = await (await dl13.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(vText).module === 'converging' && JSON.parse(vText).problem.reduce.pairs.length === 2, 'файл задачи о приведении');
+  const vSol = await p.innerText('#vsolution');
+  await p.click('[data-tab="frames"]');
+  await openText('cv.json', vText, 'ok');
+  check((await p.getAttribute('[data-tab="converging"]', 'aria-selected')) === 'true' && (await p.innerText('#vsolution')) === vSol, 'файл сходящихся сил открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
   await p.click('[data-tab="truss"]');
