@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 20, 'двадцать вкладок: девятнадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 21, 'двадцать одна вкладка: двадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 21, 'готов двадцать один пункт');
-  check((await p.textContent('[data-rm="relative"] .rm-badge')) === 'следующий', 'следующий раздел — сложное движение точки');
+  check((await p.locator('.rm-done').count()) === 22, 'готово двадцать два пункта');
+  check((await p.textContent('[data-rm="virtual"] .rm-badge')) === 'следующий', 'следующий раздел — принцип возможных перемещений');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('relative.json', JSON.stringify({ ...JSON.parse(text), module: 'relative' }), 'bad');
-  check(fric.includes('раздел «Сложное движение точки» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('virtual.json', JSON.stringify({ ...JSON.parse(text), module: 'virtual' }), 'bad');
+  check(fric.includes('раздел «Принцип возможных перемещений» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -664,6 +664,24 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('me.json', meText, 'ok');
   check((await p.getAttribute('[data-tab="mechanism"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === meSol, 'файл механизма открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 28. Вкладка «Сложное движение».
+  await p.click('[data-tab="relative"]');
+  const rlS = await p.innerText('#rsolution');
+  check(rlS.includes('35,5528') && rlS.includes('27,7128'), 'Мещерский 23.27: w = 35,56, кориолисово 27,71', rlS.slice(-400));
+  check((await p.locator('#rsvg .rl-c').count()) === 0 && ((await p.textContent('#rsvg')) ?? '').includes('⊙'), 'кориолисово ускорение перпендикулярно чертежу — отмечено ⊙');
+  await p.selectOption('#rpreset', 'r2314');
+  check((await p.innerText('#rsolution')).includes('10,953'), 'Мещерский 23.14: w_ξ = 10,95');
+  await p.selectOption('#rcarrier', 'trans');
+  check((await p.innerText('#rsolution')).includes('кориолисово') && (await p.locator('#r-xe').count()) === 1, 'поступательное переносное движение — поля x(t), y(t)');
+  const [dl24] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const rlText = await (await dl24.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const rlSol = await p.innerText('#rsolution');
+  check(JSON.parse(rlText).module === 'relative' && JSON.parse(rlText).problem.carrier === 'trans', 'файл сложного движения');
+  await p.click('[data-tab="frames"]');
+  await openText('rl.json', rlText, 'ok');
+  check((await p.getAttribute('[data-tab="relative"]', 'aria-selected')) === 'true' && (await p.innerText('#rsolution')) === rlSol, 'файл сложного движения открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
