@@ -499,6 +499,7 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .rt-line{fill:none;stroke:var(--react);stroke-width:2;stroke-linejoin:round}
 .rt-end{fill:var(--react);stroke:var(--sheet);stroke-width:2}
 .rt-val{font-family:"Golos Text",system-ui,sans-serif;font-size:13px;fill:var(--ink);font-variant-numeric:tabular-nums}
+.mc-path{fill:none;stroke:var(--ink-3);stroke-width:1.4}
 .cv-t{paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
 .cv-rope{stroke:var(--ink-2);stroke-width:1.4}
 .cv-axis{stroke:var(--bad);stroke-width:1.2;stroke-dasharray:10 5 2 5}

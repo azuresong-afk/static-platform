@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 16, 'шестнадцать вкладок: пятнадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 17, 'семнадцать вкладок: шестнадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 17, 'готово семнадцать пунктов');
-  check((await p.textContent('[data-rm="masscenter"] .rm-badge')) === 'следующий', 'следующий раздел — движение центра масс');
+  check((await p.locator('.rm-done').count()) === 18, 'готово восемнадцать пунктов');
+  check((await p.textContent('[data-rm="pointkin"] .rm-badge')) === 'следующий', 'следующий раздел — кинематика точки');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('masscenter.json', JSON.stringify({ ...JSON.parse(text), module: 'masscenter' }), 'bad');
-  check(fric.includes('раздел «Движение центра масс и плоское движение» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('pointkin.json', JSON.stringify({ ...JSON.parse(text), module: 'pointkin' }), 'bad');
+  check(fric.includes('раздел «Кинематика точки» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -563,6 +563,27 @@ async function main() {
   check((await p.innerText('#psolution')).includes('Высшая точка траектории'), 'Мещерский 27.44: траектория и высшая точка');
   await p.selectOption('#pmode', 'line');
   check((await p.locator('#pask').count()) === 1, 'переключение режима');
+  await p.click('[data-tab="frames"]');
+
+  // 24. Вкладка «Центр масс и плоское движение».
+  await p.click('[data-tab="masscenter"]');
+  const mcS = await p.innerText('#msolution');
+  check(mcS.includes('3,27') && mcS.includes('без скольжения'), 'Мещерский 39.11: цилиндр катится, a = 2/3 g sin α', mcS.slice(-300));
+  await p.selectOption('#mpreset', 'm3914');
+  check((await p.innerText('#msolution')).includes('колесо скользит'), 'Мещерский 39.14: скольжение');
+  await p.selectOption('#mpreset', 'm3520');
+  check((await p.innerText('#msolution')).includes('0,0378'), 'Мещерский 35.20: клин сместится на 3,77 см');
+  await p.selectOption('#mpreset', 'm357');
+  check((await p.innerText('#msolution')).includes('180,96'), 'Мещерский 35.7: давление насоса на грунт');
+  await p.click('#maddpt');
+  check((await p.locator('#mpts .cvrow').count()) === 4, 'добавлена точка');
+  const [dl19] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const mcText = await (await dl19.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(mcText).module === 'masscenter' && JSON.parse(mcText).problem.points.pts.length === 4, 'файл задачи о центре масс');
+  const mcSol = await p.innerText('#msolution');
+  await p.click('[data-tab="frames"]');
+  await openText('mc.json', mcText, 'ok');
+  check((await p.getAttribute('[data-tab="masscenter"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === mcSol, 'файл центра масс открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».

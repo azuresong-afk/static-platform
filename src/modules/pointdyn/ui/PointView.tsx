@@ -2,10 +2,10 @@
  * Экран «Динамика точки»: прямолинейное движение (вторая задача), силы по заданному движению (первая задача),
  * криволинейное движение в плоскости; графики или траектория, решение по шагам.
  */
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import type { Chrome } from '../../../app/module';
-import { parseExpr } from '../../../shared/expr';
 import { DocView } from '../../../shared/ui/DocView';
+import { LawField } from '../../../shared/ui/LawField';
 import { Notice } from '../../../shared/ui/Notice';
 import { Num } from '../../../shared/ui/Num';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
@@ -34,37 +34,6 @@ const MODES: [PointMode, string][] = [
   ['first', 'сила по закону движения'],
   ['plane', 'движение в плоскости'],
 ];
-
-/** Поле формулы: подсвечивает ошибку разбора. */
-function LawField({ id, label, value, onType, onEnd }: { id: string; label: string; value: string; onType: (s: string) => void; onEnd: () => void }) {
-  const [text, setText] = useState<string | null>(null);
-  const shown = text ?? value;
-  const r = parseExpr(shown);
-  return (
-    <label className="sfield" style={{ gridColumn: '1 / -1' }}>
-      <span>{label}</span>
-      <span className="inp">
-        <input
-          id={id}
-          type="text"
-          spellCheck={false}
-          className={r.ok ? undefined : 'bad'}
-          title={r.ok ? undefined : r.error}
-          value={shown}
-          placeholder="пусто — 0"
-          onChange={(e) => {
-            setText(e.target.value);
-            if (parseExpr(e.target.value).ok) onType(e.target.value);
-          }}
-          onBlur={() => {
-            setText(null);
-            onEnd();
-          }}
-        />
-      </span>
-    </label>
-  );
-}
 
 export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
