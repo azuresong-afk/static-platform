@@ -50,11 +50,16 @@ describe('динамика точки: файл проекта, графики �
       const { text } = s.exportProject(new Date(2026, 0, 1));
       const s2 = new PointStore();
       expect(s2.importProject(text)).toBe(true);
-      expect(s2.get().problem).toEqual(p.problem);
+      expect(s2.get().problem.line).toEqual(p.problem);
+      expect(s2.get().problem.mode).toBe('line');
       const r = solvePoint(p.problem as PointProblem);
       for (const t of [renderEq(r.eq).svg, JSON.stringify(pointDoc(p.problem as PointProblem, r, { explain: true }))]) expect(t).not.toMatch(/NaN|undefined|Infinity/);
     });
   }
+  it('файл первой версии раздела (только прямолинейное движение) открывается', () => {
+    const r = parsePoint(POINT_PRESETS.m277.problem);
+    expect(r.ok && r.problem.mode === 'line' && r.problem.line.v0 === 15).toBe(true);
+  });
   it('чужой и испорченный файл', () => {
     expect(new PointStore().importProject(JSON.stringify({ format: 'statika-project', version: 2, module: 'rotation', problem: {} }))).toBe(false);
     expect(parsePoint({ m: 1 }).ok).toBe(false);

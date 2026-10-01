@@ -24,7 +24,7 @@ function ticks(lo: number, hi: number, n = 5): number[] {
   return out;
 }
 
-function plot(x0: number, y0: number, w: number, h: number, pts: [number, number][], title: string, unit: string, tUnit: string): string {
+export function plot(x0: number, y0: number, w: number, h: number, pts: [number, number][], title: string, unit: string, tUnit: string): string {
   const ts = pts.map((p) => p[0]),
     ys = pts.map((p) => p[1]);
   const tMax = Math.max(1e-9, ...ts);

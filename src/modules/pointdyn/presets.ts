@@ -1,5 +1,7 @@
 /** Готовые задачи: Мещерский §27 (прямолинейное движение). Ответы — по книге или по её формулам. */
 import { G } from '../rotation/model/rotation';
+import type { FirstProblem } from './model/first';
+import type { PlaneProblem } from './model/plane';
 import type { PointProblem } from './model/point';
 
 export interface PointPreset {
@@ -96,3 +98,115 @@ export const POINT_PRESETS = {
 } satisfies Record<string, PointPreset>;
 
 export type PointPresetKey = keyof typeof POINT_PRESETS;
+
+/* ---------- первая задача: силы по заданному движению (§26) ---------- */
+
+export interface FirstPreset {
+  title: string;
+  problem: FirstProblem;
+  /** Ответ: Fx, Fy (в момент t), Fmax; kX, kY — коэффициенты X = kX·x, Y = kY·y (x, y в см); kR — F/(m·v). */
+  book?: Record<string, number>;
+  relTol?: number;
+  note?: string;
+}
+const first = (o: Partial<FirstProblem>): FirstProblem => ({ byWeight: false, m: 1, g: G, x: '', y: '', z: '', gravity: 'none', t: 1, t1: 0, t2: 0, ...o });
+
+export const FIRST_PRESETS = {
+  f2615: {
+    title: 'Мещерский 26.15: колебания s = 10 sin(πt/2) — сила и её наибольшее значение',
+    problem: first({ byWeight: true, m: 20, x: '10 sin(πt/2)', t: 1, t1: 0, t2: 4 }),
+    book: { Fx: -50.3, Fmax: 50.3 },
+    note: 'Вес 20 Н. Книга: P = −5,03s, P_max = 50,3 Н (при s = 10 м, t = 1 с).',
+  },
+  f2616: {
+    title: 'Мещерский 26.16: движение по эллипсу x = 3 cos 2πt, y = 4 sin πt (см)',
+    problem: first({ byWeight: true, m: 2, x: '0,03 cos(2πt)', y: '0,04 sin(πt)', t: 0.1 }),
+    book: { kX: -0.08, kY: -0.02 },
+    note: 'Вес 2 Н; координаты в метрах. Книга: X = −0,08x Н, Y = −0,02y Н (x, y — в см).',
+  },
+  f2617: {
+    title: 'Мещерский 26.17: шарик падает с сопротивлением воздуха',
+    problem: first({ m: 0.001, g: 9.8, x: '4,9t − 2,45(1 − exp(−2t))', gravity: '+x', t: 0.5, t1: 0, t2: 3 }),
+    book: { kR: -2 },
+    note: 'm = 1 г, ось x — вниз, g = 9,8 м/с² (как в книге). Книга: R = 2mv — сила сопротивления против скорости.',
+  },
+  f261: {
+    title: 'Мещерский 26.1: натяжение каната опускающегося лифта',
+    problem: first({ byWeight: true, m: 280, x: '0,35t^2', gravity: '+x', t: 5 }),
+    book: { Fx: -260 },
+    note: 'Вес 280 кГ, 35 м за 10 с равноускоренно: x = 0,35t² (ось x — вниз). Сила каната −260 кГ — направлена вверх.',
+  },
+  f2613: {
+    title: 'Мещерский 26.13: сила, действующая на поршень',
+    problem: first({ byWeight: true, m: 2, x: '0,1(cos 50t + 0,0625 cos 100t)', t: 0, t1: 0, t2: 0.13 }),
+    book: { Fmax: (2 / G) * 0.1 * 50 ** 2 * (1 + 0.1 / 0.4) },
+    note: 'r = 0,1 м, l = 0,4 м (r/4l = 0,0625), ω = 50 рад/с, Q = 2 кГ: P = (Q/g)rω²(1 + r/l).',
+  },
+} satisfies Record<string, FirstPreset>;
+export type FirstPresetKey = keyof typeof FIRST_PRESETS;
+
+/* ---------- криволинейное движение в плоскости (§27 б) ---------- */
+
+export interface PlanePreset {
+  title: string;
+  problem: PlaneProblem;
+  /** Ответ: x, y, t (найденное состояние), apexX, apexY. */
+  book?: Record<string, number>;
+  relTol?: number;
+  note?: string;
+}
+const plane = (o: Partial<PlaneProblem>): PlaneProblem => ({ byWeight: false, m: 1, g: G, gravity: true, Fx: 0, Fy: 0, kv: 0, kq: 0, c: 0, cx: 0, cy: 0, q: 0, x0: 0, y0: 0, v0: 10, ang: 45, ask: 'land', t: 1, y1: 0, x1: 0, ...o });
+const L44 = 100 ** 2 / G;
+const v46 = Math.sqrt(16000 * G) / Math.cos(rad(30));
+const d52 = { k: 0.01, v0: 50, al: 60 };
+
+export const PLANE_PRESETS = {
+  p2744: {
+    title: 'Мещерский 27.44: дальность и высота при угле 30°',
+    problem: plane({ v0: 100, ang: 30 }),
+    book: { x: (Math.sqrt(3) / 2) * L44, apexY: L44 / 8 },
+    note: 'v₀ = 100 м/с; наибольшая дальность L = v₀²/g. Книга: l = (√3/2)L, h = L/8.',
+  },
+  p2742: {
+    title: 'Мещерский 27.42: груз, сброшенный с самолёта',
+    problem: plane({ y0: 4000, v0: 500 / 3.6, ang: 0 }),
+    book: { x: 3960 },
+    relTol: 0.005,
+    note: 'Высота 4000 м, 500 км/ч. По расчёту 3966 м; в книге — 3960 м (округлено).',
+  },
+  p2746: {
+    title: 'Мещерский 27.46: дальность по радиусу кривизны в высшей точке',
+    problem: plane({ v0: v46, ang: 30 }),
+    book: { x: 18480 },
+    relTol: 0.001,
+    note: 'ρ = 16 км в высшей точке, α = 30°: x_max = 2ρ tg α = 18 475 м (в книге 18 480).',
+  },
+  p2752: {
+    title: 'Мещерский 27.52–27.54: полёт с сопротивлением kPv — высшая точка',
+    problem: plane({ kv: d52.k * G, v0: d52.v0, ang: d52.al, ask: 'apex' }),
+    book: {
+      y: (d52.v0 * Math.sin(rad(d52.al))) / (G * d52.k) - Math.log(1 + d52.k * d52.v0 * Math.sin(rad(d52.al))) / (G * d52.k ** 2),
+      x: (d52.v0 ** 2 * Math.sin(rad(2 * d52.al))) / (2 * G * (d52.k * d52.v0 * Math.sin(rad(d52.al)) + 1)),
+    },
+    note: 'm = 1 кг, R = kPv, k = 0,01 с/м (k₁ = kmg), v₀ = 50 м/с, α = 60°.',
+  },
+  p2756: {
+    title: 'Мещерский 27.56: притяжение к центру и сила тяжести',
+    problem: plane({ c: 4, x0: 1, v0: 0, ang: 0, ask: 't', t: 0.7 }),
+    book: { x: Math.cos(2 * 0.7), y: -(G / 4) * (1 - Math.cos(2 * 0.7)) },
+    note: 'm = 1, сила притяжения k²mr, k = 2; x₀ = a = 1, v₀ = 0; ось y — вверх. Книга: x = a cos kt, y = (g/k²)(1 − cos kt) вниз.',
+  },
+  p2757: {
+    title: 'Мещерский 27.57: отталкивание от центра — гипербола',
+    problem: plane({ gravity: false, c: -2.25, x0: 1, v0: 2, ang: 90, ask: 't', t: 1 }),
+    book: { x: Math.cosh(1.5), y: (2 / 1.5) * Math.sinh(1.5) },
+    note: 'F = k²mr от центра, k = 1,5, a = 1, v₀ = 2 м/с вдоль y: x = a ch kt, y = (v₀/k) sh kt.',
+  },
+  p2762: {
+    title: 'Мещерский 27.62: частица в магнитном поле — окружность',
+    problem: plane({ gravity: false, q: 2, v0: 3, ang: 0, ask: 't', t: Math.PI / 2 }),
+    book: { x: 0, y: -3 },
+    note: 'm = 1, v₀ = 3, сила q·(v × ẑ), q = 2: радиус mv₀/q = 1,5; через полпериода точка на расстоянии 2R.',
+  },
+} satisfies Record<string, PlanePreset>;
+export type PlanePresetKey = keyof typeof PLANE_PRESETS;

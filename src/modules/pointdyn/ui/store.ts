@@ -1,43 +1,97 @@
-/** Состояние вкладки «Динамика точки»: силы, начальные условия, вопрос; история отмены, файл проекта. */
+/**
+ * Состояние вкладки «Динамика точки»: три режима — прямолинейное движение (вторая задача),
+ * силы по заданному движению (первая задача) и криволинейное движение в плоскости; история отмены, файл проекта.
+ */
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
+import type { FirstProblem } from '../model/first';
+import type { PlaneProblem } from '../model/plane';
 import type { PointProblem } from '../model/point';
-import { POINT_PRESETS, type PointPresetKey } from '../presets';
+import { FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS, type FirstPresetKey, type PlanePresetKey, type PointPresetKey } from '../presets';
 
 export const POINT_MODULE = 'pointdyn';
 export const NUM_KEYS = ['m', 'alpha', 'f', 'F0', 'at', 'F1', 'p', 'c', 'kv', 'kq', 'x0', 'v0', 't', 'v1', 'x1'] as const;
 export type PointNumKey = (typeof NUM_KEYS)[number];
+export const FIRST_NUM = ['m', 'g', 't', 't1', 't2'] as const;
+export type FirstNumKey = (typeof FIRST_NUM)[number];
+export const PLANE_NUM = ['m', 'g', 'Fx', 'Fy', 'kv', 'kq', 'c', 'cx', 'cy', 'q', 'x0', 'y0', 'v0', 'ang', 't', 'y1', 'x1'] as const;
+export type PlaneNumKey = (typeof PLANE_NUM)[number];
+
+export type PointMode = 'line' | 'first' | 'plane';
+export interface PointTask {
+  mode: PointMode;
+  line: PointProblem;
+  first: FirstProblem;
+  plane: PlaneProblem;
+}
+export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey;
 
 export interface PointState {
-  problem: PointProblem;
+  problem: PointTask;
   title: string;
-  preset: PointPresetKey | 'custom';
+  preset: AnyPresetKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
   explain: boolean;
 }
 interface Snap {
-  problem: PointProblem;
+  problem: PointTask;
   title: string;
   preset: PointState['preset'];
 }
-const copy = (p: PointProblem): PointProblem => structuredClone(p);
+const copy = <T>(p: T): T => structuredClone(p);
 
-export function parsePoint(raw: unknown): { ok: true; problem: PointProblem } | { ok: false; errors: string[] } {
-  if (!isObj(raw) || !NUM_KEYS.every((k) => isNum(raw[k])) || !['t', 'v', 'x'].includes(raw.ask as string)) return { ok: false, errors: ['В файле нет задачи (problem с числовыми полями m, alpha, f, F0, … и ask).'] };
+const DEF_LINE = POINT_PRESETS.m277.problem as PointProblem;
+const DEF_FIRST = FIRST_PRESETS.f2615.problem as FirstProblem;
+const DEF_PLANE = PLANE_PRESETS.p2744.problem as PlaneProblem;
+
+/** Задача по ключу готовой задачи: режим и данные этого режима. */
+export function presetTask(k: AnyPresetKey, base?: PointTask): { task: PointTask; title: string } {
+  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE) };
+  if (k in POINT_PRESETS) return { task: { ...b, mode: 'line', line: copy(POINT_PRESETS[k as PointPresetKey].problem as PointProblem) }, title: POINT_PRESETS[k as PointPresetKey].title };
+  if (k in FIRST_PRESETS) return { task: { ...b, mode: 'first', first: copy(FIRST_PRESETS[k as FirstPresetKey].problem as FirstProblem) }, title: FIRST_PRESETS[k as FirstPresetKey].title };
+  return { task: { ...b, mode: 'plane', plane: copy(PLANE_PRESETS[k as PlanePresetKey].problem as PlaneProblem) }, title: PLANE_PRESETS[k as PlanePresetKey].title };
+}
+
+function parseLine(raw: unknown): PointProblem | null {
+  if (!isObj(raw) || !NUM_KEYS.every((k) => isNum(raw[k])) || !['t', 'v', 'x'].includes(raw.ask as string)) return null;
   const nums = Object.fromEntries(NUM_KEYS.map((k) => [k, raw[k]])) as Record<PointNumKey, number>;
-  return { ok: true, problem: { ...nums, byWeight: raw.byWeight === true, up: raw.up === true, ask: raw.ask as PointProblem['ask'] } };
+  return { ...nums, byWeight: raw.byWeight === true, up: raw.up === true, ask: raw.ask as PointProblem['ask'] };
+}
+function parseFirst(raw: unknown): FirstProblem | null {
+  if (!isObj(raw) || !FIRST_NUM.every((k) => isNum(raw[k])) || !['x', 'y', 'z'].every((k) => typeof raw[k] === 'string') || !['none', '-y', '+y', '-z', '+x', '-x'].includes(raw.gravity as string)) return null;
+  const nums = Object.fromEntries(FIRST_NUM.map((k) => [k, raw[k]])) as Record<FirstNumKey, number>;
+  return { ...nums, byWeight: raw.byWeight === true, x: (raw.x as string).slice(0, 200), y: (raw.y as string).slice(0, 200), z: (raw.z as string).slice(0, 200), gravity: raw.gravity as FirstProblem['gravity'] };
+}
+function parsePlane(raw: unknown): PlaneProblem | null {
+  if (!isObj(raw) || !PLANE_NUM.every((k) => isNum(raw[k])) || !['t', 'land', 'apex', 'x'].includes(raw.ask as string)) return null;
+  const nums = Object.fromEntries(PLANE_NUM.map((k) => [k, raw[k]])) as Record<PlaneNumKey, number>;
+  return { ...nums, byWeight: raw.byWeight === true, gravity: raw.gravity !== false, ask: raw.ask as PlaneProblem['ask'] };
+}
+
+export function parsePoint(raw: unknown): { ok: true; problem: PointTask } | { ok: false; errors: string[] } {
+  // Файл первой версии раздела — только прямолинейное движение.
+  const old = parseLine(raw);
+  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE) } };
+  if (!isObj(raw) || !['line', 'first', 'plane'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
+  const line = parseLine(raw.line),
+    first = parseFirst(raw.first),
+    plane = parsePlane(raw.plane);
+  const need = { line, first, plane }[raw.mode as PointMode];
+  if (!need) return { ok: false, errors: ['Данные задачи неполные.'] };
+  return { ok: true, problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE) } };
 }
 
 export class PointStore {
   private st: PointState;
   private listeners = new Set<() => void>();
   private hist = new History<Snap>();
-  constructor(opts: { preset?: PointPresetKey; explain?: boolean } = {}) {
+  constructor(opts: { preset?: AnyPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm277';
-    this.st = { problem: copy(POINT_PRESETS[k].problem as PointProblem), title: POINT_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    const { task, title } = presetTask(k);
+    this.st = { problem: task, title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): PointState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -57,30 +111,63 @@ export class PointStore {
     if (this.hist.startSession(key)) this.commit();
   }
   endSession = (key: string) => this.hist.endSession(key);
-  private edit(fn: (p: PointProblem) => void) {
+  private edit(fn: (p: PointTask) => void) {
     const p = copy(this.st.problem);
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: PointPresetKey) => {
+  loadPreset = (k: AnyPresetKey) => {
     this.commit();
-    this.set({ problem: copy(POINT_PRESETS[k].problem as PointProblem), title: POINT_PRESETS[k].title, preset: k });
+    const { task, title } = presetTask(k, this.st.problem);
+    this.set({ problem: task, title, preset: k });
   };
+  setMode = (mode: PointMode) => {
+    if (mode === this.st.problem.mode) return;
+    this.commit();
+    this.edit((p) => (p.mode = mode));
+  };
+  /* прямолинейное движение */
   typeNum = (key: PointNumKey, v: number) => {
     this.touch(`n:${key}`);
-    this.edit((p) => (p[key] = v));
+    this.edit((p) => (p.line[key] = v));
   };
   setUp = (up: boolean) => {
     this.commit();
-    this.edit((p) => (p.up = up));
+    this.edit((p) => (p.line.up = up));
   };
   setByWeight = (on: boolean) => {
     this.commit();
-    this.edit((p) => (p.byWeight = on));
+    this.edit((p) => (p[p.mode].byWeight = on));
   };
   setAsk = (ask: PointProblem['ask']) => {
     this.commit();
-    this.edit((p) => (p.ask = ask));
+    this.edit((p) => (p.line.ask = ask));
+  };
+  /* первая задача */
+  typeFirst = (key: FirstNumKey, v: number) => {
+    this.touch(`f:${key}`);
+    this.edit((p) => (p.first[key] = v));
+  };
+  typeLaw = (key: 'x' | 'y' | 'z', s: string) => {
+    this.touch(`f:${key}`);
+    this.edit((p) => (p.first[key] = s.slice(0, 200)));
+  };
+  setGravityDir = (g: FirstProblem['gravity']) => {
+    this.commit();
+    this.edit((p) => (p.first.gravity = g));
+  };
+  /* движение в плоскости */
+  typePlane = (key: PlaneNumKey, v: number) => {
+    this.touch(`q:${key}`);
+    this.edit((p) => (p.plane[key] = v));
+  };
+  setPlaneGravity = (on: boolean) => {
+    this.commit();
+    this.edit((p) => (p.plane.gravity = on));
+  };
+  setPlaneAsk = (ask: PlaneProblem['ask']) => {
+    this.commit();
+    this.edit((p) => (p.plane.ask = ask));
   };
   undo = () => {
     const s = this.hist.undo(this.snap());

@@ -546,11 +546,23 @@ async function main() {
   check((await p.innerText('#psolution')).includes('до x = 100 м'), 'вопрос по пути');
   const [dl18] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const pdText = await (await dl18.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
-  check(JSON.parse(pdText).module === 'pointdyn' && JSON.parse(pdText).problem.ask === 'x', 'файл задачи динамики точки');
+  check(JSON.parse(pdText).module === 'pointdyn' && JSON.parse(pdText).problem.line.ask === 'x', 'файл задачи динамики точки');
   const pdSol = await p.innerText('#psolution');
   await p.click('[data-tab="frames"]');
   await openText('pd.json', pdText, 'ok');
   check((await p.getAttribute('[data-tab="pointdyn"]', 'aria-selected')) === 'true' && (await p.innerText('#psolution')) === pdSol, 'файл динамики точки открывается в своей вкладке без потерь');
+  await p.selectOption('#ppreset', 'f2615');
+  const fS = await p.innerText('#psolution');
+  check(fS.includes('−50,3') && fS.includes('cos(1,5708t)'), 'Мещерский 26.15: производные формулами и сила −50,3 Н', fS.slice(0, 300));
+  await p.locator('#pf-x').fill('10 sin(');
+  check((await p.getAttribute('#pf-x', 'class'))?.includes('bad') === true, 'ошибка в формуле подсвечена');
+  await p.locator('#pf-x').fill('5t^2');
+  await p.locator('#pf-x').blur();
+  check((await p.innerText('#psolution')).includes('10t'), 'новая формула: производная 10t');
+  await p.selectOption('#ppreset', 'p2744');
+  check((await p.innerText('#psolution')).includes('Высшая точка траектории'), 'Мещерский 27.44: траектория и высшая точка');
+  await p.selectOption('#pmode', 'line');
+  check((await p.locator('#pask').count()) === 1, 'переключение режима');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
