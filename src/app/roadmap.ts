@@ -88,7 +88,8 @@ export const ROADMAP: RoadmapBlock[] = [
         title: 'Геометрия масс',
         what: 'Моменты инерции стержня, диска, кольца и составных тел, теорема Штейнера, радиус инерции.',
         refs: 'Мещерский §34; Антонов п. 9.2, 9.5',
-        status: 'planned',
+        status: 'done',
+        tab: 'inertia',
       },
       {
         id: 'energy',

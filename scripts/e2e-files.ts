@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 11, 'одиннадцать вкладок: десять разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 12, 'двенадцать вкладок: одиннадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 12, 'готово двенадцать пунктов: вся статика и четыре раздела сопромата');
-  check((await p.textContent('[data-rm="inertia"] .rm-badge')) === 'следующий', 'следующий раздел — геометрия масс');
+  check((await p.locator('.rm-done').count()) === 13, 'готово тринадцать пунктов: статика, геометрия масс и пять разделов сопромата');
+  check((await p.textContent('[data-rm="energy"] .rm-badge')) === 'следующий', 'следующий раздел — теорема об изменении кинетической энергии');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('inertia.json', JSON.stringify({ ...JSON.parse(text), module: 'inertia' }), 'bad');
-  check(fric.includes('раздел «Геометрия масс» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('energy.json', JSON.stringify({ ...JSON.parse(text), module: 'energy' }), 'bad');
+  check(fric.includes('раздел «Теорема об изменении кинетической энергии системы» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -445,6 +445,28 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('cv.json', vText, 'ok');
   check((await p.getAttribute('[data-tab="converging"]', 'aria-selected')) === 'true' && (await p.innerText('#vsolution')) === vSol, 'файл сходящихся сил открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 19. Вкладка «Геометрия масс».
+  await p.click('[data-tab="inertia"]');
+  const inS = await p.innerText('#isolution');
+  check(inS.includes('0,5417') && inS.includes('Гюйгенса'), 'Мещерский 34.21: (14m₁ + 99m₂)r²/6 = 0,5417', inS.slice(-300));
+  await p.selectOption('#ipreset', 'm3420');
+  check((await p.innerText('#isolution')).includes('101,9') && (await p.innerText('#isolution')).includes('P/g'), 'Мещерский 34.20: 102 кГ·м·с², массы из весов');
+  await p.selectOption('#ipreset', 'm3419');
+  check((await p.innerText('#isolution')).includes('ρ = 0,154'), 'Мещерский 34.19: ρ = 15,4 см');
+  await p.click('#iadd');
+  check((await p.locator('#iparts .cgrow').count()) === 2, 'добавлена часть');
+  await p.click('[data-cut="1"]');
+  check((await p.innerText('#isolution')).includes('проверьте данные'), 'вырез массивнее тела — сообщение об ошибке');
+  await p.click('.hist button[title^="Отменить"]');
+  const [dl14] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const inText = await (await dl14.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(inText).module === 'inertia' && JSON.parse(inText).problem.parts.length === 2, 'файл задачи о моментах инерции');
+  const iSol = await p.innerText('#isolution');
+  await p.click('[data-tab="frames"]');
+  await openText('in.json', inText, 'ok');
+  check((await p.getAttribute('[data-tab="inertia"]', 'aria-selected')) === 'true' && (await p.innerText('#isolution')) === iSol, 'файл геометрии масс открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».

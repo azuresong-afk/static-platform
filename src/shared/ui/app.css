@@ -469,6 +469,16 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .cg-c{fill:var(--sheet);stroke:var(--bad);stroke-width:2.4}
 .cg-cx{stroke:var(--bad);stroke-width:1.6}
 .cg-ct{font-family:"PT Serif",Georgia,serif;font-style:italic;font-weight:700;font-size:16px;fill:var(--bad)}
+.in-edge{fill:none;stroke:var(--ink);stroke-width:1.8;stroke-linejoin:round}
+.in-rod{fill:none;stroke:var(--ink);stroke-width:4;stroke-linecap:round}
+.in-axis{stroke:var(--bad);stroke-width:1.4;stroke-dasharray:12 5 2 5}
+.in-axis-f{fill:var(--bad)}
+.in-axis-dot{fill:var(--sheet);stroke:var(--bad);stroke-width:1.8}
+.in-axis-c{fill:var(--bad)}
+.in-axt{fill:var(--bad);font-size:14px}
+.in-d{stroke:var(--react);stroke-width:1.2;stroke-dasharray:3 3}
+.in-dt{fill:var(--react);font-size:13px}
+.cg0{margin-left:0}
 .cv-t{paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
 .cv-rope{stroke:var(--ink-2);stroke-width:1.4}
 .cv-axis{stroke:var(--bad);stroke-width:1.2;stroke-dasharray:10 5 2 5}
