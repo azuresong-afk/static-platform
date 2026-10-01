@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 9, 'девять вкладок: восемь разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 10, 'десять вкладок: девять разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 10, 'готово десять пунктов');
-  check((await p.textContent('[data-rm="centroid"] .rm-badge')) === 'следующий', 'следующий раздел — центр тяжести');
+  check((await p.locator('.rm-done').count()) === 11, 'готово одиннадцать пунктов');
+  check((await p.textContent('[data-rm="converging"] .rm-badge')) === 'следующий', 'следующий раздел — сходящиеся силы');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('centroid.json', JSON.stringify({ ...JSON.parse(text), module: 'centroid' }), 'bad');
-  check(fric.includes('раздел «Центр тяжести» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('converging.json', JSON.stringify({ ...JSON.parse(text), module: 'converging' }), 'bad');
+  check(fric.includes('раздел «Сходящиеся силы и приведение системы сил» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -401,6 +401,26 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('body.json', bText, 'ok');
   check((await p.getAttribute('[data-tab="spacebody"]', 'aria-selected')) === 'true' && (await p.innerText('#bsolution')) === bSol, 'файл тела открывается в своей вкладке без потерь');
+
+  // 17. Вкладка «Центр тяжести».
+  await p.click('[data-tab="centroid"]');
+  let gs = await p.innerText('#gsolution');
+  check(gs.includes('= −0,07') || gs.includes('−0,07'), 'Мещерский 9.12: доска с отверстием', gs.slice(-200));
+  await p.click('[data-cut="1"]');
+  check((await p.innerText('#gsolution')).includes('= 0,055'), 'без отметки «вырез» квадрат добавляется: 0,49·0,5/4,49 = 0,055');
+  await p.click('.hist button[title^="Отменить"]');
+  await p.selectOption('#gpreset', 'm920');
+  check((await p.innerText('#gsolution')).includes('= 8,8'), 'Мещерский 9.20: молоток, y = 8,8');
+  await p.selectOption('#gmode', 'line');
+  check((await p.locator('#gparts select[aria-label="Вид части"] option').count()) === 2, 'для линии — отрезок и дуга');
+  await p.click('.hist button[title^="Отменить"]');
+  const [dl12] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const gText = await (await dl12.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(gText).module === 'centroid' && JSON.parse(gText).problem.mode === 'volume', 'файл задачи о центре тяжести');
+  const gSol = await p.innerText('#gsolution');
+  await p.click('[data-tab="frames"]');
+  await openText('cg.json', gText, 'ok');
+  check((await p.getAttribute('[data-tab="centroid"]', 'aria-selected')) === 'true' && (await p.innerText('#gsolution')) === gSol, 'файл открывается в своей вкладке без потерь');
 
   // 15. Вкладка «Фермы».
   await p.click('[data-tab="truss"]');

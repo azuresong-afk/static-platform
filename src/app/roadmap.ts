@@ -66,7 +66,8 @@ export const ROADMAP: RoadmapBlock[] = [
         title: 'Центр тяжести',
         what: 'Плоские фигуры с вырезами, линии и тела. Центр тяжести сечения из листов и профилей уже есть во вкладке «Составное сечение».',
         refs: 'Мещерский §9',
-        status: 'planned',
+        status: 'done',
+        tab: 'centroid',
       },
       {
         id: 'converging',
