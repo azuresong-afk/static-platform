@@ -46,6 +46,10 @@ export function renderGears(pr: GearProblem, r: GearResult): { svg: string; view
     out.push(`<text class="tb-note" x="16" y="${H / 2}">Проверьте данные передачи.</text>`);
     return { svg: out.join(''), viewBox: `0 0 ${W} ${H}` };
   }
+  if (r.size) {
+    const sz = r.size;
+    pr = { ...pr, wheels: pr.wheels.map((w, j) => (j === sz.u ? { ...w, [sz.key]: sz.value } : w)) };
+  }
   const ws = pr.wheels,
     s = sizes(pr, r);
   const big = Math.max(...s);

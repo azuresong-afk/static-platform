@@ -1,16 +1,27 @@
 /** Готовые задачи: Мещерский §13 (вращение тела) и §14 (передачи). */
+import type { EllProblem } from './model/ellipse';
+import type { FrProblem } from './model/friction';
 import type { GearProblem, Wheel } from './model/gears';
+import type { UniProblem } from './model/uniform';
 
 export interface GearPreset {
   title: string;
   problem: GearProblem;
-  /** Ответ: omega (|ω_k|), eps, n (об/мин), phi (φ₁), turns, i (ω₁/ω_k), v, at, an, a, t (найденный момент). */
+  /**
+   * Ответ. Цепочка: omega (|ω_k|), eps, n (об/мин), phi (φ₁), turns, i (ω₁/ω_k), v, at, an, a, t (найденный момент), size.
+   * Равнопеременное: w0, w, eps, t, phi (рад/с, рад/с², с, рад). Эллипсы: wmin, wmax, w2, eps2. Фрикцион: omega, eps, a, t.
+   */
   book?: Record<string, number>;
   note?: string;
 }
 
 const W = (r: number, z = 0, link: Wheel['link'] = 'shaft'): Wheel => ({ r, z, link });
-const g = (o: Partial<GearProblem>): GearProblem => ({ drive: 'phi', law: 't', wheels: [W(1)], k: 0, rho: 0, t: 1, find: false, target: 0, unit: 'rpm', tMax: 0, ...o });
+export const UNI0: UniProblem = { w0: 0, w: 0, eps: 0, t: 1, phi: 0, known: ['w0', 'eps', 't'], wUnit: 'rpm', phiUnit: 'turn' };
+export const ELL0: EllProblem = { a: 25, b: 15, pivot: 'focus', A: 0, w1: 270, unit: 'rpm', phi: 0 };
+export const FR0: FrProblem = { law: '20πt', r: 5, d: '10 − 0,5t', R: 15, t: 0, find: true, dTarget: 5, tMax: 20 };
+const g = (o: Partial<GearProblem>): GearProblem => ({ mode: 'chain', drive: 'phi', law: 't', wheels: [W(1)], k: 0, rho: 0, t: 1, find: 'none', target: 0, unit: 'rpm', u: 0, uKey: 'r', tMax: 0, uni: UNI0, ell: ELL0, fr: FR0, ...o });
+const uni = (o: Partial<UniProblem>) => g({ mode: 'uniform', uni: { ...UNI0, ...o } });
+const ell = (o: Partial<EllProblem>) => g({ mode: 'ellipse', ell: { ...ELL0, ...o } });
 const PI = Math.PI;
 
 export const GEAR_PRESETS = {
@@ -94,15 +105,75 @@ export const GEAR_PRESETS = {
   },
   g143: {
     title: 'Мещерский 14.3: ремённая передача — когда станок наберёт 300 об/мин',
-    problem: g({ law: '0,2πt^2', wheels: [W(75), W(30, 0, 'belt')], k: 1, find: true, target: 300, unit: 'rpm', tMax: 20 }),
+    problem: g({ law: '0,2πt^2', wheels: [W(75), W(30, 0, 'belt')], k: 1, find: 'time', target: 300, unit: 'rpm', tMax: 20 }),
     book: { t: 10 },
     note: 'Шкив мотора B (r = 75 см) разгоняется с ε = 0,4π с⁻²; шкив станка A (r = 30 см): 300 об/мин через 10 с.',
   },
   g149: {
     title: 'Мещерский 14.9: коническая передача — время разгона',
-    problem: g({ law: '2πt^2', wheels: [W(15), W(10, 0, 'bevel')], k: 1, find: true, target: 4320, unit: 'rpm', tMax: 40 }),
+    problem: g({ law: '2πt^2', wheels: [W(15), W(10, 0, 'bevel')], k: 1, find: 'time', target: 4320, unit: 'rpm', tMax: 40 }),
     book: { t: 24 },
     note: 'Ведущее колесо O₂ (r₂ = 15 см) из покоя с ε = 2 об/с² = 4π с⁻²; колесо O₁ (r₁ = 10 см) наберёт 4320 об/мин через 24 с.',
+  },
+  g141: {
+    title: 'Мещерский 14.1: внутреннее зацепление — диаметр второго колеса',
+    problem: g({ law: '10πt/3', wheels: [W(180), W(0, 0, 'int')], k: 1, find: 'size', target: 300, unit: 'rpm', u: 1, uKey: 'r', tMax: 1 }),
+    book: { size: 60 },
+    note: 'D₁ = 360 мм, n₁ = 100 об/мин, n₂ = 300 об/мин: D₂ = 120 мм (r₂ = 60 мм).',
+  },
+  u134: {
+    title: 'Мещерский 13.4: 3600 оборотов за 2 мин из покоя — угловое ускорение',
+    problem: uni({ w0: 0, t: 120, phi: 3600, known: ['w0', 't', 'phi'], wUnit: 'rad', phiUnit: 'turn' }),
+    book: { eps: PI },
+    note: 'Равноускоренно из покоя: ε = π с⁻².',
+  },
+  u135: {
+    title: 'Мещерский 13.5: 12,5 оборота за 5 с из покоя — угловая скорость',
+    problem: uni({ w0: 0, t: 5, phi: 12.5, known: ['w0', 't', 'phi'], wUnit: 'rad', phiUnit: 'turn' }),
+    book: { w: 10 * PI },
+    note: 'ω = 5 об/с = 10π с⁻¹.',
+  },
+  u136: {
+    title: 'Мещерский 13.6: разгон до 120 об/мин за 10 мин — число оборотов',
+    problem: uni({ w0: 0, w: 120, t: 600, known: ['w0', 'w', 't'], wUnit: 'rpm', phiUnit: 'turn' }),
+    book: { phi: 1200 * PI },
+    note: '600 оборотов (φ = 1200π рад).',
+  },
+  u137: {
+    title: 'Мещерский 13.7: остановка после 10 оборотов — угловое ускорение',
+    problem: uni({ w0: 2 * PI, w: 0, phi: 10, known: ['w0', 'w', 'phi'], wUnit: 'rad', phiUnit: 'turn' }),
+    book: { eps: -0.1 * PI },
+    note: 'ω₀ = 2π с⁻¹, остановилось через 10 оборотов: ε = 0,1π с⁻², вращение замедленное.',
+  },
+  u138: {
+    title: 'Мещерский 13.8: пропеллер, 1200 об/мин, 80 оборотов до остановки — время',
+    problem: uni({ w0: 1200, w: 0, phi: 80, known: ['w0', 'w', 'phi'], wUnit: 'rpm', phiUnit: 'turn' }),
+    book: { t: 8 },
+    note: 'Равнозамедленно: t = 8 с.',
+  },
+  e146: {
+    title: 'Мещерский 14.6: эллиптические колёса на фокусах — крайние угловые скорости',
+    problem: ell({ a: 25, b: 15, pivot: 'focus', A: 50, w1: 270, unit: 'rpm', phi: 0 }),
+    book: { wmin: PI, wmax: 81 * PI },
+    note: 'OO₁ = 50 см, полуоси 25 и 15 см, 270 об/мин: ω_min = π с⁻¹, ω_max = 81π с⁻¹.',
+  },
+  e147: {
+    title: 'Мещерский 14.7: закон передачи эллиптических колёс (a = 25, b = 15, φ = 60°)',
+    problem: ell({ a: 25, b: 15, pivot: 'focus', A: 0, w1: 1, unit: 'rad', phi: 60 }),
+    book: { w2: (25 * 25 - 400) / (625 - 2 * 25 * 20 * 0.5 + 400) },
+    note: 'ω₂ = ω₁(a² − c²)/(a² − 2ac cos φ + c²), c = √(a² − b²); численный пример при ω₁ = 1.',
+  },
+  e148: {
+    title: 'Мещерский 14.8: овальные колёса на центрах',
+    problem: ell({ a: 40, b: 10, pivot: 'center', A: 50, w1: 240, unit: 'rpm', phi: 0 }),
+    book: { wmin: 2 * PI, wmax: 32 * PI },
+    note: 'Межосевое 50 см, полуоси 40 и 10 см, 240 об/мин: ω_min = 2π с⁻¹, ω_max = 32π с⁻¹.',
+  },
+  f1410: {
+    title: 'Мещерский 14.10: лобовая фрикционная передача, d = 10 − 0,5t',
+    problem: g({ mode: 'friction', fr: FR0 }),
+    book: { t: 10, eps: 2 * PI, a: 30 * PI * Math.sqrt(40000 * PI * PI + 1) },
+    note: 'Вал I — 600 об/мин, r = 5 см, R = 15 см: ε = 50π/d² с⁻² (при d = r: 2π), w = 30π√(40 000π² + 1) см/с².',
   },
 } satisfies Record<string, GearPreset>;
 

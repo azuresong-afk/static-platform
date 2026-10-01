@@ -14,6 +14,11 @@ export function gearDoc(pr: GearProblem, r: GearResult, opts: { explain?: boolea
     if (opts.explain) bl.push({ k: 'p', cls: 'explain', c });
   };
   if (!r.ok) return { steps: [{ title: 'Данные', blocks: [{ k: 'badge', tone: 'bad', text: 'проверьте данные' }, { k: 'ul', items: r.errors.map((x) => [x]) }] }] };
+  // При поиске размера подставляем найденное значение.
+  if (r.size) {
+    const sz = r.size;
+    pr = { ...pr, wheels: pr.wheels.map((w, j) => (j === sz.u ? { ...w, [sz.key]: sz.value } : w)) };
+  }
   const n = pr.wheels.length,
     k = Math.min(Math.max(0, Math.round(pr.k)), n - 1),
     K = String(k + 1);
@@ -30,6 +35,19 @@ export function gearDoc(pr: GearProblem, r: GearResult, opts: { explain?: boolea
     const bl: Block[] = [{ k: 'eq', lines }];
     ex(bl, pr.drive === 'phi' ? 'Угловая скорость — первая производная угла поворота по времени, угловое ускорение — вторая.' : 'Нить сходит с колеса без проскальзывания: скорость нити равна скорости точек обода, ẋ = ω₁r₁, поэтому ω₁ = ẋ/r₁ и ε₁ = ẍ/r₁.');
     steps.push({ title: pr.drive === 'phi' ? 'Закон вращения колеса 1' : 'Закон движения нити и колесо 1', blocks: bl });
+  }
+  if (r.size) {
+    const z = r.size,
+      U = String(z.u + 1),
+      sym = z.key === 'r' ? 'r' : 'z';
+    const tg = pr.unit === 'rpm' ? `${f(pr.target)} об/мин = ${f((pr.target * Math.PI) / 30)} рад/с` : `${f(pr.target)} рад/с`;
+    const lines: { c: Inline[] }[] = [
+      { c: [`|ω`, sub(K), `| пропорциональна ${z.p > 0 ? '' : '1/'}`, v(sym), sub(U), ` (по цепочке передаточных отношений)`] },
+      { c: [`|ω`, sub(K), `| = ${tg} ⇒ `, v(sym), sub(U), ' = ', b(f(z.value)), z.key === 'r' ? ` (диаметр ${f(2 * z.value)})` : ''] },
+    ];
+    const bl: Block[] = [{ k: 'eq', lines }];
+    ex(bl, 'Неизвестный размер входит в передаточное отношение в первой степени — в числитель или знаменатель; из заданной угловой скорости он находится однозначно.');
+    steps.push({ title: `Неизвестный размер колеса ${U}`, blocks: bl });
   }
   if (n > 1) {
     const lines: { c: Inline[] }[] = [];
@@ -55,7 +73,7 @@ export function gearDoc(pr: GearProblem, r: GearResult, opts: { explain?: boolea
   }
   {
     const lines: { c: Inline[] }[] = [];
-    if (pr.find) {
+    if (pr.find === 'time') {
       const tg = pr.unit === 'rpm' ? `${f(pr.target)} об/мин = ${f((pr.target * Math.PI) / 30)} рад/с` : `${f(pr.target)} рад/с`;
       lines.push({ c: [`|ω`, sub(K), `(t)| = ${tg} ⇒ `, r.found != null ? b(`t = ${f(r.found)}`) : `на отрезке [0; ${f(pr.tMax)}] не достигается`] });
     }
@@ -82,7 +100,8 @@ export function gearDoc(pr: GearProblem, r: GearResult, opts: { explain?: boolea
   }
   const W = r.wheels[k];
   const rows: AnswerRow[] = [
-    ...(pr.find ? [{ kind: 'main' as const, val: [r.found != null ? `t = ${f(r.found)}` : 'не достигается'] as Inline[], note: `|ω${k + 1}| = ${f(pr.target)} ${pr.unit === 'rpm' ? 'об/мин' : 'рад/с'}` }] : []),
+    ...(r.size ? [{ kind: 'main' as const, val: [`${r.size.key === 'r' ? 'r' : 'z'}${r.size.u + 1} = ${f(r.size.value)}`] as Inline[], note: r.size.key === 'r' ? `диаметр ${f(2 * r.size.value)}` : 'число зубьев' }] : []),
+    ...(pr.find === 'time' ? [{ kind: 'main' as const, val: [r.found != null ? `t = ${f(r.found)}` : 'не достигается'] as Inline[], note: `|ω${k + 1}| = ${f(pr.target)} ${pr.unit === 'rpm' ? 'об/мин' : 'рад/с'}` }] : []),
     { kind: 'main', val: [v('ω'), sub(K), ` = ${f(W.omega)} рад/с`], note: `n = ${f(W.n)} об/мин` },
     { kind: 'main', val: [v('ε'), sub(K), ` = ${f(W.eps)} рад/с²`], note: `при t = ${f(r.t)}` },
     ...(n > 1 ? [{ kind: 'aux' as const, val: [v('i'), sub(`1${K}`), ` = ${f(r.i1k)}`] as Inline[], note: 'передаточное отношение' }] : []),

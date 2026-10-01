@@ -8,9 +8,17 @@
  *   внутреннее зацепление и открытый ремень — то же без смены знака; перекрёстный ремень — со сменой знака;
  *   коническая пара — передаточное отношение то же, направление определяется по чертежу (знак не меняем).
  * Точка на колесе k на расстоянии ρ от оси: v = |ω|ρ, a_τ = ερ, a_n = ω²ρ, a = ρ√(ε² + ω⁴), tg μ = |ε|/ω².
+ * Обратная задача (14.1): размер одного колеса неизвестен, задана угловая скорость колеса k. ω_k зависит от этого
+ * размера как s^p (p = ±1; p = 0 — размер не влияет, например у паразитного колеса), откуда s = (ω/ω_k(1))^{1/p}.
  * Производные закона — символьные (src/shared/expr.ts).
  */
 import { diff, evalExpr, parseExpr, type Expr } from '../../../shared/expr';
+import type { EllProblem } from './ellipse';
+import type { FrProblem } from './friction';
+import type { UniProblem } from './uniform';
+
+export type GearMode = 'chain' | 'uniform' | 'ellipse' | 'friction';
+export type FindKind = 'none' | 'time' | 'size';
 
 export type Link = 'shaft' | 'ext' | 'int' | 'belt' | 'cross' | 'bevel';
 export const LINKS: [Link, string][] = [
@@ -32,6 +40,8 @@ export interface Wheel {
 }
 
 export interface GearProblem {
+  /** Вид задачи: цепочка колёс, равнопеременное вращение, эллиптические колёса, фрикционная передача. */
+  mode: GearMode;
   /** Что задано: закон поворота колеса 1 или закон движения нити (рейки) на колесе 1. */
   drive: 'phi' | 'x';
   law: string;
@@ -41,12 +51,17 @@ export interface GearProblem {
   /** Расстояние точки от оси (0 — радиус колеса). */
   rho: number;
   t: number;
-  /** Искать момент, когда |ω_k| достигнет заданного значения. */
-  find: boolean;
+  /** Что ищем по заданной |ω_k| = target: ничего, момент времени или неизвестный размер колеса u. */
+  find: FindKind;
   target: number;
   unit: 'rad' | 'rpm';
+  u: number;
+  uKey: 'r' | 'z';
   /** Отрезок времени для графика и поиска [0; tMax]. */
   tMax: number;
+  uni: UniProblem;
+  ell: EllProblem;
+  fr: FrProblem;
 }
 
 export interface WheelState {
@@ -77,6 +92,8 @@ export interface GearResult {
   i1k: number;
   point: { rho: number; v: number; at: number; an: number; a: number; mu: number } | null;
   hasBevel: boolean;
+  /** Найденный размер колеса u (при find = 'size') и показатель p в ω_k ∝ s^p. */
+  size: { u: number; key: 'r' | 'z'; value: number; p: number } | null;
 }
 
 const ZERO: Expr = { k: 'num', v: 0 };
@@ -122,20 +139,49 @@ export function solveGears(pr: GearProblem): GearResult {
   const ws = pr.wheels;
   if (!ws.length) errors.push('Нужно хотя бы одно колесо.');
   if (ws.some((w) => !(w.r >= 0) || !(w.z >= 0))) errors.push('Радиусы и числа зубьев — неотрицательные числа.');
-  const rt = ratios(ws);
+  // При поиске размера неизвестное значение временно равно 1 — чтобы проверить остальные данные.
+  const uu = Math.min(Math.max(0, Math.round(pr.u)), Math.max(0, ws.length - 1));
+  const rt = ratios(pr.find === 'size' && ws.length ? ws.map((w, j) => (j === uu ? { ...w, [pr.uKey]: 1 } : w)) : ws);
   errors.push(...rt.errors);
-  if (pr.drive === 'x' && !(ws[0]?.r > 0)) errors.push('Нить (рейка) сходит с колеса 1 — задайте его радиус.');
+  if (pr.drive === 'x' && !(ws[0]?.r > 0) && !(pr.find === 'size' && uu === 0 && pr.uKey === 'r')) errors.push('Нить (рейка) сходит с колеса 1 — задайте его радиус.');
   const k = Math.min(Math.max(0, Math.round(pr.k)), Math.max(0, ws.length - 1));
-  if (pr.find && !(pr.target > 0)) errors.push('Искомая угловая скорость — положительное число.');
-  if (pr.find && !(pr.tMax > 0)) errors.push('Для поиска момента задайте отрезок времени tₘₐₓ > 0.');
-  const empty: GearResult = { ok: false, errors, law, by: rt.by, t: pr.t, found: null, phi1: 0, wheels: [], i1k: 0, point: null, hasBevel: false };
+  if (pr.find !== 'none' && !(pr.target > 0)) errors.push('Заданная угловая скорость — положительное число.');
+  if (pr.find === 'time' && !(pr.tMax > 0)) errors.push('Для поиска момента задайте отрезок времени tₘₐₓ > 0.');
+  const empty: GearResult = { ok: false, errors, law, by: rt.by, t: pr.t, found: null, phi1: 0, wheels: [], i1k: 0, point: null, hasBevel: false, size: null };
+  if (pr.find === 'size') {
+    const u = uu;
+    const at = (v: number) => {
+      const w2 = ws.map((w) => ({ ...w }));
+      w2[u][pr.uKey] = v;
+      const rr = ratios(w2);
+      if (rr.errors.length) return NaN;
+      const r1 = pr.drive === 'x' ? w2[0].r : 1;
+      return Math.abs((rr.i[k] * evalExpr(d1, pr.t)) / r1);
+    };
+    if (!errors.length) {
+      const f1 = at(1),
+        f2 = at(2);
+      const p = Math.round(Math.log2(f2 / f1));
+      if (!Number.isFinite(f1) || !Number.isFinite(f2) || f1 === 0) errors.push('Угловая скорость колеса при этих данных не определена или равна нулю — размер не найти.');
+      else if (p === 0) errors.push(`${pr.uKey === 'r' ? 'Радиус' : 'Число зубьев'} колеса ${u + 1} не влияет на ω колеса ${k + 1} — найти его нельзя.`);
+      else {
+        const target = pr.unit === 'rpm' ? (pr.target * Math.PI) / 30 : pr.target;
+        const value = Math.pow(target / f1, 1 / p);
+        const ws2 = ws.map((w) => ({ ...w }));
+        ws2[u][pr.uKey] = value;
+        const r = solveGears({ ...pr, wheels: ws2, find: 'none' });
+        return r.ok ? { ...r, size: { u, key: pr.uKey, value, p } } : r;
+      }
+    }
+    return { ...empty, errors };
+  }
   if (errors.length) return empty;
   const r1 = pr.drive === 'x' ? ws[0].r : 1;
   const w1 = (t: number) => evalExpr(d1, t) / r1;
   const target = pr.unit === 'rpm' ? (pr.target * Math.PI) / 30 : pr.target;
   let t = pr.t,
     found: number | null = null;
-  if (pr.find) {
+  if (pr.find === 'time') {
     const g = (s: number) => Math.abs(rt.i[k] * w1(s)) - target;
     const N = 4000;
     let a = 0,
@@ -182,7 +228,7 @@ export function solveGears(pr: GearProblem): GearResult {
   }
   const phi1 = phi(t);
   if (![om1, ep1, dphi1, phi1, ...(point ? [point.a] : [])].every(Number.isFinite)) return { ...empty, errors: [`В момент t = ${t} закон движения не определён.`] };
-  return { ok: true, errors: [], law, by: rt.by, t, found, phi1: clean(phi1), wheels, i1k: W.i !== 0 ? 1 / W.i : Infinity, point, hasBevel: ws.slice(1).some((w) => w.link === 'bevel') };
+  return { ok: true, errors: [], law, by: rt.by, t, found, phi1: clean(phi1), wheels, i1k: W.i !== 0 ? 1 / W.i : Infinity, point, hasBevel: ws.slice(1).some((w) => w.link === 'bevel'), size: null };
 }
 
 /** ω_k(t) на отрезке [0; T] для графика. */

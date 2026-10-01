@@ -619,6 +619,26 @@ async function main() {
   await openText('gr.json', grText, 'ok');
   check((await p.getAttribute('[data-tab="gears"]', 'aria-selected')) === 'true' && (await p.innerText('#gsolution')) === grSol, 'файл передачи открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
+  await p.click('[data-tab="gears"]');
+  await p.selectOption('#gpreset', 'g141');
+  check((await p.innerText('#gsolution')).includes('диаметр 120'), 'Мещерский 14.1: D₂ = 120 мм — неизвестный размер колеса');
+  await p.selectOption('#gpreset', 'u138');
+  check((await p.innerText('#gsolution')).includes('t = 8 с'), 'Мещерский 13.8: остановка через 8 с');
+  await p.click('#gu-k-t');
+  check((await p.innerText('#gsolution')).includes('ровно три'), 'четыре известные величины — понятное сообщение');
+  await p.selectOption('#gpreset', 'e148');
+  const elS = await p.innerText('#gsolution');
+  check(elS.includes('= 2π') && elS.includes('= 32π'), 'Мещерский 14.8: ω_min = 2π, ω_max = 32π', elS.slice(0, 400));
+  await p.selectOption('#gpreset', 'f1410');
+  check((await p.innerText('#gsolution')).includes('t = 10') && (await p.innerText('#gsolution')).includes('6,2832'), 'Мещерский 14.10: при d = r через 10 с ε = 2π');
+  await p.selectOption('#gmode', 'ellipse');
+  const [dl22] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const elText = await (await dl22.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const elSol = await p.innerText('#gsolution');
+  await p.click('[data-tab="frames"]');
+  await openText('el.json', elText, 'ok');
+  check(JSON.parse(elText).problem.mode === 'ellipse' && (await p.innerText('#gsolution')) === elSol, 'файл эллиптических колёс открывается без потерь');
+  await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
   await p.click('[data-tab="truss"]');
