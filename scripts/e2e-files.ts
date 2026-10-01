@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 18, 'восемнадцать вкладок: семнадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 19, 'девятнадцать вкладок: восемнадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 19, 'готово девятнадцать пунктов');
-  check((await p.textContent('[data-rm="gears"] .rm-badge')) === 'следующий', 'следующий раздел — вращение тела и передачи');
+  check((await p.locator('.rm-done').count()) === 20, 'готово двадцать пунктов');
+  check((await p.textContent('[data-rm="mechanism"] .rm-badge')) === 'следующий', 'следующий раздел — плоский механизм');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('gears.json', JSON.stringify({ ...JSON.parse(text), module: 'gears' }), 'bad');
-  check(fric.includes('раздел «Вращение тела и передачи» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('mechanism.json', JSON.stringify({ ...JSON.parse(text), module: 'mechanism' }), 'bad');
+  check(fric.includes('раздел «Плоский механизм» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -601,6 +601,23 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('kn.json', knText, 'ok');
   check((await p.getAttribute('[data-tab="pointkin"]', 'aria-selected')) === 'true' && (await p.innerText('#ksolution')) === knSol, 'файл кинематики точки открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 26. Вкладка «Вращение и передачи».
+  await p.click('[data-tab="gears"]');
+  const grS = await p.innerText('#gsolution');
+  check(grS.includes('0,7854') && grS.includes('−0,25'), 'Мещерский 14.5: скорость рейки 7,85 мм/с, внешнее зацепление меняет знак', grS.slice(0, 300));
+  await p.selectOption('#gpreset', 'g143');
+  check((await p.innerText('#gsolution')).includes('t = 10'), 'Мещерский 14.3: 300 об/мин через 10 с');
+  await p.click('#gaddw');
+  check((await p.locator('#gwheels > div').count()) === 3 && (await p.innerText('#gsolution')).includes('Колёса 2 и 3') === false, 'колесо добавлено, передача решается');
+  const [dl21] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const grText = await (await dl21.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(grText).module === 'gears' && JSON.parse(grText).problem.wheels.length === 3, 'файл передачи');
+  const grSol = await p.innerText('#gsolution');
+  await p.click('[data-tab="frames"]');
+  await openText('gr.json', grText, 'ok');
+  check((await p.getAttribute('[data-tab="gears"]', 'aria-selected')) === 'true' && (await p.innerText('#gsolution')) === grSol, 'файл передачи открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».

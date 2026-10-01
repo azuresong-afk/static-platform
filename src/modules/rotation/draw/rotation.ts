@@ -31,6 +31,10 @@ export function plot(x0: number, y0: number, w: number, h: number, pts: [number,
   let yLo = Math.min(0, ...ys),
     yHi = Math.max(0, ...ys);
   const ty = ticks(yLo, yHi);
+  // Знаков после запятой — не меньше 3, а при мелком шаге сетки столько, чтобы подписи различались.
+  const dy = ty.length > 1 ? Math.abs(ty[1] - ty[0]) : 1,
+    dig = Math.max(3, Math.ceil(-Math.log10(dy || 1)) + 1),
+    vDig = Math.max(4, dig);
   yLo = Math.min(yLo, ty[0]);
   yHi = Math.max(yHi, ty[ty.length - 1]);
   const tx = ticks(0, tMax);
@@ -38,7 +42,7 @@ export function plot(x0: number, y0: number, w: number, h: number, pts: [number,
   const X = (t: number) => x0 + (t / tHi) * w,
     Y = (v: number) => y0 + h - ((v - yLo) / (yHi - yLo || 1)) * h;
   const out: string[] = [];
-  for (const v of ty) out.push(`<line class="rt-grid" x1="${x0}" y1="${r1(Y(v))}" x2="${x0 + w}" y2="${r1(Y(v))}"/><text class="rt-tick" x="${x0 - 8}" y="${r1(Y(v) + 4)}" text-anchor="end">${fmt(v, 3)}</text>`);
+  for (const v of ty) out.push(`<line class="rt-grid" x1="${x0}" y1="${r1(Y(v))}" x2="${x0 + w}" y2="${r1(Y(v))}"/><text class="rt-tick" x="${x0 - 8}" y="${r1(Y(v) + 4)}" text-anchor="end">${fmt(v, dig)}</text>`);
   for (const t of tx) out.push(`<text class="rt-tick" x="${r1(X(t))}" y="${y0 + h + 18}" text-anchor="middle">${fmt(t, 3)}</text>`);
   out.push(`<line class="rt-axis" x1="${x0}" y1="${r1(Y(0))}" x2="${x0 + w}" y2="${r1(Y(0))}"/><line class="rt-axis" x1="${x0}" y1="${y0}" x2="${x0}" y2="${y0 + h}"/>`);
   out.push(`<text class="rt-title" x="${x0}" y="${y0 - 14}">${title}, ${unit}</text><text class="rt-tick" x="${x0 + w}" y="${y0 + h + 36}" text-anchor="end">t, ${tUnit}</text>`);
@@ -49,8 +53,8 @@ export function plot(x0: number, y0: number, w: number, h: number, pts: [number,
   const [te, ve] = pts[pts.length - 1];
   const ex = X(te),
     ey = Y(ve);
-  out.push(`<circle class="rt-end" cx="${r1(ex)}" cy="${r1(ey)}" r="5"><title>t = ${fmt(te, 4)} ${tUnit}; ${title} = ${fmt(ve, 4)} ${unit}</title></circle>`);
-  out.push(`<text class="rt-val cv-t" x="${r1(ex - 10)}" y="${r1(ey < y0 + 20 ? ey + 22 : ey - 12)}" text-anchor="end">${fmt(ve, 4)}</text>`);
+  out.push(`<circle class="rt-end" cx="${r1(ex)}" cy="${r1(ey)}" r="5"><title>t = ${fmt(te, 4)} ${tUnit}; ${title} = ${fmt(ve, vDig)} ${unit}</title></circle>`);
+  out.push(`<text class="rt-val cv-t" x="${r1(ex - 10)}" y="${r1(ey < y0 + 20 ? ey + 22 : ey - 12)}" text-anchor="end">${fmt(ve, vDig)}</text>`);
   return out.join('');
 }
 

@@ -502,6 +502,15 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .mc-path{fill:none;stroke:var(--ink-3);stroke-width:1.4}
 .cv-t{paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
 .cv-rope{stroke:var(--ink-2);stroke-width:1.4}
+.gr-wheel{fill:var(--sheet);fill-opacity:.55;stroke:var(--ink);stroke-width:1.8}
+.gr-sel{stroke:var(--react);stroke-width:2.4}
+.gr-axle{fill:var(--ink)}
+.gr-belt{fill:none;stroke:var(--ink-2);stroke-width:1.8}
+.gr-spin{fill:none;stroke:var(--ink-2);stroke-width:1.6}
+.gr-spin-f{fill:var(--ink-2)}
+.gr-load{fill:var(--sheet);stroke:var(--ink);stroke-width:1.6}
+.gr-t{font-size:13px;fill:var(--ink)}
+.gr-tsel{fill:var(--react);font-weight:700}
 .cv-axis{stroke:var(--bad);stroke-width:1.2;stroke-dasharray:10 5 2 5}
 .cv-r{stroke:var(--bad);stroke-width:2.6;fill:none}
 .cv-r-f{fill:var(--bad)}
