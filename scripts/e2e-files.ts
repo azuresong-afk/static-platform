@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 17, 'семнадцать вкладок: шестнадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 18, 'восемнадцать вкладок: семнадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 18, 'готово восемнадцать пунктов');
-  check((await p.textContent('[data-rm="pointkin"] .rm-badge')) === 'следующий', 'следующий раздел — кинематика точки');
+  check((await p.locator('.rm-done').count()) === 19, 'готово девятнадцать пунктов');
+  check((await p.textContent('[data-rm="gears"] .rm-badge')) === 'следующий', 'следующий раздел — вращение тела и передачи');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('pointkin.json', JSON.stringify({ ...JSON.parse(text), module: 'pointkin' }), 'bad');
-  check(fric.includes('раздел «Кинематика точки» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('gears.json', JSON.stringify({ ...JSON.parse(text), module: 'gears' }), 'bad');
+  check(fric.includes('раздел «Вращение тела и передачи» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -584,6 +584,23 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('mc.json', mcText, 'ok');
   check((await p.getAttribute('[data-tab="masscenter"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === mcSol, 'файл центра масс открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 25. Вкладка «Кинематика точки».
+  await p.click('[data-tab="pointkin"]');
+  const knS = await p.innerText('#ksolution');
+  check(knS.includes('2,8284') && knS.includes('2t'), 'Мещерский 12.28: v = 2√2, производные формулами', knS.slice(0, 300));
+  await p.selectOption('#kpreset', 'k1226');
+  check((await p.innerText('#ksolution')).includes('2,125'), 'Мещерский 12.26: ρ = 2⅛');
+  await p.selectOption('#kmode', 'polar');
+  check((await p.locator('#k-phi').count()) === 1, 'полярный способ — поля r и φ');
+  const [dl20] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const knText = await (await dl20.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(knText).module === 'pointkin' && JSON.parse(knText).problem.mode === 'polar', 'файл кинематики точки');
+  const knSol = await p.innerText('#ksolution');
+  await p.click('[data-tab="frames"]');
+  await openText('kn.json', knText, 'ok');
+  check((await p.getAttribute('[data-tab="pointkin"]', 'aria-selected')) === 'true' && (await p.innerText('#ksolution')) === knSol, 'файл кинематики точки открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
