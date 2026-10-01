@@ -479,6 +479,19 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .in-d{stroke:var(--react);stroke-width:1.2;stroke-dasharray:3 3}
 .in-dt{fill:var(--react);font-size:13px}
 .cg0{margin-left:0}
+.en-ground{stroke:var(--ink);stroke-width:1.8}
+.en-hatch{stroke:var(--ink-3);stroke-width:1}
+.en-rope{stroke:var(--ink-2);stroke-width:1.5;fill:none}
+.en-wheel{fill:color-mix(in srgb,var(--react) 10%,var(--sheet));stroke:var(--ink);stroke-width:2}
+.en-wheel2{fill:none;stroke:var(--ink);stroke-width:1.4}
+.en-load{fill:color-mix(in srgb,var(--load) 12%,var(--sheet));stroke:var(--ink);stroke-width:1.8;stroke-linejoin:round}
+.en-sup{fill:var(--sheet);stroke:var(--ink);stroke-width:1.4}
+.en-mom{fill:none;stroke:var(--load);stroke-width:1.6}
+.en-v{stroke:var(--react);stroke-width:2;fill:none}
+.en-v-f{fill:var(--react)}
+.en-vt{fill:var(--react);font-size:14px}
+.en-name{font-weight:700;font-size:15px;fill:var(--ink)}
+.en-link{margin-bottom:2px}
 .cv-t{paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
 .cv-rope{stroke:var(--ink-2);stroke-width:1.4}
 .cv-axis{stroke:var(--bad);stroke-width:1.2;stroke-dasharray:10 5 2 5}

@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 12, 'двенадцать вкладок: одиннадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 13, 'тринадцать вкладок: двенадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 13, 'готово тринадцать пунктов: статика, геометрия масс и пять разделов сопромата');
-  check((await p.textContent('[data-rm="energy"] .rm-badge')) === 'следующий', 'следующий раздел — теорема об изменении кинетической энергии');
+  check((await p.locator('.rm-done').count()) === 14, 'готово четырнадцать пунктов');
+  check((await p.textContent('[data-rm="rotation"] .rm-badge')) === 'следующий', 'следующий раздел — вращение тела вокруг оси');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('energy.json', JSON.stringify({ ...JSON.parse(text), module: 'energy' }), 'bad');
-  check(fric.includes('раздел «Теорема об изменении кинетической энергии системы» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('rotation.json', JSON.stringify({ ...JSON.parse(text), module: 'rotation' }), 'bad');
+  check(fric.includes('раздел «Вращение тела вокруг оси» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -467,6 +467,30 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('in.json', inText, 'ok');
   check((await p.getAttribute('[data-tab="inertia"]', 'aria-selected')) === 'true' && (await p.innerText('#isolution')) === iSol, 'файл геометрии масс открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 20. Вкладка «Кинетическая энергия».
+  await p.click('[data-tab="energy"]');
+  const enS = await p.innerText('#esolution');
+  check(enS.includes('2,3055') && enS.includes('приведённая масса'), 'Мещерский 38.45: v по теореме об изменении кинетической энергии', enS.slice(-300));
+  await p.selectOption('#epreset', 'm3823');
+  check((await p.innerText('#esolution')).includes('пойдёт в обратную сторону'), '38.23: из покоя груз не поднимется — предупреждение');
+  await p.selectOption('#epreset', 'm3813');
+  check((await p.innerText('#esolution')).includes('109,8'), 'Мещерский 38.13: 109,8 оборота до остановки');
+  await p.selectOption('#epreset', 'm3845');
+  await p.selectOption('#emode', 's');
+  await p.locator('#e-v1').fill('2,3055');
+  await p.locator('#e-v1').blur();
+  check((await p.innerText('#esolution')).includes('= 1 м'), 'обратная задача: путь до скорости 2,3055 — 1 м');
+  await p.click('#eadd');
+  check((await p.locator('#ebodies .cgrow').count()) === 4, 'добавлено тело');
+  const [dl15] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const enText = await (await dl15.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(enText).module === 'energy' && JSON.parse(enText).problem.bodies.length === 4, 'файл задачи о кинетической энергии');
+  const enSol = await p.innerText('#esolution');
+  await p.click('[data-tab="frames"]');
+  await openText('en.json', enText, 'ok');
+  check((await p.getAttribute('[data-tab="energy"]', 'aria-selected')) === 'true' && (await p.innerText('#esolution')) === enSol, 'файл кинетической энергии открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
