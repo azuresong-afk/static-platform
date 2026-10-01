@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 19, 'девятнадцать вкладок: восемнадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 20, 'двадцать вкладок: девятнадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 20, 'готово двадцать пунктов');
-  check((await p.textContent('[data-rm="mechanism"] .rm-badge')) === 'следующий', 'следующий раздел — плоский механизм');
+  check((await p.locator('.rm-done').count()) === 21, 'готов двадцать один пункт');
+  check((await p.textContent('[data-rm="relative"] .rm-badge')) === 'следующий', 'следующий раздел — сложное движение точки');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('mechanism.json', JSON.stringify({ ...JSON.parse(text), module: 'mechanism' }), 'bad');
-  check(fric.includes('раздел «Плоский механизм» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('relative.json', JSON.stringify({ ...JSON.parse(text), module: 'relative' }), 'bad');
+  check(fric.includes('раздел «Сложное движение точки» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -638,6 +638,32 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('el.json', elText, 'ok');
   check(JSON.parse(elText).problem.mode === 'ellipse' && (await p.innerText('#gsolution')) === elSol, 'файл эллиптических колёс открывается без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 27. Вкладка «Плоский механизм».
+  await p.click('[data-tab="mechanism"]');
+  const meS = await p.innerText('#msolution');
+  check(meS.includes('565,6854') && meS.includes('= 2 рад/с'), 'Мещерский 18.12: ω_AB = 2, w_B = 565,6', meS.slice(0, 300));
+  check((await p.locator('#msvg .mc-icr').count()) === 1, 'на чертеже — МЦС шатуна');
+  await p.click('#mshow-a');
+  check((await p.locator('#msvg .cv-r').count()) >= 2, 'переключение на ускорения');
+  await p.selectOption('#mpreset', 'm1636');
+  check((await p.innerText('#msolution')).includes('3,75'), 'Мещерский 16.36: ω_OB = 3,75 с⁻¹ (механизм Уатта)');
+  await p.selectOption('#mpreset', 'm1615');
+  await p.locator('#mpoints input[aria-label="Имя точки"]').nth(1).fill('K');
+  await p.locator('#mpoints input[aria-label="Имя точки"]').nth(1).blur();
+  const meK = await p.innerText('#msolution');
+  check(meK.includes('Звено OA') && meK.includes('v') && !meK.includes('проверьте механизм'), 'переименование точки — механизм по-прежнему решается', meK.slice(0, 200));
+  await p.click('#maddd-proj');
+  check((await p.innerText('#msolution')).includes('противоречат'), 'лишнее ведущее — понятное сообщение');
+  await p.click('.hist button[title^="Отменить"]');
+  const [dl23] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const meText = await (await dl23.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const meSol = await p.innerText('#msolution');
+  check(JSON.parse(meText).module === 'mechanism' && JSON.parse(meText).problem.points[1].name === 'K', 'файл механизма');
+  await p.click('[data-tab="frames"]');
+  await openText('me.json', meText, 'ok');
+  check((await p.getAttribute('[data-tab="mechanism"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === meSol, 'файл механизма открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
