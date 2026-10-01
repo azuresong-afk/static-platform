@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 14, 'четырнадцать вкладок: тринадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 15, 'пятнадцать вкладок: четырнадцать разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 15, 'готово пятнадцать пунктов');
-  check((await p.textContent('[data-rm="dalembert"] .rm-badge')) === 'следующий', 'следующий раздел — принцип Даламбера');
+  check((await p.locator('.rm-done').count()) === 16, 'готово шестнадцать пунктов');
+  check((await p.textContent('[data-rm="pointdyn"] .rm-badge')) === 'следующий', 'следующий раздел — динамика точки');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('dalembert.json', JSON.stringify({ ...JSON.parse(text), module: 'dalembert' }), 'bad');
-  check(fric.includes('раздел «Принцип Даламбера» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('pointdyn.json', JSON.stringify({ ...JSON.parse(text), module: 'pointdyn' }), 'bad');
+  check(fric.includes('раздел «Динамика точки» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -473,6 +473,7 @@ async function main() {
   await p.click('[data-tab="energy"]');
   const enS = await p.innerText('#esolution');
   check(enS.includes('2,3055') && enS.includes('приведённая масса'), 'Мещерский 38.45: v по теореме об изменении кинетической энергии', enS.slice(-300));
+  check(enS.includes('Натяжения нитей (принцип Даламбера)'), '38.45: натяжения нитей по принципу Даламбера');
   await p.selectOption('#epreset', 'm3823');
   check((await p.innerText('#esolution')).includes('пойдёт в обратную сторону'), '38.23: из покоя груз не поднимется — предупреждение');
   await p.selectOption('#epreset', 'm3813');
@@ -512,6 +513,25 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('rt.json', rtText, 'ok');
   check((await p.getAttribute('[data-tab="rotation"]', 'aria-selected')) === 'true' && (await p.innerText('#rsolution')) === rtSol, 'файл вращения открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 22. Вкладка «Принцип Даламбера».
+  await p.click('[data-tab="dalembert"]');
+  const daS = await p.innerText('#dsolution');
+  check(daS.includes('Силы инерции, приведённые к центру O') && daS.includes('Уравнения кинетостатики'), 'Мещерский 42.7: силы инерции и кинетостатика', daS.slice(-300));
+  await p.selectOption('#dpreset', 'm4211');
+  check((await p.innerText('#dsolution')).includes('822,'), 'Мещерский 42.11: динамическое давление 822 кГ');
+  await p.selectOption('#dgrav', 'none');
+  check(!(await p.innerText('#dsolution')).includes('Сила тяжести'), 'без силы тяжести — только динамические реакции');
+  await p.click('#dadd');
+  check((await p.locator('#dparts .cgrow').count()) === 2, 'добавлена часть');
+  const [dl17] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const daText = await (await dl17.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(daText).module === 'dalembert' && JSON.parse(daText).problem.parts.length === 2, 'файл задачи о динамических реакциях');
+  const daSol = await p.innerText('#dsolution');
+  await p.click('[data-tab="frames"]');
+  await openText('da.json', daText, 'ok');
+  check((await p.getAttribute('[data-tab="dalembert"]', 'aria-selected')) === 'true' && (await p.innerText('#dsolution')) === daSol, 'файл принципа Даламбера открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».

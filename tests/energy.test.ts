@@ -1,6 +1,6 @@
 /** Теорема об изменении кинетической энергии: ответы Мещерского §38 и независимая проверка интегрированием уравнения движения. */
 import { describe, expect, it } from 'vitest';
-import { solveEnergy, type EnergyProblem } from '../src/modules/energy/model/energy';
+import { solveEnergy, tensions, type EnergyProblem } from '../src/modules/energy/model/energy';
 import { ENERGY_PRESETS, type EnergyPresetKey } from '../src/modules/energy/presets';
 import { renderEnergy } from '../src/modules/energy/draw/energy';
 import { energyDoc } from '../src/modules/energy/text/solution';
@@ -128,5 +128,31 @@ describe('кинетическая энергия: файл проекта, сх
     s.undo();
     expect(s.get().problem.bodies.length).toBe(3);
     expect(solveEnergy(s.get().problem).v).toBeCloseTo(ENERGY_PRESETS.m3845.book.v, 12);
+  });
+});
+
+describe('натяжения нитей (принцип Даламбера)', () => {
+  it('Мещерский 41.18: груз A тянет груз B по гладкому столу — T = P₁P₂/(P₁ + P₂)', () => {
+    const P1 = 30,
+      P2 = 20;
+    const base = ENERGY_PRESETS.m3845.problem as EnergyProblem;
+    const pr: EnergyProblem = {
+      ...base,
+      bodies: [
+        { ...base.bodies[0], name: 'A', m: P1, alpha: 90, f: 0 },
+        { ...base.bodies[1], name: 'блок C', m: 0, link: { from: 0, at: 'c', to: 'R' } },
+        { ...base.bodies[0], name: 'B', m: P2, alpha: 0, f: 0, link: { from: 1, at: 'R', to: 'c' } },
+      ],
+    };
+    const r = solveEnergy(pr);
+    const T = tensions(pr, r, pr.s);
+    expect(T.length).toBe(2);
+    for (const t of T) expect(t.T).toBeCloseTo((P1 * P2) / (P1 + P2), 9);
+  });
+  it('38.45: натяжение у груза A по его уравнению движения m·a = P sin α − T', () => {
+    const pr = ENERGY_PRESETS.m3845.problem as EnergyProblem;
+    const r = solveEnergy(pr);
+    const T = tensions(pr, r, pr.s).find((t) => t.body === 1)!;
+    expect(T.T).toBeCloseTo(20 * Math.sin(Math.PI / 3) - (20 / 9.81) * r.a, 9);
   });
 });

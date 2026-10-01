@@ -304,3 +304,36 @@ export function solveEnergy(pr: EnergyProblem): EnergyResult {
   const stop = target > 0 ? firstStop(pr.v0, s * (1 - 1e-9)) : null;
   return { ...base, s, v0: pr.v0, v: pr.v1, a: Q(s) / mred, Atot: A(s), note: stop != null ? 'never' : 'ok', sStop: stop };
 }
+
+/** Натяжение нити, связывающей тело i с предыдущим (принцип Даламбера для отсечённой части). */
+export interface Tension {
+  /** Тело, к которому крепится нить. */
+  body: number;
+  /** Тела отсечённой части (тело и все, что связаны через него). */
+  part: number[];
+  /** Скорость нити на единицу скорости ведущего тела. */
+  w: number;
+  /** m_пр отсечённой части и её обобщённая сила. */
+  mred: number;
+  Q: number;
+  /** Натяжение (для ремня между блоками — разность натяжений ветвей). */
+  T: number;
+  belt: boolean;
+}
+
+/** Натяжения нитей в положении s: отсекаем по нити часть S, для неё T·w = m_пр,S·a − Q_S. */
+export function tensions(pr: EnergyProblem, r: EnergyResult, s: number): Tension[] {
+  if (!r.ok) return [];
+  const children = (i: number) => pr.bodies.map((b, j) => (b.link?.from === i ? j : -1)).filter((j) => j >= 0);
+  const subtree = (i: number): number[] => [i, ...children(i).flatMap(subtree)];
+  return pr.bodies.flatMap((b, i) => {
+    if (!b.link) return [];
+    const part = subtree(i).sort((x, y) => x - y);
+    const L = b.link;
+    const w = Math.abs(attachSpeed(pr.bodies[L.from], L.at, r.kin[L.from].k, r.kin[L.from].q));
+    const mred = part.reduce((t, j) => t + r.kin[j].red, 0);
+    const Q = r.terms.filter((t) => part.includes(t.body)).reduce((t, x) => t + x.Q(s), 0);
+    const T = w > 1e-15 ? Math.abs(mred * r.a - Q) / w : 0;
+    return [{ body: i, part, w, mred, Q, T, belt: b.kind === 'rotate' && pr.bodies[L.from].kind === 'rotate' }];
+  });
+}

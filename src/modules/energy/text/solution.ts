@@ -1,7 +1,7 @@
 /** Решение: кинематические связи, кинетическая энергия и приведённая масса, работа сил, теорема, ускорение. */
 import { b, sub, v, type AnswerRow, type Block, type Doc, type Inline, type Step } from '../../../shared/doc';
 import { fmt } from '../../../shared/format';
-import { ATTACH_NAME, G, type Body, type EnergyProblem, type EnergyResult } from '../model/energy';
+import { ATTACH_NAME, G, tensions, type Body, type EnergyProblem, type EnergyResult } from '../model/energy';
 
 const f = (x: number) => fmt(x, 4);
 const KIND = { translate: 'груз (поступательно)', rotate: 'блок (вращение вокруг неподвижной оси)', roll: 'каток (катится без скольжения)' } as const;
@@ -137,6 +137,27 @@ export function energyDoc(pr: EnergyProblem, r: EnergyResult, opts: { explain?: 
     bl.push({ k: 'p', c: [r.linear ? 'Работа пропорциональна перемещению — ускорение постоянно.' : `Работа нелинейна по ${S} — ускорение переменно; дано значение в конце перемещения.`] });
     ex(bl, 'Q = dΣA/ds — обобщённая (приведённая) сила; m_пр·a = Q — уравнение движения системы, полученное из теоремы в дифференциальной форме dT = dA.');
     steps.push({ title: ang ? 'Угловое ускорение' : 'Ускорение', blocks: bl });
+  }
+  // 6. Натяжения нитей.
+  const Ts = tensions(pr, r, sEnd);
+  if (Ts.length) {
+    const FU2 = pr.byWeight ? 'кГ' : 'Н';
+    const lines = Ts.map((t) => ({
+      c: [
+        v('T'),
+        sub(`${pr.bodies[t.body].link!.from + 1}–${t.body + 1}`),
+        `: часть {${t.part.map((j) => j + 1).join(', ')}}, `,
+        v('T'),
+        `·${f(t.w)} = |${f(t.mred)}·${f(r.a)} − ${f(t.Q)}| → `,
+        v('T'),
+        ' = ',
+        b(`${f(t.T)} ${FU2}`),
+        t.belt ? ' (разность натяжений ветвей ремня)' : '',
+      ] as Inline[],
+    }));
+    const bl: Block[] = [{ k: 'p', c: ['Отсекаем систему по нити: для части, оставшейся по одну сторону, по принципу Даламбера (в форме мощностей) ', v('T'), '·', v('w'), ' = ', v('m'), sub('пр,S'), v(Acc), ' − ', v('Q'), sub('S'), ', где ', v('w'), ` — скорость нити при ${V} = 1.`] }, { k: 'eq', lines }];
+    ex(bl, 'Силы инерции отсечённых тел (−m·a у груза, момент −J·ε у блока и катка) вместе с внешними силами и натяжением нити образуют уравновешенную систему. Нить считается натянутой; если получается, что нить должна была бы толкать, схема не соответствует допущениям задачи.');
+    steps.push({ title: 'Натяжения нитей (принцип Даламбера)', blocks: bl });
   }
   const rows: AnswerRow[] = [];
   if (pr.mode === 'v' && r.note !== 'stops') rows.push({ kind: 'main', val: [v(V), ` = ${f(r.v)} ${VU}`], note: r.note === 'reverse' ? 'формально' : `при ${S} = ${f(r.s)} ${SU}` });

@@ -25,7 +25,7 @@ const circle = (c: V3, u: V3, R: number, n = 48): V3[] => {
 };
 
 /** Контуры части (ломаные). */
-function outline(q: IPart): V3[][] {
+export function outline(q: IPart): V3[][] {
   const p = q.p,
     c = q.c,
     e = unit(q.u);
