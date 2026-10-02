@@ -2,6 +2,7 @@
 import { createAxialModule } from '../modules/axial';
 import { createBendingModule } from '../modules/bending';
 import { createCompositeModule } from '../modules/composite';
+import { createVesselModule } from '../modules/vessels';
 import { createFramesModule } from '../modules/frames';
 import { createSectionsModule } from '../modules/sections';
 import { createSpaceModule } from '../modules/space';
@@ -26,7 +27,7 @@ import { ROADMAP } from './roadmap';
 export function createModules(): StatikaModule[] {
   const frames = createFramesModule();
   const conventions = new ConventionsStore();
-  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createMcModule(), createKinModule(), createGearModule(), createMechModule(), createRelModule(), createBendingModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createSpaceModule(conventions), createCompositeModule()];
+  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createMcModule(), createKinModule(), createGearModule(), createMechModule(), createRelModule(), createBendingModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createSpaceModule(conventions), createCompositeModule(), createVesselModule()];
 }
 
 export const PLANNED: PlannedModule[] = ROADMAP.flatMap((b) => b.items)

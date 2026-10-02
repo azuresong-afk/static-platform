@@ -128,12 +128,12 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 21, 'двадцать одна вкладка: двадцать разделов и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 22, 'двадцать две вкладки: двадцать один раздел и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 22, 'готово двадцать два пункта');
+  check((await p.locator('.rm-done').count()) === 23, 'готово двадцать три пункта');
   check((await p.textContent('[data-rm="virtual"] .rm-badge')) === 'следующий', 'следующий раздел — принцип возможных перемещений');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -682,6 +682,25 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('rl.json', rlText, 'ok');
   check((await p.getAttribute('[data-tab="relative"]', 'aria-selected')) === 'true' && (await p.innerText('#rsolution')) === rlSol, 'файл сложного движения открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 29. Вкладка «Сосуды».
+  await p.click('[data-tab="vessels"]');
+  const vsS = await p.innerText('#vsolution');
+  check(vsS.includes('5,7051 мм') && vsS.includes('принимаем 6 мм'), 'задача 4, рис. 1: δ = 5,71 мм по III гипотезе', vsS.slice(-300));
+  await p.selectOption('#vpreset', 'cylgas');
+  check((await p.innerText('#vsolution')).includes('δ = 10 мм'), 'цилиндр под газом: δ = pr/[σ] = 10 мм');
+  await p.click('#vadd-ell');
+  check((await p.locator('#vsegs > div').count()) === 2 && !(await p.innerText('#vsolution')).includes('проверьте данные'), 'добавлено эллиптическое днище — сосуд решается');
+  await p.selectOption('#vsupport', 'lugs');
+  check((await p.locator('#v-zs').count()) === 1, 'опора на лапах — поле высоты лап');
+  const [dl25] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const vsText = await (await dl25.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const vsSol = await p.innerText('#vsolution');
+  check(JSON.parse(vsText).module === 'vessels' && JSON.parse(vsText).problem.segs.length === 2, 'файл сосуда');
+  await p.click('[data-tab="frames"]');
+  await openText('vs.json', vsText, 'ok');
+  check((await p.getAttribute('[data-tab="vessels"]', 'aria-selected')) === 'true' && (await p.innerText('#vsolution')) === vsSol, 'файл сосуда открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
