@@ -2,8 +2,9 @@
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
+import type { AntData } from '../model/antonov';
 import type { SegKind, Segment, VesselProblem } from '../model/vessel';
-import { VESSEL_PRESETS, type VesselPresetKey } from '../presets';
+import { ANT0, VESSEL_PRESETS, type VesselPresetKey, type VesselTask } from '../presets';
 
 export const VESSEL_MODULE = 'vessels';
 export const MAX_SEGS = 8;
@@ -12,7 +13,7 @@ export type VesselNumKey = (typeof NUM)[number];
 const KINDS: SegKind[] = ['cyl', 'cone', 'sph', 'ell'];
 
 export interface VesselState {
-  problem: VesselProblem;
+  problem: VesselTask;
   title: string;
   preset: VesselPresetKey | 'custom';
   canUndo: boolean;
@@ -21,18 +22,34 @@ export interface VesselState {
   explain: boolean;
 }
 interface Snap {
-  problem: VesselProblem;
+  problem: VesselTask;
   title: string;
   preset: VesselState['preset'];
 }
-const copy = (p: VesselProblem): VesselProblem => structuredClone(p);
+const copy = (p: VesselTask): VesselTask => structuredClone(p);
+const ANT_KEYS = ['fig', 'alpha', 'H1', 'H2', 'H3', 'D', 'R', 'Rb', 'p', 'rho3', 'sigma'] as const;
+export type AntNumKey = Exclude<(typeof ANT_KEYS)[number], 'fig'>;
+
+/** Файл: задача {mode, ant, custom}; файл первой редакции (сам сосуд) открывается как «свой сосуд». */
+export function parseTask(raw: unknown): { ok: true; problem: VesselTask } | { ok: false; errors: string[] } {
+  if (isObj(raw) && (raw.mode === 'ant' || raw.mode === 'custom')) {
+    const a = raw.ant;
+    if (!isObj(a) || !ANT_KEYS.every((k) => isNum(a[k]))) return { ok: false, errors: ['Данные схемы Антонова записаны неверно.'] };
+    const ant = Object.fromEntries(ANT_KEYS.map((k) => [k, a[k]])) as unknown as AntData;
+    const c = parseVessel(raw.custom);
+    if (!c.ok) return c;
+    return { ok: true, problem: { mode: raw.mode, ant, custom: c.problem } };
+  }
+  const c = parseVessel(raw);
+  return c.ok ? { ok: true, problem: { mode: 'custom', ant: structuredClone(ANT0), custom: c.problem } } : c;
+}
 
 export function parseVessel(raw: unknown): { ok: true; problem: VesselProblem } | { ok: false; errors: string[] } {
   if (!isObj(raw) || !Array.isArray(raw.segs) || !NUM.every((k) => isNum(raw[k])) || !['ground', 'lugs'].includes(raw.support as string)) return { ok: false, errors: ['В файле нет сосуда (problem с полями segs, pg, rho, level, support, zs, sigma).'] };
   const segs = raw.segs as unknown[];
   if (!segs.length || segs.length > MAX_SEGS || !segs.every((s) => isObj(s) && KINDS.includes(s.kind as SegKind) && ['r1', 'r2', 'p', 'h'].every((k) => isNum(s[k])))) return { ok: false, errors: [`Участки: от 1 до ${MAX_SEGS}, у каждого kind, r1, r2, p, h.`] };
   const n = Object.fromEntries(NUM.map((k) => [k, raw[k]])) as Record<VesselNumKey, number>;
-  return { ok: true, problem: { segs: segs.map((s) => ({ ...(s as Segment) })).map(({ kind, r1, r2, p, h }) => ({ kind, r1, r2, p, h })), support: raw.support as 'ground' | 'lugs', ...n } };
+  return { ok: true, problem: { segs: segs.map((s) => ({ ...(s as Segment) })).map(({ kind, r1, r2, p, h }) => ({ kind, r1, r2, p, h })), support: raw.support as 'ground' | 'lugs', ...n, tube: isNum(raw.tube) ? (raw.tube as number) : 0 } };
 }
 
 /** Новый участок продолжает предыдущий по радиусу. */
@@ -49,8 +66,8 @@ export class VesselStore {
   private listeners = new Set<() => void>();
   private hist = new History<Snap>();
   constructor(opts: { preset?: VesselPresetKey; explain?: boolean } = {}) {
-    const k = opts.preset ?? 'a1';
-    this.st = { problem: copy(VESSEL_PRESETS[k].problem as VesselProblem), title: VESSEL_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    const k = opts.preset ?? 'f1r1';
+    this.st = { problem: copy(VESSEL_PRESETS[k].task as VesselTask), title: VESSEL_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): VesselState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -70,18 +87,41 @@ export class VesselStore {
     if (this.hist.startSession(key)) this.commit();
   }
   endSession = (key: string) => this.hist.endSession(key);
+  private editTask(fn: (t: VesselTask) => void) {
+    const t = copy(this.st.problem);
+    fn(t);
+    this.set({ problem: t });
+  }
+  /** Правка своего сосуда. */
   private edit(fn: (p: VesselProblem) => void) {
-    const p = copy(this.st.problem);
-    fn(p);
-    this.set({ problem: p });
+    this.editTask((t) => fn(t.custom));
   }
   private change(fn: (p: VesselProblem) => void) {
     this.commit();
     this.edit(fn);
   }
+  setMode = (m: VesselTask['mode']) => {
+    if (m === this.st.problem.mode) return;
+    this.commit();
+    this.editTask((t) => (t.mode = m));
+  };
+  setFig = (fig: number) => {
+    if (fig === this.st.problem.ant.fig) return;
+    this.commit();
+    this.editTask((t) => (t.ant.fig = fig));
+  };
+  typeAnt = (k: AntNumKey, v: number) => {
+    this.touch(`a:${k}`);
+    this.editTask((t) => (t.ant[k] = v));
+  };
+  /** Перенести построенный по схеме сосуд в «свой сосуд» для правки. */
+  toCustom = (p: VesselProblem) => {
+    this.commit();
+    this.editTask((t) => ((t.custom = structuredClone(p)), (t.mode = 'custom')));
+  };
   loadPreset = (k: VesselPresetKey) => {
     this.commit();
-    this.set({ problem: copy(VESSEL_PRESETS[k].problem as VesselProblem), title: VESSEL_PRESETS[k].title, preset: k });
+    this.set({ problem: copy(VESSEL_PRESETS[k].task as VesselTask), title: VESSEL_PRESETS[k].title, preset: k });
   };
   typeNum = (k: VesselNumKey, v: number) => {
     this.touch(`n:${k}`);
@@ -100,14 +140,14 @@ export class VesselStore {
       p.segs[i] = newSeg(kind, prev ? (prev.kind === 'cyl' ? prev.r1 : prev.r2) : p.segs[i].r1);
     });
   addSeg = (kind: SegKind) => {
-    if (this.st.problem.segs.length >= MAX_SEGS) return;
+    if (this.st.problem.custom.segs.length >= MAX_SEGS) return;
     this.change((p) => {
       const last = p.segs[p.segs.length - 1];
       p.segs.push(newSeg(kind, last ? (last.kind === 'cyl' ? last.r1 : last.r2) : 1));
     });
   };
-  removeSeg = (i: number) => this.st.problem.segs.length > 1 && this.change((p) => p.segs.splice(i, 1));
-  setSupport = (s: 'ground' | 'lugs') => s !== this.st.problem.support && this.change((p) => (p.support = s));
+  removeSeg = (i: number) => this.st.problem.custom.segs.length > 1 && this.change((p) => p.segs.splice(i, 1));
+  setSupport = (s: 'ground' | 'lugs') => s !== this.st.problem.custom.support && this.change((p) => (p.support = s));
   undo = () => {
     const s = this.hist.undo(this.snap());
     if (s) this.set(s);
@@ -126,7 +166,7 @@ export class VesselStore {
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== VESSEL_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
-    const r = parseVessel(env.raw.problem);
+    const r = parseTask(env.raw.problem);
     if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Тонкостенный сосуд';

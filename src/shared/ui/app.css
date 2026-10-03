@@ -547,6 +547,7 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .vs-liq{fill:var(--react);fill-opacity:.16;stroke:none}
 .vs-gas{fill:var(--warn);fill-opacity:.1;stroke:none}
 .vs-level{stroke:var(--react);stroke-width:1.6;stroke-dasharray:6 4}
+.vs-tube{stroke:var(--react);stroke-width:5;stroke-opacity:.35}
 .vs-axis{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:14 4 3 4}
 .vs-ep{fill:var(--react);fill-opacity:.08;stroke:var(--react);stroke-width:2;stroke-linejoin:round}
 .vs-hatch{stroke:var(--react);stroke-width:.8;stroke-opacity:.6}

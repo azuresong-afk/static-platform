@@ -36,6 +36,11 @@ export interface VesselProblem {
   /** Допускаемое напряжение, МПа. */
   sigma: number;
   g: number;
+  /**
+   * Пьезометр: высота уровня жидкости в трубке от низа сосуда, м (0 — трубки нет). Трубка сообщается с жидкостью
+   * сосуда, поэтому давление на её свободной поверхности p_г = ρg(z_тр − z_ж) — оно заменяет заданное давление газа.
+   */
+  tube?: number;
 }
 
 export interface MeridianPt {
@@ -67,6 +72,8 @@ export interface VesselResult {
   volume: number;
   /** Вес жидкости, МН. */
   G: number;
+  /** Давление газа над жидкостью, МПа (заданное или по пьезометру). */
+  pg: number;
   /** Толщина стенки, м, и точка, где достигается максимум σ_экв. */
   delta: number;
   crit: MeridianPt | null;
@@ -122,7 +129,7 @@ export function segHeight(s: Segment): number {
 export function solveVessel(pr: VesselProblem): VesselResult {
   const errors: string[] = [],
     warnings: string[] = [];
-  const empty: VesselResult = { ok: false, errors, warnings, segs: [], pts: [], height: 0, volume: 0, G: 0, delta: 0, crit: null };
+  const empty: VesselResult = { ok: false, errors, warnings, segs: [], pts: [], height: 0, volume: 0, G: 0, delta: 0, crit: null, pg: 0 };
   if (!pr.segs.length) errors.push('Добавьте хотя бы один участок.');
   pr.segs.forEach((s, i) => {
     const w = `Участок ${i + 1}`;
@@ -188,12 +195,15 @@ export function solveVessel(pr: VesselProblem): VesselResult {
   const volume = volBelow(height);
   const gamma = (pr.rho * pr.g) / 1e6; // МН/м³
   const zL = pr.level;
+  // Давление газа: заданное или по пьезометру.
+  const pg = (pr.tube ?? 0) > 0 ? gamma * ((pr.tube ?? 0) - Math.min(zL, height)) : pr.pg;
+  if ((pr.tube ?? 0) > 0 && pg < 0) errors.push('Уровень в пьезометре ниже уровня жидкости в сосуде — давление газа получилось бы отрицательным.');
   const G = gamma * volBelow(Math.min(zL, height));
   const zS = pr.support === 'ground' ? 0 : pr.zs;
   if (pr.support === 'lugs' && !(zS > 0 && zS <= height + 1e-9)) errors.push(`Лапы должны быть на высоте от 0 до ${+height.toFixed(4)} м.`);
   if (errors.length) return { ...empty, errors };
   const pts: MeridianPt[] = raw.map((q) => {
-    const p = pr.pg + gamma * Math.max(0, zL - q.z);
+    const p = pg + gamma * Math.max(0, zL - q.z);
     const Gb = gamma * volBelow(Math.min(zL, q.z));
     const Rb = q.z > zS + 1e-12 ? G : 0;
     const F = p * Math.PI * q.r * q.r + Gb - Rb;
@@ -207,6 +217,6 @@ export function solveVessel(pr: VesselProblem): VesselResult {
   let crit: MeridianPt | null = null;
   for (const q of pts) if (!crit || q.Neq > crit.Neq) crit = q;
   const delta = crit ? crit.Neq / pr.sigma : 0;
-  if (pr.level > height + 1e-9 && pr.pg > 0) warnings.push('Уровень жидкости выше крышки и задано давление газа: газ над жидкостью при полном сосуде отсутствует — проверьте данные.');
-  return { ok: true, errors: [], warnings, segs, pts, height, volume, G, delta, crit };
+  if (pr.level > height + 1e-9 && pg > 0 && !((pr.tube ?? 0) > 0)) warnings.push('Уровень жидкости выше крышки и задано давление газа: газ над жидкостью при полном сосуде отсутствует — проверьте данные.');
+  return { ok: true, errors: [], warnings, segs, pts, height, volume, G, delta, crit, pg };
 }

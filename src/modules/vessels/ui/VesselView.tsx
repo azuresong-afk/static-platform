@@ -6,10 +6,11 @@ import { Notice } from '../../../shared/ui/Notice';
 import { Num } from '../../../shared/ui/Num';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { renderVessel } from '../draw/vessel';
+import { ANT_NEEDS } from '../model/antonov';
 import { solveVessel, type SegKind } from '../model/vessel';
-import { VESSEL_PRESETS, type VesselPresetKey } from '../presets';
+import { taskProblem, VESSEL_PRESETS, type VesselPresetKey, type VesselTask } from '../presets';
 import { vesselDoc } from '../text/solution';
-import { MAX_SEGS, type VesselNumKey, type VesselStore } from './store';
+import { MAX_SEGS, type AntNumKey, type VesselNumKey, type VesselStore } from './store';
 
 const KINDS: [SegKind, string][] = [
   ['cyl', 'цилиндр'],
@@ -20,11 +21,16 @@ const KINDS: [SegKind, string][] = [
 
 export function VesselView({ chrome, store }: { chrome: Chrome; store: VesselStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
-  const pr = st.problem;
-  const r = useMemo(() => solveVessel(pr), [pr]);
+  const task = st.problem;
+  const built = useMemo(() => taskProblem(task), [task]);
+  const pr = built.problem;
+  const cp = task.custom;
+  const r = useMemo(() => (built.errors.length ? { ...solveVessel({ ...pr, segs: [] }), errors: built.errors } : solveVessel(pr)), [built, pr]);
   const fig = useMemo(() => renderVessel(pr, r), [pr, r]);
-  const doc = useMemo(() => vesselDoc(pr, r, { explain: st.explain }), [pr, r, st.explain]);
-  const N = (k: VesselNumKey, label: string) => <Num key={k} id={`v-${k}`} label={label} value={pr[k]} zero onType={(v) => store.typeNum(k, v)} onEnd={() => store.endSession(`n:${k}`)} />;
+  const doc = useMemo(() => vesselDoc(pr, r, { explain: st.explain, reading: task.mode === 'ant' ? built.reading : undefined }), [pr, r, st.explain, task.mode, built]);
+  const N = (k: VesselNumKey, label: string) => <Num key={k} id={`v-${k}`} label={label} value={cp[k]} zero onType={(v) => store.typeNum(k, v)} onEnd={() => store.endSession(`n:${k}`)} />;
+  const A = (k: AntNumKey, label: string) => <Num key={k} id={`va-${k}`} label={label} value={task.ant[k]} zero onType={(v) => store.typeAnt(k, v)} onEnd={() => store.endSession(`a:${k}`)} />;
+  const needs = ANT_NEEDS[task.ant.fig] ?? [];
   const end = (k: string) => () => store.endSession(k);
   return (
     <>
@@ -73,9 +79,58 @@ export function VesselView({ chrome, store }: { chrome: Chrome; store: VesselSto
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <label className="field">
+              <span>Как задан сосуд</span>
+              <select id="vmode" value={task.mode} onChange={(e) => store.setMode(e.target.value as VesselTask['mode'])}>
+                <option value="ant">по схеме задачи 4 Антонова (рис. 1–16)</option>
+                <option value="custom">свой сосуд из участков</option>
+              </select>
+            </label>
+            {task.mode === 'ant' && (
+              <>
+                <label className="field">
+                  <span>Рисунок</span>
+                  <select id="vfig" value={task.ant.fig} onChange={(e) => store.setFig(+e.target.value)}>
+                    {Array.from({ length: 16 }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>
+                        рис. {n}
+                        {[4, 8, 10].includes(n) ? ' — с пьезометром' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="cgpar cg0">
+                  {needs.includes('alpha') && A('alpha', 'α, град')}
+                  {needs.includes('H1') && A('H1', 'H₁, м')}
+                  {needs.includes('H2') && A('H2', 'H₂, м')}
+                  {needs.includes('H3') && A('H3', task.ant.fig === 12 ? 'H₃ (диаметр основания крышки), м' : 'H₃ (уровень в трубке), м')}
+                  {needs.includes('D') && A('D', 'D, м')}
+                  {needs.includes('R') && A('R', 'R, м')}
+                  {needs.includes('Rb') && A('Rb', 'R_b (высота крышки), м')}
+                  {needs.includes('p') && A('p', 'p, МПа')}
+                  {A('rho3', 'ρ·10⁻³, кг/м³')}
+                  {A('sigma', '[σ], МПа')}
+                </div>
+                {built.reading.length > 0 && (
+                  <ul className="empty" id="vreading">
+                    {built.reading.map((t, i) => (
+                      <li key={i}>{t}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="segbtns">
+                  <button type="button" id="vtocustom" disabled={!r.ok} onClick={() => store.toCustom(pr)}>
+                    Изменить как свой сосуд
+                  </button>
+                </div>
+                <p className="empty">Числа — из строки таблицы 12.4 (стр. 171). Схему можно выбрать любую: недостающие для рисунка величины программа попросит ввести.</p>
+              </>
+            )}
+            {task.mode === 'custom' && (
+              <>
             <h2>Участки снизу вверх</h2>
             <div className="asteps" id="vsegs">
-              {pr.segs.map((s, i) => (
+              {cp.segs.map((s, i) => (
                 <div key={i}>
                   <div className="cvrow cvrow2">
                     <span className="hint">{i + 1}</span>
@@ -86,7 +141,7 @@ export function VesselView({ chrome, store }: { chrome: Chrome; store: VesselSto
                         </option>
                       ))}
                     </select>
-                    <button type="button" className="del" aria-label="Убрать участок" disabled={pr.segs.length <= 1} onClick={() => store.removeSeg(i)}>
+                    <button type="button" className="del" aria-label="Убрать участок" disabled={cp.segs.length <= 1} onClick={() => store.removeSeg(i)}>
                       ×
                     </button>
                   </div>
@@ -111,7 +166,7 @@ export function VesselView({ chrome, store }: { chrome: Chrome; store: VesselSto
             </div>
             <div className="segbtns">
               {KINDS.map(([k, t]) => (
-                <button key={k} type="button" id={`vadd-${k}`} disabled={pr.segs.length >= MAX_SEGS} onClick={() => store.addSeg(k)}>
+                <button key={k} type="button" id={`vadd-${k}`} disabled={cp.segs.length >= MAX_SEGS} onClick={() => store.addSeg(k)}>
                   + {t}
                 </button>
               ))}
@@ -125,14 +180,16 @@ export function VesselView({ chrome, store }: { chrome: Chrome; store: VesselSto
               {N('sigma', '[σ], МПа')}
               <label className="field">
                 <span>опора</span>
-                <select id="vsupport" value={pr.support} onChange={(e) => store.setSupport(e.target.value as 'ground' | 'lugs')}>
+                <select id="vsupport" value={cp.support} onChange={(e) => store.setSupport(e.target.value as 'ground' | 'lugs')}>
                   <option value="ground">на основании (низ сосуда)</option>
                   <option value="lugs">на лапах</option>
                 </select>
               </label>
-              {pr.support === 'lugs' && N('zs', 'высота лап от низа, м')}
+              {cp.support === 'lugs' && N('zs', 'высота лап от низа, м')}
             </div>
-            <p className="empty">В таблице Антонова «ρ·10⁻³» = 1,1 означает ρ = 1100 кг/м³. Пьезометр — уровень выше крышки (сосуд полон, давление газа 0).</p>
+            <p className="empty">Плотность — в кг/м³ (в таблице Антонова «ρ·10⁻³» = 1,1 означает 1100). Уровень выше крышки — сосуд полон.</p>
+              </>
+            )}
           </section>
           <section className="panel" aria-label="Решение">
             <div className="sol-head">

@@ -15,7 +15,8 @@ export function renderVessel(pr: VesselProblem, r: VesselResult): { svg: string;
   const top = 60,
     bot = H - 70;
   const rMax = Math.max(...r.pts.map((q) => q.r), 1e-9);
-  const zTop = Math.max(r.height, pr.level);
+  const tz = (pr.tube ?? 0) > 0 ? pr.tube! : pr.rho > 0 && pr.level > r.height + 1e-9 ? pr.level : 0;
+  const zTop = Math.max(r.height, pr.level, tz);
   const k = Math.min(300 / (2 * rMax), (bot - top) / Math.max(zTop, 1e-9));
   const cx = 200;
   const Y = (z: number) => bot - z * k;
@@ -64,9 +65,12 @@ export function renderVessel(pr: VesselProblem, r: VesselResult): { svg: string;
   for (const e of ends) out.push(`<line class="vs-wall" x1="${r1(cx - e.r * k)}" y1="${r1(Y(e.z))}" x2="${r1(cx + e.r * k)}" y2="${r1(Y(e.z))}"/>`);
   out.push(`<line class="vs-axis" x1="${cx}" y1="${r1(Y(zTop) - 16)}" x2="${cx}" y2="${bot + 16}"/>`);
   // Пьезометр.
-  if (pr.rho > 0 && pr.level > r.height + 1e-9) {
-    const x = cx + rMax * k + 26;
-    out.push(`<path class="vs-wall" d="M${r1(cx + last.r * k)} ${r1(Y(r.height) + 6)}H${r1(x)}V${r1(Y(pr.level) - 10)}"/><line class="vs-level" x1="${r1(x - 6)}" y1="${r1(Y(pr.level))}" x2="${r1(x + 6)}" y2="${r1(Y(pr.level))}"/><text class="t vs-t" x="${r1(x + 10)}" y="${r1(Y(pr.level) + 4)}">уровень</text>`);
+  if (tz > 0) {
+    // Трубка выходит из стенки у низа сосуда (ниже уровня жидкости) и поднимается до своего уровня.
+    const x = cx - rMax * k - 30;
+    const zj = Math.min(pr.level, r.height) / 2;
+    const qj = pts.reduce((a, c) => (Math.abs(c.z - zj) < Math.abs(a.z - zj) ? c : a));
+    out.push(`<path class="vs-wall" d="M${r1(cx - qj.r * k)} ${r1(Y(zj))}H${r1(x)}V${r1(Y(tz) - 12)}"/><line class="vs-tube" x1="${r1(x)}" y1="${r1(Y(zj))}" x2="${r1(x)}" y2="${r1(Y(tz))}"/><line class="vs-level" x1="${r1(x - 7)}" y1="${r1(Y(tz))}" x2="${r1(x + 7)}" y2="${r1(Y(tz))}"/><text class="t vs-t" x="${r1(x - 10)}" y="${r1(Y(tz) - 6)}" text-anchor="end">пьезометр</text>`);
   }
   // Опоры.
   if (pr.support === 'ground') out.push(`<line class="mc-ground" x1="${r1(cx - rMax * k - 30)}" y1="${bot + 2}" x2="${r1(cx + rMax * k + 30)}" y2="${bot + 2}"/>`);

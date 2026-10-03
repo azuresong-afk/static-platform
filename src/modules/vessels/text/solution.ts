@@ -8,13 +8,14 @@ const KIND: Record<string, string> = { cyl: 'цилиндр', cone: 'конус'
 /** Напряжение при найденной толщине, МПа. */
 const S = (N: number, d: number) => (d > 0 ? N / d : 0);
 
-export function vesselDoc(pr: VesselProblem, r: VesselResult, opts: { explain?: boolean } = {}): Doc {
+export function vesselDoc(pr: VesselProblem, r: VesselResult, opts: { explain?: boolean; reading?: string[] } = {}): Doc {
   const steps: Step[] = [];
   const ex = (bl: Block[], ...c: Inline[]) => {
     if (opts.explain) bl.push({ k: 'p', cls: 'explain', c });
   };
   if (!r.ok) return { steps: [{ title: 'Данные', blocks: [{ k: 'badge', tone: 'bad', text: 'проверьте данные' }, { k: 'ul', items: r.errors.map((x) => [x]) }] }] };
   const d = r.delta;
+  if (opts.reading?.length) steps.push({ title: 'Схема по рисунку', blocks: [{ k: 'ul', items: opts.reading.map((x) => [x]) }] });
   {
     const lines: { c: Inline[] }[] = pr.segs.map((s, i) => {
       const g = r.segs[i];
@@ -30,7 +31,8 @@ export function vesselDoc(pr: VesselProblem, r: VesselResult, opts: { explain?: 
   {
     const gam = (pr.rho * pr.g) / 1e6;
     const lines: { c: Inline[] }[] = [
-      { c: [v('p'), `(z) = p`, sub('г'), ` + ρg(z`, sub('ж'), ` − z) = ${f(pr.pg)} + ${f(gam)}·(${f(pr.level)} − z) МПа при z < z`, sub('ж'), `; выше уровня — ${f(pr.pg)} МПа`] },
+      ...((pr.tube ?? 0) > 0 ? [{ c: ['пьезометр: уровень в трубке z', sub('тр'), ` = ${f(pr.tube!)} м ⇒ p`, sub('г'), ` = ρg(z`, sub('тр'), ' − z', sub('ж'), `) = ${f(gam)}·(${f(pr.tube!)} − ${f(Math.min(pr.level, r.height))}) = `, b(f(r.pg)), ' МПа'] as Inline[] }] : []),
+      { c: [v('p'), `(z) = p`, sub('г'), ` + ρg(z`, sub('ж'), ` − z) = ${f(r.pg)} + ${f(gam)}·(${f(pr.level)} − z) МПа при z < z`, sub('ж'), `; выше уровня — ${f(r.pg)} МПа`] },
       { c: [`вес жидкости G = ρg·V`, sub('ж'), ` = `, b(f(r.G)), ` МН; ${pr.support === 'ground' ? 'сосуд опирается на основание (z = 0)' : `опорная реакция лап на высоте ${f(pr.zs)} м: R = G`}`] },
     ];
     const bl: Block[] = [{ k: 'eq', lines }];

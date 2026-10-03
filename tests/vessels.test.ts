@@ -93,35 +93,87 @@ describe('сосуды: точные формулы', () => {
   });
 });
 
-import { VesselStore, parseVessel } from '../src/modules/vessels/ui/store';
-import { VESSEL_PRESETS, type VesselPresetKey } from '../src/modules/vessels/presets';
+import { VesselStore, parseTask } from '../src/modules/vessels/ui/store';
+import { taskProblem, VESSEL_PRESETS, type VesselPresetKey } from '../src/modules/vessels/presets';
+import { antonovVessel, ANT_NEEDS, type AntData } from '../src/modules/vessels/model/antonov';
 import { renderVessel } from '../src/modules/vessels/draw/vessel';
 import { vesselDoc } from '../src/modules/vessels/text/solution';
+
+const A0: AntData = { fig: 1, alpha: 30, H1: 10, H2: 7, H3: 5, D: 2, R: 1.5, Rb: 0.6, p: 0.3, rho3: 1.2, sigma: 100 };
+
+describe('сосуды по схемам Антонова', () => {
+  for (let fig = 1; fig <= 16; fig++)
+    it(`рис. ${fig}: сосуд строится и рассчитывается`, () => {
+      const { problem, errors, reading } = antonovVessel({ ...A0, fig, R: [7, 15].includes(fig) ? 2.5 : A0.R, H1: [3, 7, 11, 15].includes(fig) ? 14 : A0.H1 });
+      expect(errors, `рис. ${fig}`).toEqual([]);
+      expect(reading.length).toBeGreaterThan(0);
+      const r = solveVessel(problem);
+      expect(r.ok, `рис. ${fig}: ${r.errors.join()}`).toBe(true);
+      expect(r.warnings, `рис. ${fig}`).toEqual([]);
+      expect(r.delta).toBeGreaterThan(0);
+      for (const x of [renderVessel(problem, r).svg, JSON.stringify(vesselDoc(problem, r, { explain: true, reading }))]) expect(x).not.toMatch(/NaN|undefined|Infinity/);
+    });
+  it('рис. 1: α — между образующей и осью; высоты и лапы', () => {
+    const { problem } = antonovVessel({ ...A0, fig: 1, alpha: 30, H1: 20, H2: 14, D: 2, R: 1 });
+    const hc = 1 / Math.tan(Math.PI / 6);
+    const r = solveVessel(problem);
+    expect(r.height).toBeCloseTo(hc + 20 + 1, 9);
+    expect(problem.level).toBeCloseTo(hc + 14, 12);
+    expect(problem.zs).toBeCloseTo(hc + 20, 12);
+    // Выше уровня жидкости цилиндр нагружен только газом и весом жидкости через лапы сверху: N_t = p_г·r.
+    const q = r.pts.find((x) => x.seg === 1 && x.z > hc + 15)!;
+    expect(q.Nt).toBeCloseTo(0.3, 9);
+  });
+  it('рис. 4 и 8: давление газа по пьезометру p_г = ρg(H₁ + H₃ − H₂)', () => {
+    const g4 = antonovVessel({ ...A0, fig: 4, H1: 20, H2: 14, H3: 10, D: 3, R: 1.5, rho3: 1.3 });
+    const r4 = solveVessel(g4.problem);
+    expect(r4.pg).toBeCloseTo((1300 * 9.81 * (20 + 10 - 14)) / 1e6, 12);
+    const g8 = antonovVessel({ ...A0, fig: 8, H1: 10, H2: 7, H3: 10, D: 6, rho3: 1.1 });
+    const r8 = solveVessel(g8.problem);
+    expect(r8.pg).toBeCloseTo((1100 * 9.81 * (10 + 10 - 7)) / 1e6, 12);
+    // Цилиндр на основании: осевую силу несёт только газ — N_m = p_г·r/2.
+    for (const q of r8.pts.filter((x) => x.seg === 0 && x.z > 1e-6)) expect(q.Nm).toBeCloseTo((r8.pg * 3) / 2, 9);
+  });
+  it('рис. 3: α — от горизонтали; верхний цилиндр должен помещаться', () => {
+    const ok = antonovVessel({ ...A0, fig: 3, alpha: 45, D: 2, H1: 14, H2: 7, R: 1.5 });
+    const hcone = (2 - 1) * Math.tan(Math.PI / 4);
+    expect(solveVessel(ok.problem).height).toBeCloseTo(14 + 1.5 - Math.sqrt(1.5 ** 2 - 1), 6);
+    expect(ok.problem.segs[2].h).toBeCloseTo(14 - 7 - hcone, 12);
+    expect(antonovVessel({ ...A0, fig: 3, alpha: 80, D: 2, H1: 9, H2: 7, R: 1.5 }).errors.join()).toMatch(/не помещается/);
+  });
+  it('недостающие данные — понятное сообщение', () => {
+    expect(antonovVessel({ ...A0, fig: 4, H3: 0 }).errors.join()).toMatch(/H₃/);
+    expect(ANT_NEEDS[12]).toContain('H3');
+  });
+});
 
 describe('сосуды: пресеты, файл, чертёж, текст', () => {
   for (const key of Object.keys(VESSEL_PRESETS) as VesselPresetKey[])
     it(`${key}: решается, файл туда-обратно, без NaN`, () => {
       const s = new VesselStore({ preset: key });
-      const p = s.get().problem,
-        r = solveVessel(p);
+      const t = taskProblem(s.get().problem);
+      expect(t.errors).toEqual([]);
+      const r = solveVessel(t.problem);
       expect(r.ok, r.errors.join()).toBe(true);
       expect(r.warnings, key).toHaveLength(0);
       const s2 = new VesselStore();
       expect(s2.importProject(s.exportProject(new Date(2026, 0, 1)).text)).toBe(true);
-      expect(s2.get().problem).toEqual(p);
-      for (const x of [renderVessel(p, r).svg, JSON.stringify(vesselDoc(p, r, { explain: true }))]) expect(x).not.toMatch(/NaN|undefined|Infinity/);
+      expect(s2.get().problem).toEqual(s.get().problem);
+      for (const x of [renderVessel(t.problem, r).svg, JSON.stringify(vesselDoc(t.problem, r, { explain: true }))]) expect(x).not.toMatch(/NaN|undefined|Infinity/);
     });
-  it('пресет «цилиндр под газом»: δ = 10 мм', () => expect(solveVessel(VESSEL_PRESETS.cylgas.problem as VesselProblem).delta * 1000).toBeCloseTo(10, 9));
-  it('правка участков и отмена; чужой файл', () => {
-    const s = new VesselStore({ preset: 'a2' });
+  it('пресет «цилиндр под газом»: δ = 10 мм', () => expect(solveVessel(taskProblem(VESSEL_PRESETS.cylgas.task).problem).delta * 1000).toBeCloseTo(10, 9));
+  it('правка, перенос схемы в свой сосуд, отмена; файл первой редакции; чужой файл', () => {
+    const s = new VesselStore({ preset: 'f2r4' });
+    s.toCustom(taskProblem(s.get().problem).problem);
+    expect(s.get().problem.mode).toBe('custom');
     s.addSeg('sph');
     s.setSegKind(2, 'ell');
     s.removeSeg(0);
-    s.undo();
-    s.undo();
-    s.undo();
-    expect(s.get().preset).toBe('a2');
+    for (let i = 0; i < 4; i++) s.undo();
+    expect(s.get().preset).toBe('f2r4');
+    const old = { segs: [{ kind: 'cyl', r1: 1, r2: 1, p: 0, h: 2 }], pg: 1, rho: 0, level: 0, support: 'ground', zs: 0, sigma: 100, g: 9.81 };
+    const p = parseTask(old);
+    expect(p.ok && p.problem.mode === 'custom' && p.problem.custom.tube === 0).toBe(true);
     expect(new VesselStore().importProject(JSON.stringify({ format: 'statika-project', version: 2, module: 'gears', problem: {} }))).toBe(false);
-    expect(parseVessel({ segs: [] }).ok).toBe(false);
   });
 });

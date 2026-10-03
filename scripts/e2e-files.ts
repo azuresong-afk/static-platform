@@ -687,7 +687,11 @@ async function main() {
   // 29. Вкладка «Сосуды».
   await p.click('[data-tab="vessels"]');
   const vsS = await p.innerText('#vsolution');
-  check(vsS.includes('5,7051 мм') && vsS.includes('принимаем 6 мм'), 'задача 4, рис. 1: δ = 5,71 мм по III гипотезе', vsS.slice(-300));
+  check(vsS.includes('Схема по рисунку') && vsS.includes('6,3632 мм') && vsS.includes('принимаем 7 мм'), 'задача 4, рис. 1, строка 1: δ = 6,36 мм по III гипотезе', vsS.slice(-300));
+  await p.selectOption('#vpreset', 'f4r10');
+  check((await p.innerText('#vsolution')).includes('0,204') && (await p.locator('#va-H3').count()) === 1, 'рис. 4: давление газа по пьезометру 0,204 МПа');
+  await p.selectOption('#vfig', '16');
+  check((await p.innerText('#vsolution')).includes('давление p'), 'рис. 16 без давления — понятное сообщение');
   await p.selectOption('#vpreset', 'cylgas');
   check((await p.innerText('#vsolution')).includes('δ = 10 мм'), 'цилиндр под газом: δ = pr/[σ] = 10 мм');
   await p.click('#vadd-ell');
@@ -697,7 +701,7 @@ async function main() {
   const [dl25] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const vsText = await (await dl25.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   const vsSol = await p.innerText('#vsolution');
-  check(JSON.parse(vsText).module === 'vessels' && JSON.parse(vsText).problem.segs.length === 2, 'файл сосуда');
+  check(JSON.parse(vsText).module === 'vessels' && JSON.parse(vsText).problem.mode === 'custom' && JSON.parse(vsText).problem.custom.segs.length === 2, 'файл сосуда');
   await p.click('[data-tab="frames"]');
   await openText('vs.json', vsText, 'ok');
   check((await p.getAttribute('[data-tab="vessels"]', 'aria-selected')) === 'true' && (await p.innerText('#vsolution')) === vsSol, 'файл сосуда открывается в своей вкладке без потерь');
