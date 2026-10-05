@@ -128,12 +128,12 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 22, 'двадцать две вкладки: двадцать один раздел и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 23, 'двадцать три вкладки: двадцать два раздела и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 23, 'готово двадцать три пункта');
+  check((await p.locator('.rm-done').count()) === 24, 'готово двадцать четыре пункта');
   check((await p.textContent('[data-rm="virtual"] .rm-badge')) === 'следующий', 'следующий раздел — принцип возможных перемещений');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -705,6 +705,28 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('vs.json', vsText, 'ok');
   check((await p.getAttribute('[data-tab="vessels"]', 'aria-selected')) === 'true' && (await p.innerText('#vsolution')) === vsSol, 'файл сосуда открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 30. Вкладка «Кручение».
+  await p.click('[data-tab="torsion"]');
+  const trS = await p.innerText('#torsolution');
+  check(trS.includes('65,6513 мм') && trS.includes('определяет жёсткость'), 'шкивы: d = 65,65 мм, определяет жёсткость', trS.slice(0, 300));
+  await p.selectOption('#torpreset', 'ant72');
+  const tr72 = await p.innerText('#torsolution');
+  check(tr72.includes('участок I (AB)') && tr72.includes('= −1 кН·м') && tr72.includes('= 1 кН·м'), 'Антонов, рис. 7.2: M_z = −M и +M', tr72.slice(0, 400));
+  await p.locator('#t-m0').fill('2');
+  await p.locator('#t-m0').blur();
+  check((await p.innerText('.sheet')).includes('уравновешиваться'), 'вал без заделок с неуравновешенными моментами — понятное сообщение');
+  await p.click('.hist button[title^="Отменить"]');
+  await p.selectOption('#torpreset', 'bothfixed');
+  check((await p.innerText('#torsolution')).includes('статически неопределимый'), 'вал с двумя заделками — статически неопределимый');
+  const [dl26] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const trText = await (await dl26.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const trSol = await p.innerText('#torsolution');
+  check(JSON.parse(trText).module === 'torsion' && JSON.parse(trText).shaft.supports === 'both', 'файл вала');
+  await p.click('[data-tab="frames"]');
+  await openText('tr.json', trText, 'ok');
+  check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.innerText('#torsolution')) === trSol, 'файл вала открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
