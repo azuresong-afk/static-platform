@@ -1,6 +1,7 @@
 /** Разделы приложения: готовые и запланированные по дорожной карте (src/app/roadmap.ts). */
 import { createAxialModule } from '../modules/axial';
 import { createBendingModule } from '../modules/bending';
+import { createFrameDiagModule } from '../modules/framediag';
 import { createCompositeModule } from '../modules/composite';
 import { createVesselModule } from '../modules/vessels';
 import { createTorsionModule } from '../modules/torsion';
@@ -28,7 +29,7 @@ import { ROADMAP } from './roadmap';
 export function createModules(): StatikaModule[] {
   const frames = createFramesModule();
   const conventions = new ConventionsStore();
-  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createMcModule(), createKinModule(), createGearModule(), createMechModule(), createRelModule(), createBendingModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createSpaceModule(conventions), createCompositeModule(), createVesselModule(), createTorsionModule()];
+  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createMcModule(), createKinModule(), createGearModule(), createMechModule(), createRelModule(), createBendingModule(frames.store, conventions), createFrameDiagModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createSpaceModule(conventions), createCompositeModule(), createVesselModule(), createTorsionModule()];
 }
 
 export const PLANNED: PlannedModule[] = ROADMAP.flatMap((b) => b.items)

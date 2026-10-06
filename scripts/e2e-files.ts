@@ -128,12 +128,12 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 23, 'двадцать три вкладки: двадцать два раздела и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 24, 'двадцать четыре вкладки: двадцать три раздела и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 24, 'готово двадцать четыре пункта');
+  check((await p.locator('.rm-done').count()) === 25, 'готово двадцать пять пунктов');
   check((await p.textContent('[data-rm="virtual"] .rm-badge')) === 'следующий', 'следующий раздел — принцип возможных перемещений');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -210,7 +210,7 @@ async function main() {
   check((await p.inputValue('#preset')) === 'custom' && (await p.textContent('h1'))!.includes('балки'), 'там открыта та же схема');
   await p.selectOption('#preset', 'pframe');
   await p.click('[data-tab="bending"]');
-  check((await p.innerText('.dg-empty')).includes('только для прямых горизонтальных балок'), 'для рамы — понятное сообщение');
+  check((await p.innerText('.dg-empty')).includes('вкладка «Рамы: эпюры N, Q, M»'), 'для рамы — понятное сообщение со ссылкой на вкладку рам');
   await p.click('.hist button[title^="Отменить"]');
   check((await p.innerText('#bsolution')).includes('M(0,667) = 2,667'), 'отмена во вкладке «Изгиб» возвращает балку (M_max = 8/9·ql²)');
   await openText('beam.json', text, 'ok');
@@ -727,6 +727,30 @@ async function main() {
   await p.click('[data-tab="frames"]');
   await openText('tr.json', trText, 'ok');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.innerText('#torsolution')) === trSol, 'файл вала открывается в своей вкладке без потерь');
+  await p.click('[data-tab="frames"]');
+
+  // 31. Вкладка «Рамы: эпюры N, Q, M» (схема общая с «Балками и рамами»).
+  await p.click('[data-tab="framediag"]');
+  await p.selectOption('#fdpreset', 'gframe');
+  const fd = await p.innerText('#fdsolution');
+  check(fd.includes('M(0) = 38 (растянуты волокна слева)') && fd.includes('M(2) = 50') && fd.includes('узел C') && fd.includes('= 30 (растянуты волокна сверху)'), 'Г-рама: M в заделке 50, в узле C 34 и 30, проверка узла', fd.slice(0, 400));
+  check((await p.locator('.fd-canvas .fd-grid svg').count()) === 3 && (await p.locator('#fd-M .dg-line').count()) === 3, 'три эпюры, по линии на участок');
+  const mSideX = () => p.evaluate(`[...document.querySelectorAll('#fd-M .dg-val')].find((t) => t.textContent === '50').getAttribute('x')`) as Promise<string>;
+  const xc = +(await mSideX());
+  await p.click('input[name="mSide"] >> nth=1');
+  const xt = +(await mSideX());
+  check(xt < xc, 'на растянутых волокнах эпюра M у стойки переходит на левую сторону', `${xc} → ${xt}`);
+  await p.click('input[name="mSide"] >> nth=0');
+  await p.selectOption('#fdpreset', 'inclined');
+  const fdi = await p.innerText('#fdsolution');
+  check(fdi.includes('Участок') && fdi.includes('ΣX = 0') && !fdi.includes('NaN'), 'рама с наклонным ригелем: решение и проверка узлов');
+  await p.click('#fdedit');
+  check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true' && (await p.inputValue('#preset')) === 'custom', '«Изменить схему» ведёт в «Балки и рамы» с той же рамой');
+  await p.selectOption('#preset', 'indet');
+  await p.click('[data-tab="framediag"]');
+  check((await p.innerText('.dg-empty')).includes('статически определимая'), 'неопределимая схема — понятное сообщение');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.locator('.fd-canvas .fd-grid').count()) === 1, 'отмена возвращает раму');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».

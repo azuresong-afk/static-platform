@@ -19,7 +19,7 @@ import { BENDING_PRESETS, type BendingPresetKey } from '../presets';
 import { bendingDoc } from '../text/solution';
 
 const WHY: Record<Exclude<BeamResult, { ok: true }>['why'], string> = {
-  notbeam: 'Эпюры пока строятся только для прямых горизонтальных балок. Рамы с вертикальными участками — следующий шаг.',
+  notbeam: 'Здесь эпюры строятся для прямых горизонтальных балок. Для рам с вертикальными и наклонными участками — вкладка «Рамы: эпюры N, Q, M».',
   status: 'Сначала нужна статически определимая схема: реакции должны находиться из уравнений равновесия.',
   baddist: 'Распределённая нагрузка задана между точками не на одной прямой — исправьте её в «Балках и рамах».',
 };
@@ -36,7 +36,7 @@ function Figures({ schema, dg, idPrefix }: { schema: Drawing; dg: DiagramsSVG; i
   );
 }
 
-function ConventionsPanel({ c, conv }: { c: Conventions; conv: ConventionsStore }) {
+export function ConventionsPanel({ c, conv }: { c: Conventions; conv: ConventionsStore }) {
   const n = forceNames(c);
   const radio = <K extends keyof Conventions>(key: K, value: Conventions[K], label: string, hint?: string) => (
     <label className="opt">

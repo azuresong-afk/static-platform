@@ -41,7 +41,7 @@ const qSym = (S: string): Inline => sym({ L: 'q', S });
 const num = (x: number) => f3(Math.abs(x));
 
 /** Сумма слагаемых со знаками: [[+1, […]], [−1, […]]] → «Y_A − F·sin 60° + …». Пустая — «0». */
-function signedSum(parts: [number, Inline[]][]): Inline[] {
+export function signedSum(parts: [number, Inline[]][]): Inline[] {
   const r: Inline[] = [];
   parts.forEach(([s, c], i) => {
     if (i === 0) {
@@ -53,7 +53,7 @@ function signedSum(parts: [number, Inline[]][]): Inline[] {
 }
 
 /** Многочлен от z: «6,274 − 2·z₁ + 0,5·z₁²». */
-function polyText(p: Poly, z: Inline[], scale: number): Inline[] {
+export function polyText(p: Poly, z: Inline[], scale: number): Inline[] {
   const deg = polyDegree(p, scale);
   const parts: [number, Inline[]][] = [];
   for (let i = 0; i <= deg; i++) {
@@ -66,7 +66,7 @@ function polyText(p: Poly, z: Inline[], scale: number): Inline[] {
 }
 
 /** Плечо «(a + z₁)» или «z₁». */
-function armText(a: number, z: Inline[]): Inline[] {
+export function armText(a: number, z: Inline[]): Inline[] {
   return a < EPS ? [...z] : ['(', f3(a), ' + ', ...z, ')'];
 }
 
