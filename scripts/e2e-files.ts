@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 24, 'двадцать четыре вкладки: двадцать три раздела и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 25, 'двадцать пять вкладок: двадцать четыре раздела и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 25, 'готово двадцать пять пунктов');
-  check((await p.textContent('[data-rm="virtual"] .rm-badge')) === 'следующий', 'следующий раздел — принцип возможных перемещений');
+  check((await p.locator('.rm-done').count()) === 26, 'готово двадцать шесть пунктов');
+  check((await p.textContent('[data-rm="lagrange"] .rm-badge')) === 'следующий', 'следующий раздел — уравнения Лагранжа');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('virtual.json', JSON.stringify({ ...JSON.parse(text), module: 'virtual' }), 'bad');
-  check(fric.includes('раздел «Принцип возможных перемещений» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('lagrange.json', JSON.stringify({ ...JSON.parse(text), module: 'lagrange' }), 'bad');
+  check(fric.includes('раздел «Уравнения Лагранжа второго рода» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -751,6 +751,26 @@ async function main() {
   check((await p.innerText('.dg-empty')).includes('статически определимая'), 'неопределимая схема — понятное сообщение');
   await p.click('.hist button[title^="Отменить"]');
   check((await p.locator('.fd-canvas .fd-grid').count()) === 1, 'отмена возвращает раму');
+  await p.click('[data-tab="frames"]');
+
+  // 32. Вкладка «Возможные перемещения» (схема общая с «Балками и рамами»).
+  await p.click('[data-tab="virtual"]');
+  await p.selectOption('#vwpreset', 'm4619');
+  const vw = await p.innerText('#vwsolution');
+  check(vw.includes('= 10,5') && vw.includes('= −0,5') && vw.includes('совпадает ✓') && !vw.includes('не совпадает'), 'Мещерский 46.19: R_B = 10,5, R_D = −0,5, совпадает с уравнениями равновесия', vw.slice(0, 300));
+  check((await p.locator('#vwfig .vw-center').count()) === 1, 'перемещение для Y_A: левая часть поворачивается вокруг шарнира C');
+  await p.selectOption('#vwpreset', 'm4625');
+  check((await p.innerText('#vwsolution')).includes('поворачивается вокруг точки D'), 'Мещерский 46.25: правая часть поворачивается вокруг угла рамы');
+  await p.click('input[name="vw-pick"] >> nth=2');
+  check((await p.locator('#vwfig .vw-delta').count()) === 1 && (await p.locator('#vwfig path.vw-delta').count()) === 1, 'для момента заделки — поворот сечения (дуга)');
+  await p.selectOption('#vwpreset', 'm4620');
+  check((await p.innerText('#vwsolution')).includes('Неизвестная нагрузка M'), 'Мещерский 46.20: неизвестная пара');
+  await p.click('#vwedit');
+  await p.selectOption('#preset', 'indet');
+  await p.click('[data-tab="virtual"]');
+  check((await p.innerText('.dg-empty')).includes('статически определимая'), 'неопределимая схема — понятное сообщение');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.locator('#vwfig').count()) === 1, 'отмена возвращает схему');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».

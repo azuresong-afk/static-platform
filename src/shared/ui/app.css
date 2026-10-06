@@ -577,3 +577,19 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .fd-hinge{fill:var(--sheet);stroke:var(--ink);stroke-width:1.6}
 .fd-pt{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:16px;fill:var(--ink-2);paint-order:stroke;stroke:var(--sheet);stroke-width:3px}
 .fd-sign{fill:var(--sheet);stroke:var(--ink-3);stroke-width:1}
+/* Возможные перемещения */
+.vw-canvas svg#vwschema{display:block;width:100%;height:auto}
+.canvas svg.vw-fig{display:block;width:100%;max-width:820px;min-width:0;height:auto;margin:0 auto}
+.vw-figwrap{border-top:1px solid var(--rule)}
+.vw-pick{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 14px;border-top:1px solid var(--rule);font-size:14px;color:var(--ink-2)}
+.vw-pick .opt{display:inline-flex;gap:4px;align-items:center}
+.vw-bar{stroke:var(--ink-3);stroke-width:2.2;stroke-linecap:round}
+.vw-moved{stroke:var(--load);stroke-width:2.2;stroke-dasharray:8 5;stroke-linecap:round}
+.vw-hinge{fill:var(--sheet);stroke:var(--ink);stroke-width:1.6}
+.vw-pt{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:16px;fill:var(--ink-2)}
+.vw-center{fill:var(--sheet);stroke:var(--react);stroke-width:1.6}
+.vw-center-x{stroke:var(--react);stroke-width:1.4}
+.vw-cname{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:15px;fill:var(--react)}
+.vw-delta{fill:none;stroke:var(--react);stroke-width:2.4}
+.vw-delta-head{fill:var(--react)}
+.vw-dname{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:17px;fill:var(--react)}
