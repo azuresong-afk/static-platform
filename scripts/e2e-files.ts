@@ -128,13 +128,13 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 25, 'двадцать пять вкладок: двадцать четыре раздела и «Дорожная карта»');
+  check((await p.locator('.tabs [role="tab"]').count()) === 26, 'двадцать шесть вкладок: двадцать пять разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   const beforeMap = JSON.stringify(await state(p));
   await p.click('[data-tab="roadmap"]');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 26, 'готово двадцать шесть пунктов');
-  check((await p.textContent('[data-rm="lagrange"] .rm-badge')) === 'следующий', 'следующий раздел — уравнения Лагранжа');
+  check((await p.locator('.rm-done').count()) === 27, 'готово двадцать семь пунктов');
+  check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -147,8 +147,8 @@ async function main() {
   await p.selectOption('#preset', 'simple');
   await openText('old.json', JSON.stringify(v1), 'ok');
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'файл версии 1 открывается во вкладке «Балки и рамы»');
-  const fric = await openText('lagrange.json', JSON.stringify({ ...JSON.parse(text), module: 'lagrange' }), 'bad');
-  check(fric.includes('раздел «Уравнения Лагранжа второго рода» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
+  const fric = await openText('joints.json', JSON.stringify({ ...JSON.parse(text), module: 'joints' }), 'bad');
+  check(fric.includes('раздел «Резьбовые и сварные соединения» ещё в разработке'), 'файл неготового раздела — понятное сообщение', fric);
   check(JSON.stringify(await state(p)) === JSON.stringify(saved), 'после такого файла схема не изменилась');
   if (out) {
     await p.click('[data-view="schema"]');
@@ -771,6 +771,37 @@ async function main() {
   check((await p.innerText('.dg-empty')).includes('статически определимая'), 'неопределимая схема — понятное сообщение');
   await p.click('.hist button[title^="Отменить"]');
   check((await p.locator('#vwfig').count()) === 1, 'отмена возвращает схему');
+  await p.click('[data-tab="frames"]');
+
+  // 33. Вкладка «Уравнения Лагранжа».
+  await p.click('[data-tab="lagrange"]');
+  await p.selectOption('#lgpreset', 'm4811');
+  let lg = await p.innerText('#lgsolution');
+  check(lg.includes('(l + r·φ)·φ̈ + r·φ̇² + g·sin φ = 0') && lg.includes('сокращаем на m·(l + r·φ)'), 'Мещерский 48.11: уравнение движения после сокращения', lg.slice(0, 400));
+  await p.selectOption('#lgpreset', 'm4837');
+  lg = await p.innerText('#lgsolution');
+  check(lg.includes('cos φ·ẍ + l·φ̈ + g·sin φ = 0') && lg.includes('1,6379 с'), 'Мещерский 48.37–48.38: уравнения и период малых колебаний', lg.slice(0, 400));
+  check((await p.locator('#lgplot .rt-line').count()) === 3, 'графики x(t), φ(t) и интеграла энергии');
+  await p.locator('#lg-T').fill("(m1 + m2) x'^2/2 + k");
+  check((await p.getAttribute('#lg-T', 'class'))?.includes('bad') === true && (await p.innerText('.panel.conv')).includes('неизвестное обозначение «k»'), 'неизвестное обозначение в T подсвечивается');
+  await p.locator('#lg-T').blur();
+  await p.click('#lgaddp');
+  await p.locator('#lg-pn4').fill('k');
+  await p.locator('#lg-pn4').blur();
+  await p.locator('#lg-T').fill("(m1 + m2) x'^2/2 + m2 l x' φ' cos φ + m2 l^2 φ'^2/2");
+  await p.locator('#lg-T').blur();
+  await p.locator('#lg-q1').fill("−k φ'");
+  await p.locator('#lg-q1').blur();
+  lg = await p.innerText('#lgsolution');
+  check(lg.includes('механическая энергия не сохраняется') && lg.includes('k·φ̇'), 'непотенциальная сила сопротивления входит в уравнение', lg.slice(0, 300));
+  check((await p.locator('#lgplot .rt-line').count()) === 2, 'без интеграла энергии — только графики координат');
+  const [dl33] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const lgText = await (await dl33.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const lgSol = await p.innerText('#lgsolution');
+  check(JSON.parse(lgText).module === 'lagrange' && JSON.parse(lgText).problem.coords[1].Q.includes('k'), 'файл задачи Лагранжа');
+  await p.click('[data-tab="frames"]');
+  await openText('lg.json', lgText, 'ok');
+  check((await p.getAttribute('[data-tab="lagrange"]', 'aria-selected')) === 'true' && (await p.innerText('#lgsolution')) === lgSol, 'файл задачи Лагранжа открывается в своей вкладке без потерь');
   await p.click('[data-tab="frames"]');
 
   // 15. Вкладка «Фермы».
