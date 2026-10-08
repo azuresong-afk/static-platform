@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { LagrangeStore, LAGRANGE_MODULE } from './ui/store';
 import { LagrangeView } from './ui/LagrangeView';
+import { taskEntries } from '../../shared/tasks';
+import { LAGRANGE_PRESETS, type LagrangePresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createLagrangeModule(): StatikaModule {
     tab: 'Уравнения Лагранжа',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(LAGRANGE_PRESETS),
+    loadTask: (k) => store.loadPreset(k as LagrangePresetKey),
   };
 }

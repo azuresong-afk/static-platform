@@ -16,6 +16,8 @@ import { GEAR_PRESETS, type GearPresetKey } from '../presets';
 import { ellDoc, frDoc, uniDoc, UNI_NAMES } from '../text/extra';
 import { gearDoc } from '../text/solution';
 import { MAX_WHEELS, type GearNumKey, type GearStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 export function GearView({ chrome, store }: { chrome: Chrome; store: GearStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
@@ -53,11 +55,7 @@ export function GearView({ chrome, store }: { chrome: Chrome; store: GearStore }
             <label className="preset">
               Готовая задача
               <select id="gpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as GearPresetKey)}>
-                {(Object.keys(GEAR_PRESETS) as GearPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {GEAR_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(GEAR_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

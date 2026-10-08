@@ -4,7 +4,9 @@ import type { Chrome } from '../../../app/module';
 import { Notice } from '../../../shared/ui/Notice';
 import { analyze } from '../analyze';
 import { renderDrawing, type View } from '../draw/drawing';
-import { PRESET_TITLES, type PresetKey } from '../model/presets';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { FRAMES_BOOK, FRAMES_TASKS } from '../tasks';
+import { loadFramesTask } from './loadTask';
 import { Canvas } from './Canvas';
 import { Configurator } from './Configurator';
 import { PrintReport } from './PrintReport';
@@ -18,6 +20,8 @@ export function FramesView({ chrome }: { chrome: Chrome }) {
   const nt = useMemo(() => new Set(st.nt), [st.nt]);
   const a = useMemo(() => analyze(st.s, { notTarget: nt, explain: st.explain }), [st.s, nt, st.explain]);
   const drawing = useMemo(() => renderDrawing(st.s, a.model, a.solution, { view: st.view, sel: st.sel }), [st.s, a, st.view, st.sel]);
+  // Задача Мещерского загружается как своя схема с названием задачи — список показывает её по названию.
+  const presetValue = st.preset !== 'custom' ? st.preset : (FRAMES_BOOK.find((t) => t.title === st.title)?.key ?? 'custom');
 
   return (
     <>
@@ -31,12 +35,8 @@ export function FramesView({ chrome }: { chrome: Chrome }) {
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="preset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as PresetKey)}>
-                {(Object.keys(PRESET_TITLES) as PresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {PRESET_TITLES[k]}
-                  </option>
-                ))}
+              <select id="preset" value={presetValue} onChange={(e) => loadFramesTask(store, e.target.value)}>
+                <PresetOptions items={FRAMES_TASKS} />
                 <option value="custom" hidden>
                   Своя схема
                 </option>

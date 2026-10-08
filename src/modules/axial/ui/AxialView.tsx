@@ -11,6 +11,8 @@ import { pointName, renderBar, renderBarDiagrams } from '../draw/bar';
 import { AXIAL_PRESETS, type AxialPresetKey } from '../presets';
 import { axialDoc } from '../text/solution';
 import type { AxialStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const WHY = {
   nosteps: 'Добавьте хотя бы одну ступень.',
@@ -51,11 +53,7 @@ export function AxialView({ chrome, store }: { chrome: Chrome; store: AxialStore
             <label className="preset">
               Готовая задача
               <select id="apreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as AxialPresetKey)}>
-                {(Object.keys(AXIAL_PRESETS) as AxialPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {AXIAL_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(AXIAL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

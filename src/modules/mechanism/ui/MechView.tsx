@@ -10,6 +10,8 @@ import { solveMech, type MCons, type MDrive, type MechProblem, type PtDef } from
 import { MECH_PRESETS, type MechPresetKey } from '../presets';
 import { mechDoc } from '../text/solution';
 import { MAX_ITEMS, type MechStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 export function MechView({ chrome, store }: { chrome: Chrome; store: MechStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
@@ -32,11 +34,7 @@ export function MechView({ chrome, store }: { chrome: Chrome; store: MechStore }
             <label className="preset">
               Готовая задача
               <select id="mpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as MechPresetKey)}>
-                {(Object.keys(MECH_PRESETS) as MechPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {MECH_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(MECH_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

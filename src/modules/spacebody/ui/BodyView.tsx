@@ -10,6 +10,8 @@ import { buildModel, solveBody, type Axis, type SupportKind } from '../model/bod
 import { BODY_PRESETS, type BodyPresetKey } from '../presets';
 import { bodyDoc } from '../text/solution';
 import type { BodyStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const KINDS: [SupportKind, string][] = [
   ['ball', 'сферический шарнир'],
@@ -49,11 +51,7 @@ export function BodyView({ chrome, store }: { chrome: Chrome; store: BodyStore }
             <label className="preset">
               Готовая задача
               <select id="bpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as BodyPresetKey)}>
-                {(Object.keys(BODY_PRESETS) as BodyPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {BODY_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(BODY_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

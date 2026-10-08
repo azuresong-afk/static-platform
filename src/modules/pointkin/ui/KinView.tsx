@@ -11,6 +11,8 @@ import { solveKin, type KinMode } from '../model/kin';
 import { KIN_PRESETS, type KinPresetKey } from '../presets';
 import { kinDoc } from '../text/solution';
 import type { KinNumKey, KinStore, KinStrKey } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const MODES: [KinMode, string][] = [
   ['coord', 'координатный: x(t), y(t), z(t)'],
@@ -40,11 +42,7 @@ export function KinView({ chrome, store }: { chrome: Chrome; store: KinStore }) 
             <label className="preset">
               Готовая задача
               <select id="kpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as KinPresetKey)}>
-                {(Object.keys(KIN_PRESETS) as KinPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {KIN_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(KIN_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

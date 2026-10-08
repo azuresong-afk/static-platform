@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { AxialStore, AXIAL_MODULE } from './ui/store';
 import { AxialView } from './ui/AxialView';
+import { taskEntries } from '../../shared/tasks';
+import { AXIAL_PRESETS, type AxialPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -36,5 +38,7 @@ export function createAxialModule(): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
+    tasks: taskEntries(AXIAL_PRESETS),
+    loadTask: (k) => store.loadPreset(k as AxialPresetKey),
   };
 }

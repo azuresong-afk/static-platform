@@ -7,6 +7,7 @@ import { dirname, resolve as pathResolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright-core';
 import { preview } from 'vite';
+import { blockOf, NAV_BLOCKS } from '../src/app/nav';
 
 const root = pathResolve(dirname(fileURLToPath(import.meta.url)), '..');
 const out = process.env.E2E_OUT;
@@ -45,6 +46,12 @@ async function main() {
   const errors: string[] = [];
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto('http://localhost:4176/');
+  /** Перейти в раздел: сначала его блок (вкладки разделов видны только внутри блока), затем вкладка. */
+  const tab = async (id: string) => {
+    const b = blockOf(id);
+    if (b && !(await p.locator(`.tabs [data-tab="${id}"]`).count())) await p.click(`[data-block="${b.id}"]`);
+    await p.click(`[data-tab="${id}"]`);
+  };
 
   // 1. Своя схема: П-рама с правками → сохранить.
   await p.selectOption('#preset', 'pframe');
@@ -128,10 +135,19 @@ async function main() {
   check((await p.locator('#svg .ihinge').count()) === 1 && (await stampStatus()) === 'статически определима', 'шарнир сохраняется в файле и восстанавливается');
 
   // 7а. Вкладки разделов и файлы разных версий и разделов.
-  check((await p.locator('.tabs [role="tab"]').count()) === 26, 'двадцать шесть вкладок: двадцать пять разделов и «Дорожная карта»');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
+  check((await p.locator('[data-block]').count()) === 5 && (await p.locator('[data-course="theor"] [data-block]').count()) === 4, 'навигация: четыре блока Мещерского и сопромат Антонова');
+  check((await p.getAttribute('[data-block="statics"]', 'aria-current')) === 'true' && (await p.locator('.tabs [role="tab"]').count()) === 5, 'блок «Статика» активен, в нём пять разделов');
+  const seen: string[] = [];
+  for (const b of NAV_BLOCKS) {
+    await p.click(`[data-block="${b.id}"]`);
+    seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
+  }
+  check(new Set(seen).size === 25 && seen.length === 25, 'двадцать пять разделов, каждый — в одном блоке', seen.join(' '));
+  await tab('frames');
+  check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
-  await p.click('[data-tab="roadmap"]');
+  await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
   check((await p.locator('.rm-done').count()) === 27, 'готово двадцать семь пунктов');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
@@ -139,7 +155,7 @@ async function main() {
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
   check((await p.getAttribute('[data-tab="composite"]', 'aria-selected')) === 'true', '«Открыть» ведёт во вкладку раздела');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   check(JSON.stringify(await state(p)) === beforeMap, 'Ctrl+Z на дорожной карте не меняет схему');
   const v1 = JSON.parse(text);
   delete v1.module;
@@ -181,7 +197,7 @@ async function main() {
 
   // 9. Вкладка «Изгиб».
   await p.emulateMedia({ media: 'screen' });
-  await p.click('[data-tab="bending"]');
+  await tab('bending');
   check((await p.getAttribute('[data-tab="bending"]', 'aria-selected')) === 'true', 'вкладка «Изгиб» открывается');
   await p.selectOption('#bpreset', 'antonov7');
   const sol = await p.innerText('#bsolution');
@@ -209,7 +225,7 @@ async function main() {
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', '«Изменить схему» ведёт в «Балки и рамы»');
   check((await p.inputValue('#preset')) === 'custom' && (await p.textContent('h1'))!.includes('балки'), 'там открыта та же схема');
   await p.selectOption('#preset', 'pframe');
-  await p.click('[data-tab="bending"]');
+  await tab('bending');
   check((await p.innerText('.dg-empty')).includes('вкладка «Рамы: эпюры N, Q, M»'), 'для рамы — понятное сообщение со ссылкой на вкладку рам');
   await p.click('.hist button[title^="Отменить"]');
   check((await p.innerText('#bsolution')).includes('M(0,667) = 2,667'), 'отмена во вкладке «Изгиб» возвращает балку (M_max = 8/9·ql²)');
@@ -222,7 +238,7 @@ async function main() {
   await p.emulateMedia({ media: 'screen' });
 
   // 10. Вкладка «Подбор сечения».
-  await p.click('[data-tab="sections"]');
+  await tab('sections');
   await p.selectOption('#spreset', 'antonov7');
   let ss = await p.innerText('#ssolution');
   check(ss.includes('678,26 см³') && ss.includes('двутавр №36') && ss.includes('16,86 МПа'), 'подбор по задаче Антонова: W, двутавр №36, касательные', ss.slice(0, 200));
@@ -242,7 +258,7 @@ async function main() {
   const [dl4] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const secText = await (await dl4.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(secText).module === 'sections' && JSON.parse(secText).section.sigmaT === 230, 'файл подбора: раздел sections и исходные данные');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await p.selectOption('#preset', 'simple');
   await openText('sec.json', secText, 'ok');
   check((await p.getAttribute('[data-tab="sections"]', 'aria-selected')) === 'true', 'файл подбора из «Балок и рам» открывается во вкладке «Подбор сечения»');
@@ -253,7 +269,7 @@ async function main() {
   await p.emulateMedia({ media: 'screen' });
 
   // 11. Вкладка «Растяжение-сжатие».
-  await p.click('[data-tab="axial"]');
+  await tab('axial');
   await p.selectOption('#apreset', 'antonov11');
   let as = await p.innerText('#asolution');
   check(as.includes('6,667 см²') && as.includes('|σ|max = 150 МПа'), 'задача 1.1: площадь A из условия прочности', as.slice(0, 200));
@@ -275,7 +291,7 @@ async function main() {
   const [dl5] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const axText = await (await dl5.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(axText).module === 'axial' && JSON.parse(axText).bar.steps.length === 4, 'файл бруса: раздел axial');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('bar.json', axText, 'ok');
   check((await p.getAttribute('[data-tab="axial"]', 'aria-selected')) === 'true', 'файл бруса открывается во вкладке «Растяжение-сжатие»');
   await p.emulateMedia({ media: 'print' });
@@ -284,7 +300,7 @@ async function main() {
   await p.emulateMedia({ media: 'screen' });
 
   // 12. Вкладка «Пространственный брус».
-  await p.click('[data-tab="space3"]');
+  await tab('space3');
   await p.selectOption('#spreset3', 's16');
   let s3 = await p.innerText('#s3solution');
   check(s3.includes('51,235') && s3.includes('d = 149 мм'), 'задача 3: M_экв в заделке и диаметр круга', s3.slice(0, 200));
@@ -299,7 +315,7 @@ async function main() {
   check((await p.locator('.lrow').count()) === 2, 'отмена');
   const [dl6] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const s3Text = await (await dl6.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('space.json', s3Text, 'ok');
   check((await p.getAttribute('[data-tab="space3"]', 'aria-selected')) === 'true', 'файл пространственного бруса открывается в своей вкладке');
   await p.emulateMedia({ media: 'print' });
@@ -308,7 +324,7 @@ async function main() {
   await p.emulateMedia({ media: 'screen' });
 
   // 13. Вкладка «Составное сечение».
-  await p.click('[data-tab="composite"]');
+  await tab('composite');
   await p.selectOption('#cpreset', 's7');
   let cs = await p.innerText('#csolution');
   check(cs.includes('7,672 см') && cs.includes('4609,91') && cs.includes('32·(−6,872)²'), 'задача 6, схема 7: центр тяжести и I_X', cs.slice(0, 200));
@@ -324,7 +340,7 @@ async function main() {
   const [dl7] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const cText = await (await dl7.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(cText).module === 'composite' && JSON.parse(cText).parts.length === 3, 'файл сечения');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('sec.json', cText, 'ok');
   check((await p.getAttribute('[data-tab="composite"]', 'aria-selected')) === 'true', 'файл сечения открывается в своей вкладке');
   await p.emulateMedia({ media: 'print' });
@@ -333,7 +349,7 @@ async function main() {
   await p.emulateMedia({ media: 'screen' });
 
   // 14. Наклонные участки в «Балках и рамах».
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await p.selectOption('#preset', 'rafter');
   let fs = await p.innerText('#solution');
   check(fs.includes('перпендикулярно участку') && fs.includes('5,231') && fs.includes('5,462'), 'стропила: ветер по нормали к скату, реакции 4.21', fs.slice(0, 300));
@@ -385,7 +401,7 @@ async function main() {
   check(cr.structure.items.filter((i: { oneSided?: boolean }) => i.oneSided).length === 2, 'в файле — односторонние связи');
 
   // 16. Вкладка «Пространственное тело».
-  await p.click('[data-tab="spacebody"]');
+  await tab('spacebody');
   let bs = await p.innerText('#bsolution');
   check(bs.includes('статически определимо') && bs.includes('T = 20 кН') && bs.includes('8,66'), 'Мещерский 8.24: натяжение и реакции', bs.slice(0, 200));
   await p.selectOption('#bpreset', 'm826');
@@ -398,12 +414,12 @@ async function main() {
   const bText = await (await dl11.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(bText).module === 'spacebody' && JSON.parse(bText).body.supports.length === 3, 'файл тела');
   const bSol = await p.innerText('#bsolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('body.json', bText, 'ok');
   check((await p.getAttribute('[data-tab="spacebody"]', 'aria-selected')) === 'true' && (await p.innerText('#bsolution')) === bSol, 'файл тела открывается в своей вкладке без потерь');
 
   // 17. Вкладка «Центр тяжести».
-  await p.click('[data-tab="centroid"]');
+  await tab('centroid');
   let gs = await p.innerText('#gsolution');
   check(gs.includes('= −0,07') || gs.includes('−0,07'), 'Мещерский 9.12: доска с отверстием', gs.slice(-200));
   await p.click('[data-cut="1"]');
@@ -418,12 +434,12 @@ async function main() {
   const gText = await (await dl12.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(gText).module === 'centroid' && JSON.parse(gText).problem.mode === 'volume', 'файл задачи о центре тяжести');
   const gSol = await p.innerText('#gsolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('cg.json', gText, 'ok');
   check((await p.getAttribute('[data-tab="centroid"]', 'aria-selected')) === 'true' && (await p.innerText('#gsolution')) === gSol, 'файл открывается в своей вкладке без потерь');
 
   // 18. Вкладка «Сходящиеся силы».
-  await p.click('[data-tab="converging"]');
+  await tab('converging');
   let vs = await p.innerText('#vsolution');
   check(vs.includes('866,025') && vs.includes('−500') && vs.includes('стержень сжат') && vs.includes('теореме Лами'), 'Мещерский 2.7: S_A = 866, S_B = −500', vs.slice(-300));
   await p.selectOption('#vpreset', 'm615');
@@ -442,13 +458,13 @@ async function main() {
   const vText = await (await dl13.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(vText).module === 'converging' && JSON.parse(vText).problem.reduce.pairs.length === 2, 'файл задачи о приведении');
   const vSol = await p.innerText('#vsolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('cv.json', vText, 'ok');
   check((await p.getAttribute('[data-tab="converging"]', 'aria-selected')) === 'true' && (await p.innerText('#vsolution')) === vSol, 'файл сходящихся сил открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 19. Вкладка «Геометрия масс».
-  await p.click('[data-tab="inertia"]');
+  await tab('inertia');
   const inS = await p.innerText('#isolution');
   check(inS.includes('0,5417') && inS.includes('Гюйгенса'), 'Мещерский 34.21: (14m₁ + 99m₂)r²/6 = 0,5417', inS.slice(-300));
   await p.selectOption('#ipreset', 'm3420');
@@ -464,13 +480,13 @@ async function main() {
   const inText = await (await dl14.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(inText).module === 'inertia' && JSON.parse(inText).problem.parts.length === 2, 'файл задачи о моментах инерции');
   const iSol = await p.innerText('#isolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('in.json', inText, 'ok');
   check((await p.getAttribute('[data-tab="inertia"]', 'aria-selected')) === 'true' && (await p.innerText('#isolution')) === iSol, 'файл геометрии масс открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 20. Вкладка «Кинетическая энергия».
-  await p.click('[data-tab="energy"]');
+  await tab('energy');
   const enS = await p.innerText('#esolution');
   check(enS.includes('2,3055') && enS.includes('приведённая масса'), 'Мещерский 38.45: v по теореме об изменении кинетической энергии', enS.slice(-300));
   check(enS.includes('Натяжения нитей (принцип Даламбера)'), '38.45: натяжения нитей по принципу Даламбера');
@@ -489,13 +505,13 @@ async function main() {
   const enText = await (await dl15.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(enText).module === 'energy' && JSON.parse(enText).problem.bodies.length === 4, 'файл задачи о кинетической энергии');
   const enSol = await p.innerText('#esolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('en.json', enText, 'ok');
   check((await p.getAttribute('[data-tab="energy"]', 'aria-selected')) === 'true' && (await p.innerText('#esolution')) === enSol, 'файл кинетической энергии открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 21. Вкладка «Вращение тела».
-  await p.click('[data-tab="rotation"]');
+  await tab('rotation');
   const rtS = await p.innerText('#rsolution');
   check(rtS.includes('Дифференциальное уравнение вращения') && rtS.includes('ω∞'), 'Мещерский 37.45: уравнение с вязким сопротивлением', rtS.slice(-300));
   await p.selectOption('#rpreset', 'm377');
@@ -510,13 +526,13 @@ async function main() {
   const rtText = await (await dl16.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(rtText).module === 'rotation' && JSON.parse(rtText).problem.K.length === 2, 'файл задачи о вращении');
   const rtSol = await p.innerText('#rsolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('rt.json', rtText, 'ok');
   check((await p.getAttribute('[data-tab="rotation"]', 'aria-selected')) === 'true' && (await p.innerText('#rsolution')) === rtSol, 'файл вращения открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 22. Вкладка «Принцип Даламбера».
-  await p.click('[data-tab="dalembert"]');
+  await tab('dalembert');
   const daS = await p.innerText('#dsolution');
   check(daS.includes('Силы инерции, приведённые к центру O') && daS.includes('Уравнения кинетостатики'), 'Мещерский 42.7: силы инерции и кинетостатика', daS.slice(-300));
   await p.selectOption('#dpreset', 'm4211');
@@ -529,13 +545,13 @@ async function main() {
   const daText = await (await dl17.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(daText).module === 'dalembert' && JSON.parse(daText).problem.parts.length === 2, 'файл задачи о динамических реакциях');
   const daSol = await p.innerText('#dsolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('da.json', daText, 'ok');
   check((await p.getAttribute('[data-tab="dalembert"]', 'aria-selected')) === 'true' && (await p.innerText('#dsolution')) === daSol, 'файл принципа Даламбера открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 23. Вкладка «Динамика точки».
-  await p.click('[data-tab="pointdyn"]');
+  await tab('pointdyn');
   const pdS = await p.innerText('#psolution');
   check(pdS.includes('19,5497') && pdS.includes('2,6066'), 'Мещерский 27.7: путь 19,55 м и время 2,61 с до остановки', pdS.slice(-300));
   await p.selectOption('#ppreset', 'm279');
@@ -548,7 +564,7 @@ async function main() {
   const pdText = await (await dl18.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(pdText).module === 'pointdyn' && JSON.parse(pdText).problem.line.ask === 'x', 'файл задачи динамики точки');
   const pdSol = await p.innerText('#psolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('pd.json', pdText, 'ok');
   check((await p.getAttribute('[data-tab="pointdyn"]', 'aria-selected')) === 'true' && (await p.innerText('#psolution')) === pdSol, 'файл динамики точки открывается в своей вкладке без потерь');
   await p.selectOption('#ppreset', 'f2615');
@@ -563,10 +579,10 @@ async function main() {
   check((await p.innerText('#psolution')).includes('Высшая точка траектории'), 'Мещерский 27.44: траектория и высшая точка');
   await p.selectOption('#pmode', 'line');
   check((await p.locator('#pask').count()) === 1, 'переключение режима');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 24. Вкладка «Центр масс и плоское движение».
-  await p.click('[data-tab="masscenter"]');
+  await tab('masscenter');
   const mcS = await p.innerText('#msolution');
   check(mcS.includes('3,27') && mcS.includes('без скольжения'), 'Мещерский 39.11: цилиндр катится, a = 2/3 g sin α', mcS.slice(-300));
   await p.selectOption('#mpreset', 'm3914');
@@ -581,13 +597,13 @@ async function main() {
   const mcText = await (await dl19.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(mcText).module === 'masscenter' && JSON.parse(mcText).problem.points.pts.length === 4, 'файл задачи о центре масс');
   const mcSol = await p.innerText('#msolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('mc.json', mcText, 'ok');
   check((await p.getAttribute('[data-tab="masscenter"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === mcSol, 'файл центра масс открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 25. Вкладка «Кинематика точки».
-  await p.click('[data-tab="pointkin"]');
+  await tab('pointkin');
   const knS = await p.innerText('#ksolution');
   check(knS.includes('2,8284') && knS.includes('2t'), 'Мещерский 12.28: v = 2√2, производные формулами', knS.slice(0, 300));
   await p.selectOption('#kpreset', 'k1226');
@@ -598,13 +614,13 @@ async function main() {
   const knText = await (await dl20.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(knText).module === 'pointkin' && JSON.parse(knText).problem.mode === 'polar', 'файл кинематики точки');
   const knSol = await p.innerText('#ksolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('kn.json', knText, 'ok');
   check((await p.getAttribute('[data-tab="pointkin"]', 'aria-selected')) === 'true' && (await p.innerText('#ksolution')) === knSol, 'файл кинематики точки открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 26. Вкладка «Вращение и передачи».
-  await p.click('[data-tab="gears"]');
+  await tab('gears');
   const grS = await p.innerText('#gsolution');
   check(grS.includes('0,7854') && grS.includes('−0,25'), 'Мещерский 14.5: скорость рейки 7,85 мм/с, внешнее зацепление меняет знак', grS.slice(0, 300));
   await p.selectOption('#gpreset', 'g143');
@@ -615,11 +631,11 @@ async function main() {
   const grText = await (await dl21.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(grText).module === 'gears' && JSON.parse(grText).problem.wheels.length === 3, 'файл передачи');
   const grSol = await p.innerText('#gsolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('gr.json', grText, 'ok');
   check((await p.getAttribute('[data-tab="gears"]', 'aria-selected')) === 'true' && (await p.innerText('#gsolution')) === grSol, 'файл передачи открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
-  await p.click('[data-tab="gears"]');
+  await tab('frames');
+  await tab('gears');
   await p.selectOption('#gpreset', 'g141');
   check((await p.innerText('#gsolution')).includes('диаметр 120'), 'Мещерский 14.1: D₂ = 120 мм — неизвестный размер колеса');
   await p.selectOption('#gpreset', 'u138');
@@ -635,13 +651,13 @@ async function main() {
   const [dl22] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const elText = await (await dl22.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   const elSol = await p.innerText('#gsolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('el.json', elText, 'ok');
   check(JSON.parse(elText).problem.mode === 'ellipse' && (await p.innerText('#gsolution')) === elSol, 'файл эллиптических колёс открывается без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 27. Вкладка «Плоский механизм».
-  await p.click('[data-tab="mechanism"]');
+  await tab('mechanism');
   const meS = await p.innerText('#msolution');
   check(meS.includes('565,6854') && meS.includes('= 2 рад/с'), 'Мещерский 18.12: ω_AB = 2, w_B = 565,6', meS.slice(0, 300));
   check((await p.locator('#msvg .mc-icr').count()) === 1, 'на чертеже — МЦС шатуна');
@@ -661,13 +677,13 @@ async function main() {
   const meText = await (await dl23.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   const meSol = await p.innerText('#msolution');
   check(JSON.parse(meText).module === 'mechanism' && JSON.parse(meText).problem.points[1].name === 'K', 'файл механизма');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('me.json', meText, 'ok');
   check((await p.getAttribute('[data-tab="mechanism"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === meSol, 'файл механизма открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 28. Вкладка «Сложное движение».
-  await p.click('[data-tab="relative"]');
+  await tab('relative');
   const rlS = await p.innerText('#rsolution');
   check(rlS.includes('35,5528') && rlS.includes('27,7128'), 'Мещерский 23.27: w = 35,56, кориолисово 27,71', rlS.slice(-400));
   check((await p.locator('#rsvg .rl-c').count()) === 0 && ((await p.textContent('#rsvg')) ?? '').includes('⊙'), 'кориолисово ускорение перпендикулярно чертежу — отмечено ⊙');
@@ -679,13 +695,13 @@ async function main() {
   const rlText = await (await dl24.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   const rlSol = await p.innerText('#rsolution');
   check(JSON.parse(rlText).module === 'relative' && JSON.parse(rlText).problem.carrier === 'trans', 'файл сложного движения');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('rl.json', rlText, 'ok');
   check((await p.getAttribute('[data-tab="relative"]', 'aria-selected')) === 'true' && (await p.innerText('#rsolution')) === rlSol, 'файл сложного движения открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 29. Вкладка «Сосуды».
-  await p.click('[data-tab="vessels"]');
+  await tab('vessels');
   const vsS = await p.innerText('#vsolution');
   check(vsS.includes('Схема по рисунку') && vsS.includes('6,3632 мм') && vsS.includes('принимаем 7 мм'), 'задача 4, рис. 1, строка 1: δ = 6,36 мм по III гипотезе', vsS.slice(-300));
   await p.selectOption('#vpreset', 'f4r10');
@@ -702,13 +718,13 @@ async function main() {
   const vsText = await (await dl25.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   const vsSol = await p.innerText('#vsolution');
   check(JSON.parse(vsText).module === 'vessels' && JSON.parse(vsText).problem.mode === 'custom' && JSON.parse(vsText).problem.custom.segs.length === 2, 'файл сосуда');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('vs.json', vsText, 'ok');
   check((await p.getAttribute('[data-tab="vessels"]', 'aria-selected')) === 'true' && (await p.innerText('#vsolution')) === vsSol, 'файл сосуда открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 30. Вкладка «Кручение».
-  await p.click('[data-tab="torsion"]');
+  await tab('torsion');
   const trS = await p.innerText('#torsolution');
   check(trS.includes('65,6513 мм') && trS.includes('определяет жёсткость'), 'шкивы: d = 65,65 мм, определяет жёсткость', trS.slice(0, 300));
   await p.selectOption('#torpreset', 'ant72');
@@ -724,13 +740,13 @@ async function main() {
   const trText = await (await dl26.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   const trSol = await p.innerText('#torsolution');
   check(JSON.parse(trText).module === 'torsion' && JSON.parse(trText).shaft.supports === 'both', 'файл вала');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('tr.json', trText, 'ok');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.innerText('#torsolution')) === trSol, 'файл вала открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 31. Вкладка «Рамы: эпюры N, Q, M» (схема общая с «Балками и рамами»).
-  await p.click('[data-tab="framediag"]');
+  await tab('framediag');
   await p.selectOption('#fdpreset', 'gframe');
   const fd = await p.innerText('#fdsolution');
   check(fd.includes('M(0) = 38 (растянуты волокна слева)') && fd.includes('M(2) = 50') && fd.includes('узел C') && fd.includes('= 30 (растянуты волокна сверху)'), 'Г-рама: M в заделке 50, в узле C 34 и 30, проверка узла', fd.slice(0, 400));
@@ -747,14 +763,14 @@ async function main() {
   await p.click('#fdedit');
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true' && (await p.inputValue('#preset')) === 'custom', '«Изменить схему» ведёт в «Балки и рамы» с той же рамой');
   await p.selectOption('#preset', 'indet');
-  await p.click('[data-tab="framediag"]');
+  await tab('framediag');
   check((await p.innerText('.dg-empty')).includes('статически определимая'), 'неопределимая схема — понятное сообщение');
   await p.click('.hist button[title^="Отменить"]');
   check((await p.locator('.fd-canvas .fd-grid').count()) === 1, 'отмена возвращает раму');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 32. Вкладка «Возможные перемещения» (схема общая с «Балками и рамами»).
-  await p.click('[data-tab="virtual"]');
+  await tab('virtual');
   await p.selectOption('#vwpreset', 'm4619');
   const vw = await p.innerText('#vwsolution');
   check(vw.includes('= 10,5') && vw.includes('= −0,5') && vw.includes('совпадает ✓') && !vw.includes('не совпадает'), 'Мещерский 46.19: R_B = 10,5, R_D = −0,5, совпадает с уравнениями равновесия', vw.slice(0, 300));
@@ -767,14 +783,14 @@ async function main() {
   check((await p.innerText('#vwsolution')).includes('Неизвестная нагрузка M'), 'Мещерский 46.20: неизвестная пара');
   await p.click('#vwedit');
   await p.selectOption('#preset', 'indet');
-  await p.click('[data-tab="virtual"]');
+  await tab('virtual');
   check((await p.innerText('.dg-empty')).includes('статически определимая'), 'неопределимая схема — понятное сообщение');
   await p.click('.hist button[title^="Отменить"]');
   check((await p.locator('#vwfig').count()) === 1, 'отмена возвращает схему');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
 
   // 33. Вкладка «Уравнения Лагранжа».
-  await p.click('[data-tab="lagrange"]');
+  await tab('lagrange');
   await p.selectOption('#lgpreset', 'm4811');
   let lg = await p.innerText('#lgsolution');
   check(lg.includes('(l + r·φ)·φ̈ + r·φ̇² + g·sin φ = 0') && lg.includes('сокращаем на m·(l + r·φ)'), 'Мещерский 48.11: уравнение движения после сокращения', lg.slice(0, 400));
@@ -799,13 +815,52 @@ async function main() {
   const lgText = await (await dl33.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   const lgSol = await p.innerText('#lgsolution');
   check(JSON.parse(lgText).module === 'lagrange' && JSON.parse(lgText).problem.coords[1].Q.includes('k'), 'файл задачи Лагранжа');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('lg.json', lgText, 'ok');
   check((await p.getAttribute('[data-tab="lagrange"]', 'aria-selected')) === 'true' && (await p.innerText('#lgsolution')) === lgSol, 'файл задачи Лагранжа открывается в своей вкладке без потерь');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
+
+  // 34. Навигация и «Задачник».
+  await tab('tasks');
+  check((await p.getAttribute('[data-tab="tasks"]', 'aria-current')) === 'true' && (await p.locator('.tk-book').count()) === 3, '«Задачник»: Мещерский, Антонов, примеры приложения');
+  const allTasks = await p.locator('.tk-item').count();
+  check(allTasks > 250 && (await p.locator('.filebar').count()) === 0, 'в «Задачнике» все готовые задачи, кнопок файлов нет', String(allTasks));
+  await p.fill('#tksearch', '46.19');
+  check((await p.locator('.tk-item').count()) === 1, 'поиск по номеру задачи');
+  await p.click('[data-task="virtual:m4619"]');
+  check((await p.getAttribute('[data-tab="virtual"]', 'aria-selected')) === 'true' && (await p.inputValue('#vwpreset')) === 'm4619' && (await p.innerText('#vwsolution')).includes('= 10,5'), 'задача из «Задачника» открывается в своём разделе');
+  await tab('tasks');
+  await p.fill('#tksearch', 'конец оттянут тросом');
+  await p.click('[data-task="frames:tb:3.7"]');
+  check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true' && (await p.inputValue('#preset')) === 'tb:3.7', 'задача Мещерского 3.7 открывается в «Балках и рамах»');
+  check((await p.textContent('.notice'))!.includes('Ответ задачника: R_B = 300; R_E = 400') && (await p.innerText('#solution')).includes('300'), 'при загрузке задачи из книги показан ответ задачника');
+  const groups = await p.locator('#preset optgroup').evaluateAll((els) => els.map((e) => e.getAttribute('label')));
+  check(groups[0]!.startsWith('Мещерский, § 3.') && groups.some((g) => g!.startsWith('Мещерский, § 4.')) && groups[groups.length - 1] === 'Другие примеры', 'список «Готовая задача» сгруппирован: Мещерский по параграфам, затем примеры', groups.join(' | '));
+  await tab('tasks');
+  await p.fill('#tksearch', '');
+  await p.click('[data-book="ant"]');
+  check((await p.locator('.tk-book').count()) === 1 && (await p.locator('.tk-item').count()) >= 15, 'фильтр по книге: только Антонов');
+  await p.click('[data-book="all"]');
+  await tab('vessels');
+  const vg = await p.locator('#vpreset optgroup').evaluateAll((els) => els.map((e) => e.getAttribute('label')));
+  check(vg[0] === 'Антонов, Задача 4. Тонкостенные сосуды' && vg[1] === 'Другие примеры', 'в «Сосудах» — задачи Антонова отдельно от примеров', vg.join(' | '));
+  // Блок помнит последний раздел.
+  await tab('rotation');
+  await p.click('[data-block="statics"]');
+  await p.click('[data-block="dynamics"]');
+  check((await p.getAttribute('[data-tab="rotation"]', 'aria-selected')) === 'true', 'блок возвращает в последний открытый раздел');
+  // Узкий экран: меню-оглавление.
+  await p.setViewportSize({ width: 390, height: 800 });
+  check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
+  await p.click('.nav-menu');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 27, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  await p.click('.nav-sheet [data-go="torsion"]');
+  check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
+  await p.setViewportSize({ width: 1280, height: 1000 });
+  await tab('frames');
 
   // 15. Вкладка «Фермы».
-  await p.click('[data-tab="truss"]');
+  await tab('truss');
   let ts = await p.innerText('#tsolution');
   check(ts.includes('ферма статически определима') && ts.includes('1,299') && ts.includes('−3,5') && ts.includes('совпадает с вырезанием узлов'), 'Мещерский 5.7: усилия и проверка Риттера', ts.slice(0, 200));
   check((await p.locator('#tsvg .tb-ten').count()) === 3 && (await p.locator('#tsvg .tb-comp').count()) === 4, 'растянутые и сжатые стержни на чертеже');
@@ -824,7 +879,7 @@ async function main() {
   const tText = await (await dl9.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(tText).module === 'truss' && JSON.parse(tText).truss.bars.length === 9, 'файл фермы');
   const tSol = await p.innerText('#tsolution');
-  await p.click('[data-tab="frames"]');
+  await tab('frames');
   await openText('truss.json', tText, 'ok');
   check((await p.getAttribute('[data-tab="truss"]', 'aria-selected')) === 'true' && (await p.innerText('#tsolution')) === tSol, 'файл фермы открывается в своей вкладке без потерь');
   await p.emulateMedia({ media: 'print' });

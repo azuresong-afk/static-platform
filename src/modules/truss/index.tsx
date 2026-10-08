@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { TrussStore, TRUSS_MODULE } from './ui/store';
 import { TrussView } from './ui/TrussView';
+import { taskEntries } from '../../shared/tasks';
+import { TRUSS_PRESETS, type TrussPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createTrussModule(): StatikaModule {
     tab: 'Фермы',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(TRUSS_PRESETS),
+    loadTask: (k) => store.loadPreset(k as TrussPresetKey),
   };
 }

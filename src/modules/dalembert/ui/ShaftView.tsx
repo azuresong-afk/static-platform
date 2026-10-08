@@ -11,6 +11,8 @@ import { solveShaft, type ShaftProblem } from '../model/shaft';
 import { SHAFT_PRESETS, type ShaftPresetKey } from '../presets';
 import { shaftDoc } from '../text/solution';
 import type { ShaftStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const AX = ['x', 'y', 'z'];
 
@@ -35,11 +37,7 @@ export function ShaftView({ chrome, store }: { chrome: Chrome; store: ShaftStore
             <label className="preset">
               Готовая задача
               <select id="dpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as ShaftPresetKey)}>
-                {(Object.keys(SHAFT_PRESETS) as ShaftPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {SHAFT_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(SHAFT_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

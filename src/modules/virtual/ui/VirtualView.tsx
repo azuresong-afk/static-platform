@@ -14,6 +14,8 @@ import { virtualWork, type VirtualResult } from '../model/virtual';
 import { renderVirtual } from '../draw/virtual';
 import { VIRTUAL_PRESETS, type VirtualPresetKey } from '../presets';
 import { virtualDoc } from '../text/solution';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const WHY: Record<Exclude<VirtualResult, { ok: true }>['why'], string> = {
   empty: 'Схема пуста — соберите конструкцию во вкладке «Балки и рамы».',
@@ -61,11 +63,7 @@ export function VirtualView({ chrome, frames }: { chrome: Chrome; frames: Frames
             <label className="preset">
               Готовая задача
               <select id="vwpreset" value={presetKey} onChange={(e) => load(e.target.value as VirtualPresetKey)}>
-                {(Object.keys(VIRTUAL_PRESETS) as VirtualPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {VIRTUAL_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(VIRTUAL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

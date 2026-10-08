@@ -17,6 +17,8 @@ import { analyzeBeam, type BeamResult } from '../model/beam';
 import { renderDiagrams, type DiagramsSVG } from '../draw/diagrams';
 import { BENDING_PRESETS, type BendingPresetKey } from '../presets';
 import { bendingDoc } from '../text/solution';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const WHY: Record<Exclude<BeamResult, { ok: true }>['why'], string> = {
   notbeam: 'Здесь эпюры строятся для прямых горизонтальных балок. Для рам с вертикальными и наклонными участками — вкладка «Рамы: эпюры N, Q, M».',
@@ -96,11 +98,7 @@ export function BendingView({ chrome, frames, conv }: { chrome: Chrome; frames: 
             <label className="preset">
               Готовая задача
               <select id="bpreset" value={presetKey} onChange={(e) => load(e.target.value as BendingPresetKey)}>
-                {(Object.keys(BENDING_PRESETS) as BendingPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {BENDING_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(BENDING_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

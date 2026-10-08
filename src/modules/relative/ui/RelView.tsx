@@ -11,6 +11,8 @@ import { solveRel, type Plane, type RelProblem } from '../model/rel';
 import { REL_PRESETS, type RelPresetKey } from '../presets';
 import { relDoc } from '../text/solution';
 import type { RelStore, RelStrKey } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
@@ -33,11 +35,7 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
             <label className="preset">
               Готовая задача
               <select id="rpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as RelPresetKey)}>
-                {(Object.keys(REL_PRESETS) as RelPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {REL_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(REL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

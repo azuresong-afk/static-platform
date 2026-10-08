@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { InertiaStore, INERTIA_MODULE } from './ui/store';
 import { InertiaView } from './ui/InertiaView';
+import { taskEntries } from '../../shared/tasks';
+import { INERTIA_PRESETS, type InertiaPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createInertiaModule(): StatikaModule {
     tab: 'Геометрия масс',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(INERTIA_PRESETS),
+    loadTask: (k) => store.loadPreset(k as InertiaPresetKey),
   };
 }

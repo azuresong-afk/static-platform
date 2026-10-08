@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { BodyStore, BODY_MODULE } from './ui/store';
 import { BodyView } from './ui/BodyView';
+import { taskEntries } from '../../shared/tasks';
+import { BODY_PRESETS, type BodyPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createBodyModule(): StatikaModule {
     tab: 'Пространственное тело',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(BODY_PRESETS),
+    loadTask: (k) => store.loadPreset(k as BodyPresetKey),
   };
 }

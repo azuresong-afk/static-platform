@@ -609,3 +609,91 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .lg-formula input{font-family:"PT Serif",Georgia,serif}
 .lg-err{display:block;color:var(--bad);font-size:12.5px;margin-top:2px}
 @media (max-width:640px){.lg-coords .arow,.lg-coords .ahead{grid-template-columns:56px 1fr 1fr;}.lg-coords .ahead span:nth-child(n+3){display:none}}
+/* Навигация: курсы по задачникам → блоки → разделы. Шапка прилипает к верху страницы. */
+.nav{position:sticky;top:0;z-index:40;background:var(--paper);margin:-28px -20px 20px;padding:10px 20px 0;border-bottom:1px solid var(--rule)}
+.nav.nav-hide{transform:translateY(-100%)}
+@media (prefers-reduced-motion:no-preference){.nav{transition:transform .18s ease}}
+.nav-top{display:flex;align-items:flex-end;gap:6px 22px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.nav-top::-webkit-scrollbar{display:none}
+.nav-course{display:flex;flex-direction:column;gap:4px;flex:none}
+.nav-book{font-size:10.5px;line-height:1.2;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;padding-left:2px}
+.nav-blocks{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.nav-blocks::-webkit-scrollbar{display:none}
+.nav-blocks button{font:inherit;font-size:13.5px;line-height:1.3;padding:5px 12px;border:1px solid var(--rule);border-radius:999px;background:transparent;color:var(--ink-2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:baseline;gap:6px}
+.nav-blocks button:hover{color:var(--ink);border-color:var(--ink-3)}
+.nav-blocks button[aria-current="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.nav-blocks button small{font-size:11px;color:inherit;opacity:.7;font-variant-numeric:tabular-nums}
+.nav-extra{margin-left:auto}
+.nav-short{display:none}
+.nav .tabs{margin:6px 0 0;border-bottom:0}
+.nav-refs{margin-left:auto;align-self:center;padding-left:16px;font-size:12px;color:var(--ink-3);white-space:nowrap}
+/* Узкий экран: вместо ряда блоков — кнопка-меню с оглавлением; ряд разделов текущего блока остаётся. */
+.nav-mob{display:none}
+.nav-menu{display:flex;align-items:center;gap:10px;width:100%;font:inherit;text-align:left;padding:4px 2px 6px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.nav-burger{display:inline-flex;flex-direction:column;justify-content:center;gap:3px;width:30px;height:30px;border:1px solid var(--rule);border-radius:7px;align-items:center;flex:none}
+.nav-burger i{display:block;width:14px;height:1.6px;border-radius:1px;background:var(--ink)}
+.nav-where{display:flex;flex-direction:column;line-height:1.25;font-weight:600;font-size:15px;min-width:0}
+.nav-where small{font-size:10.5px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-caret{margin-left:auto;color:var(--ink-3);font-size:12px}
+.nav-menu[aria-expanded="true"] .nav-caret{transform:rotate(180deg)}
+.nav-veil{position:fixed;inset:0;z-index:-1;background:color-mix(in srgb,var(--ink) 18%,transparent)}
+.nav-sheet{position:absolute;left:0;right:0;top:100%;max-height:calc(100dvh - 70px);overflow:auto;background:var(--sheet);border-bottom:1px solid var(--rule);box-shadow:0 12px 28px rgba(0,0,0,.16);padding:6px 20px 14px}
+.nav-sheet section{padding:10px 0;border-bottom:1px solid var(--rule)}
+.nav-sheet section:last-child{border-bottom:0}
+.nav-sheet h3{margin:0 0 4px;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.nav-sheet h4{margin:8px 0 2px;font-size:14px;font-weight:600}
+.nav-sheet h4 small{font-weight:400;font-size:12px;color:var(--ink-3)}
+.nav-sheet ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 6px}
+.nav-sheet button{font:inherit;font-size:14px;padding:6px 11px;border:1px solid var(--rule);border-radius:999px;background:transparent;color:var(--ink);cursor:pointer;display:inline-flex;align-items:baseline;gap:6px}
+.nav-sheet button[aria-current="true"]{background:var(--ink);border-color:var(--ink);color:var(--sheet)}
+.nav-sheet button small{font-size:11.5px;opacity:.7}
+.nav-sheet-extra{display:flex;flex-wrap:wrap;gap:6px}
+@media (max-width:1180px){
+  .nav-full{display:none}
+  .nav-short{display:inline}
+  .nav-blocks button small{display:none}
+  .nav-top{gap:6px 14px}
+}
+@media (max-width:900px){
+  .nav-top{display:none}
+  .nav-mob{display:block}
+  .nav-refs{display:none}
+  .nav .tabs{margin-top:0}
+}
+@media (max-width:720px){
+  .wrap{padding-top:14px}
+  .nav{margin-top:-14px;padding-top:6px}
+  h1{font-size:24px}
+}
+@media print{.nav{display:none}}
+
+/* «Задачник» */
+.tk-search{display:flex;flex-direction:column;gap:8px;width:min(440px,100%)}
+.tk-search input{font:inherit;font-size:15px;color:var(--ink);background:var(--sheet);border:1px solid var(--rule);border-radius:6px;padding:8px 10px;width:100%}
+.tk-books{flex-wrap:wrap;align-self:flex-start}
+.tk-book h2{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.tk-ed{font-size:13px;font-weight:400;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.tk-cols{columns:2 400px;column-gap:32px}
+.tk-part h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin:6px 0 2px}
+.tk-group{break-inside:avoid;margin:0 0 12px}
+.tk-group h4{font-size:13.5px;font-weight:600;margin:8px 0 2px;color:var(--ink);text-wrap:balance}
+.tk-group ul{list-style:none;margin:0;padding:0}
+.tk-item{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;font:inherit;font-size:14px;line-height:1.4;padding:4px 6px;border:0;border-radius:5px;background:transparent;color:var(--ink);cursor:pointer}
+.tk-item:hover,.tk-item:focus-visible{background:var(--sel-bg)}
+.tk-num{flex:none;min-width:4.4em;font-variant-numeric:tabular-nums;font-weight:600;color:var(--react);white-space:nowrap}
+.tk-title{flex:1;min-width:0}
+.tk-sec{flex:none;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.tk-pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:20px;margin-top:20px;align-items:start}
+.tk-page .tk-book+.tk-pair{margin-top:20px}
+.tk-other .tk-sec{display:none}
+.tk-none{padding:24px 0}
+@media (max-width:560px){.tk-item{flex-wrap:wrap;gap:2px 10px}.tk-sec{flex-basis:100%;padding-left:calc(4.4em + 10px);white-space:normal}}
+/* Список «Готовая задача» не растягивает шапку раздела по самому длинному названию. */
+.topright{width:min(460px,100%)}
+.preset select{max-width:100%;text-overflow:ellipsis}
+/* Переключатель книг в «Задачнике» — ряд «таблеток». */
+.tk-books{display:flex;flex-wrap:wrap;gap:4px;border:0;border-radius:0;overflow:visible}
+.tk-books button{border:1px solid var(--rule) !important;border-radius:999px;padding:4px 12px}
+.tk-books button+button{border-left:1px solid var(--rule)}
+/* Шапка раздела: заголовок сжимается, список задач остаётся справа. */
+.top>div:first-child{flex:1 1 340px;min-width:0}

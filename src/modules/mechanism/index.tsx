@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { MechStore, MECH_MODULE } from './ui/store';
 import { MechView } from './ui/MechView';
+import { taskEntries } from '../../shared/tasks';
+import { MECH_PRESETS, type MechPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createMechModule(): StatikaModule {
     tab: 'Плоский механизм',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(MECH_PRESETS),
+    loadTask: (k) => store.loadPreset(k as MechPresetKey),
   };
 }

@@ -10,6 +10,8 @@ import { solveEq, solveK, type InertiaKind } from '../model/rotation';
 import { ROT_PRESETS, type RotPresetKey } from '../presets';
 import { eqDoc, kDoc } from '../text/solution';
 import type { EqNumKey, KNumKey, RotStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const BODY: [InertiaKind, string][] = [
   ['J', 'момент инерции J задан'],
@@ -56,11 +58,7 @@ export function RotView({ chrome, store }: { chrome: Chrome; store: RotStore }) 
             <label className="preset">
               Готовая задача
               <select id="rpreset" value={st.preset} onChange={(ev) => store.loadPreset(ev.target.value as RotPresetKey)}>
-                {(Object.keys(ROT_PRESETS) as RotPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {ROT_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(ROT_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

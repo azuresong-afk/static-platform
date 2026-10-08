@@ -17,22 +17,11 @@ import { BENDING_PRESETS } from '../../bending/presets';
 import { design } from '../model/design';
 import { renderSketch } from '../draw/sketch';
 import { sectionsDoc } from '../text/solution';
-import { DEFAULT_PARAMS, sigmaOf, type SectionParams, type SectionsStore } from './store';
+import { sigmaOf, type SectionParams, type SectionsStore } from './store';
+import { loadSectionPreset, SECTION_PRESETS, type SectionPresetKey } from '../presets';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
-/** Готовые исходные данные. beam — задача вкладки «Изгиб», которую загрузить вместе с ними. */
-const SECTION_PRESETS = {
-  antonov7: {
-    title: 'Антонов, задача 2, схема 7 (группа 10): σт = 230 МПа, n = 1,3, [τ] = 70 МПа',
-    beam: 'antonov7' as const,
-    p: { ...DEFAULT_PARAMS, source: 'beam', sigmaMode: 'yield', sigmaT: 230, n: 1.3, tau: 70, k: 2, overload: 0 } as SectionParams,
-  },
-  steel: {
-    title: 'Сталь: [σ] = 160 МПа, [τ] = 100 МПа (схема не меняется)',
-    beam: null,
-    p: { ...DEFAULT_PARAMS },
-  },
-};
-type SectionPresetKey = keyof typeof SECTION_PRESETS;
 
 export function SectionsView({ chrome, store, conv }: { chrome: Chrome; store: SectionsStore; conv: ConventionsStore }) {
   const frames = store.frames;
@@ -75,11 +64,7 @@ export function SectionsView({ chrome, store, conv }: { chrome: Chrome; store: S
     const sp = SECTION_PRESETS[k];
     return JSON.stringify(sp.p) === JSON.stringify(p) && (!sp.beam || BENDING_PRESETS[sp.beam].title === fst.title);
   });
-  const loadPreset = (k: SectionPresetKey) => {
-    const sp = SECTION_PRESETS[k];
-    if (sp.beam) frames.loadStructure(BENDING_PRESETS[sp.beam].build(frames.ids), BENDING_PRESETS[sp.beam].title);
-    store.load(sp.p);
-  };
+  const loadPreset = (k: SectionPresetKey) => loadSectionPreset(store, k);
   const num = (key: 'M' | 'Q' | 'sigmaAllow' | 'sigmaT' | 'n' | 'tau' | 'k' | 'overload', label: ReactNode, unit?: string, zero = false) => (
     <Num key={key} id={'s-' + key} label={label} unit={unit} value={p[key]} zero={zero} onType={(v) => store.typeField(key, v)} onEnd={() => store.endSession(key)} />
   );
@@ -103,11 +88,7 @@ export function SectionsView({ chrome, store, conv }: { chrome: Chrome; store: S
             <label className="preset">
               Готовые данные
               <select id="spreset" value={presetKey ?? 'custom'} onChange={(e) => loadPreset(e.target.value as SectionPresetKey)}>
-                {(Object.keys(SECTION_PRESETS) as SectionPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {SECTION_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(SECTION_PRESETS)} />
                 <option value="custom" hidden>
                   Свои данные
                 </option>

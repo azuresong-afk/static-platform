@@ -11,6 +11,8 @@ import { KINDS, KIND_NAME, PARAMS, solveCentroid, type CPart, type Mode, type Pa
 import { CENTROID_PRESETS, type CentroidPresetKey } from '../presets';
 import { centroidDoc } from '../text/solution';
 import type { CentroidStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const MODES: [Mode, string][] = [
   ['area', 'плоская фигура'],
@@ -72,11 +74,7 @@ export function CentroidView({ chrome, store }: { chrome: Chrome; store: Centroi
             <label className="preset">
               Готовая задача
               <select id="gpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as CentroidPresetKey)}>
-                {(Object.keys(CENTROID_PRESETS) as CentroidPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {CENTROID_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(CENTROID_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

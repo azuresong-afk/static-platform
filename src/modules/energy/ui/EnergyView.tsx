@@ -10,6 +10,8 @@ import { ATTACHES, ATTACH_NAME, solveEnergy, type BodyKind, type EnergyMode, typ
 import { ENERGY_PRESETS, type EnergyPresetKey } from '../presets';
 import { energyDoc } from '../text/solution';
 import type { EnergyStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const KIND: [BodyKind, string][] = [
   ['translate', 'груз'],
@@ -52,11 +54,7 @@ export function EnergyView({ chrome, store }: { chrome: Chrome; store: EnergySto
             <label className="preset">
               Готовая задача
               <select id="epreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as EnergyPresetKey)}>
-                {(Object.keys(ENERGY_PRESETS) as EnergyPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {ENERGY_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(ENERGY_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

@@ -11,6 +11,8 @@ import { renderSection } from '../draw/section';
 import { COMPOSITE_PRESETS, type CompositePresetKey } from '../presets';
 import { compositeDoc } from '../text/solution';
 import type { CompositeStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const KINDS: [PartKind, string][] = [
   ['plate', 'лист'],
@@ -80,11 +82,7 @@ export function CompositeView({ chrome, store }: { chrome: Chrome; store: Compos
             <label className="preset">
               Готовая задача
               <select id="cpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as CompositePresetKey)}>
-                {(Object.keys(COMPOSITE_PRESETS) as CompositePresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {COMPOSITE_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(COMPOSITE_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

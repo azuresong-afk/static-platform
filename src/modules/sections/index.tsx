@@ -7,6 +7,8 @@ import type { ConventionsStore } from '../../shared/conventions';
 import type { Store as FramesStore } from '../frames/ui/store';
 import { SectionsStore, SECTIONS_MODULE } from './ui/store';
 import { SectionsView } from './ui/SectionsView';
+import { taskEntries } from '../../shared/tasks';
+import { loadSectionPreset, SECTION_PRESETS, type SectionPresetKey } from './presets';
 
 export function createSectionsModule(frames: FramesStore, conv: ConventionsStore): StatikaModule {
   const store = new SectionsStore(frames);
@@ -26,5 +28,7 @@ export function createSectionsModule(frames: FramesStore, conv: ConventionsStore
       projectTitle: frames.projectTitle,
     },
     Screen,
+    tasks: taskEntries(SECTION_PRESETS),
+    loadTask: (k) => loadSectionPreset(store, k as SectionPresetKey),
   };
 }

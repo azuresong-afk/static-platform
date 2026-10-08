@@ -10,7 +10,7 @@ const base = { c: 0.8, sigma: 160, hyp: 3 as const };
 
 export const SPACE_PRESETS = {
   s16: {
-    title: 'По мотивам схемы 16 (А, круг): P в середине, q на втором участке',
+    title: 'Антонов, задача 3, по мотивам схемы 16 (А, круг): P в середине, q на втором участке',
     frame: {
       segs: [
         { axis: 'y', sign: -1, l: 1 },
@@ -26,7 +26,7 @@ export const SPACE_PRESETS = {
     } as Frame3,
   },
   s9: {
-    title: 'По мотивам схемы 9 (Б, кольцо): q вверх, P на конце',
+    title: 'Антонов, задача 3, по мотивам схемы 9 (Б, кольцо): q вверх, P на конце',
     frame: {
       segs: [
         { axis: 'y', sign: -1, l: 2 },

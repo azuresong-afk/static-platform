@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { CentroidStore, CENTROID_MODULE } from './ui/store';
 import { CentroidView } from './ui/CentroidView';
+import { taskEntries } from '../../shared/tasks';
+import { CENTROID_PRESETS, type CentroidPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createCentroidModule(): StatikaModule {
     tab: 'Центр тяжести',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(CENTROID_PRESETS),
+    loadTask: (k) => store.loadPreset(k as CentroidPresetKey),
   };
 }

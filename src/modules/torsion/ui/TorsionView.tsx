@@ -11,6 +11,8 @@ import { renderShaft, renderShaftDiagrams } from '../draw/shaft';
 import { TORSION_PRESETS, type TorsionPresetKey } from '../presets';
 import { pointName, torsionDoc } from '../text/solution';
 import type { TorsionNumKey, TorsionStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 export function TorsionView({ chrome, store }: { chrome: Chrome; store: TorsionStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
@@ -47,11 +49,7 @@ export function TorsionView({ chrome, store }: { chrome: Chrome; store: TorsionS
             <label className="preset">
               Готовая задача
               <select id="torpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as TorsionPresetKey)}>
-                {(Object.keys(TORSION_PRESETS) as TorsionPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {TORSION_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(TORSION_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

@@ -12,6 +12,8 @@ import { solveFrame3, type Axis, type Frame3, type Load3 } from '../model/frame3
 import { SPACE_PRESETS, type SpacePresetKey } from '../presets';
 import { spaceDoc } from '../text/solution';
 import type { SpaceStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const DIRS: { axis: Axis; sign: 1 | -1; label: string }[] = [
   { axis: 'x', sign: 1, label: '+x (вправо)' },
@@ -85,11 +87,7 @@ export function SpaceView({ chrome, store, conv }: { chrome: Chrome; store: Spac
             <label className="preset">
               Готовая задача
               <select id="spreset3" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as SpacePresetKey)}>
-                {(Object.keys(SPACE_PRESETS) as SpacePresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {SPACE_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(SPACE_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

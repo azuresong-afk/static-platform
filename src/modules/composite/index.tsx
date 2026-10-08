@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { CompositeStore, COMPOSITE_MODULE } from './ui/store';
 import { CompositeView } from './ui/CompositeView';
+import { taskEntries } from '../../shared/tasks';
+import { COMPOSITE_PRESETS, type CompositePresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createCompositeModule(): StatikaModule {
     tab: 'Составное сечение',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(COMPOSITE_PRESETS),
+    loadTask: (k) => store.loadPreset(k as CompositePresetKey),
   };
 }

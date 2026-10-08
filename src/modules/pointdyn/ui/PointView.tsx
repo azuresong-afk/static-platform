@@ -18,6 +18,7 @@ import { FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS } from '../presets';
 import { firstDoc, planeDoc } from '../text/extra';
 import { pointDoc } from '../text/solution';
 import type { AnyPresetKey, FirstNumKey, PlaneNumKey, PointMode, PointNumKey, PointStore } from './store';
+import { taskInfo } from '../../../shared/tasks';
 
 const LABELS = { w: ['v', 'м/с'] as [string, string], phi: ['x', 'м'] as [string, string], note: 'Скорость и координата точки по времени; точка — искомое состояние (наведите, чтобы увидеть значения).' };
 const FORCES: [PointNumKey, string, boolean][] = [
@@ -71,27 +72,24 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
             <label className="preset">
               Готовая задача
               <select id="ppreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as AnyPresetKey)}>
-                <optgroup label="Прямолинейное движение (§27 а)">
-                  {Object.entries(POINT_PRESETS).map(([k, p]) => (
-                    <option key={k} value={k}>
-                      {p.title}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Сила по закону движения (§26)">
-                  {Object.entries(FIRST_PRESETS).map(([k, p]) => (
-                    <option key={k} value={k}>
-                      {p.title}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Движение в плоскости (§27 б)">
-                  {Object.entries(PLANE_PRESETS).map(([k, p]) => (
-                    <option key={k} value={k}>
-                      {p.title}
-                    </option>
-                  ))}
-                </optgroup>
+                {(
+                  [
+                    ['Мещерский, § 26. Определение сил по заданному движению', FIRST_PRESETS],
+                    ['Мещерский, § 27 а) Прямолинейное движение', POINT_PRESETS],
+                    ['Мещерский, § 27 б) Криволинейное движение', PLANE_PRESETS],
+                  ] as [string, Record<string, { title: string }>][]
+                ).map(([label, rec]) => (
+                  <optgroup key={label} label={label}>
+                    {Object.entries(rec)
+                      .map(([k, p]) => [k, p, taskInfo(p.title)] as const)
+                      .sort((x, y) => x[2].order[0] - y[2].order[0] || x[2].order[1] - y[2].order[1])
+                      .map(([k, , info]) => (
+                        <option key={k} value={k}>
+                          {info.label}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
                 <option value="custom" hidden>
                   {st.title}
                 </option>

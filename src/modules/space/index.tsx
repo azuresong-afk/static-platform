@@ -3,6 +3,8 @@ import type { Chrome, StatikaModule } from '../../app/module';
 import type { ConventionsStore } from '../../shared/conventions';
 import { SpaceStore, SPACE_MODULE } from './ui/store';
 import { SpaceView } from './ui/SpaceView';
+import { taskEntries } from '../../shared/tasks';
+import { SPACE_PRESETS, type SpacePresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -37,5 +39,7 @@ export function createSpaceModule(conv: ConventionsStore): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
+    tasks: taskEntries(SPACE_PRESETS),
+    loadTask: (k) => store.loadPreset(k as SpacePresetKey),
   };
 }

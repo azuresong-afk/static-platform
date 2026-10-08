@@ -5,6 +5,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import type { Store as FramesStore } from '../frames/ui/store';
 import { VirtualView } from './ui/VirtualView';
+import { taskEntries } from '../../shared/tasks';
+import { VIRTUAL_PRESETS, type VirtualPresetKey } from './presets';
 
 export function createVirtualModule(frames: FramesStore): StatikaModule {
   function Screen({ chrome }: { chrome: Chrome }) {
@@ -23,5 +25,10 @@ export function createVirtualModule(frames: FramesStore): StatikaModule {
       projectTitle: frames.projectTitle,
     },
     Screen,
+    tasks: taskEntries(VIRTUAL_PRESETS),
+    loadTask: (k) => {
+      const p = VIRTUAL_PRESETS[k as VirtualPresetKey];
+      frames.loadStructure(p.build(frames.ids), p.title);
+    },
   };
 }

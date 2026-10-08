@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { KinStore, KIN_MODULE } from './ui/store';
 import { KinView } from './ui/KinView';
+import { taskEntries } from '../../shared/tasks';
+import { KIN_PRESETS, type KinPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createKinModule(): StatikaModule {
     tab: 'Кинематика точки',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(KIN_PRESETS),
+    loadTask: (k) => store.loadPreset(k as KinPresetKey),
   };
 }

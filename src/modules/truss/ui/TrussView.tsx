@@ -10,6 +10,8 @@ import { nodeName, solveTruss } from '../model/truss';
 import { TRUSS_PRESETS, type TrussPresetKey } from '../presets';
 import { trussDoc } from '../text/solution';
 import type { TrussStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const DIRS: [number, string, string][] = [
   [270, '↓', 'вниз'],
@@ -48,11 +50,7 @@ export function TrussView({ chrome, store }: { chrome: Chrome; store: TrussStore
             <label className="preset">
               Готовая задача
               <select id="tpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as TrussPresetKey)}>
-                {(Object.keys(TRUSS_PRESETS) as TrussPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {TRUSS_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(TRUSS_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

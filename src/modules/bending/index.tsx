@@ -6,6 +6,8 @@ import type { Chrome, StatikaModule } from '../../app/module';
 import type { ConventionsStore } from '../../shared/conventions';
 import type { Store as FramesStore } from '../frames/ui/store';
 import { BendingView } from './ui/BendingView';
+import { taskEntries } from '../../shared/tasks';
+import { BENDING_PRESETS, type BendingPresetKey } from './presets';
 
 export function createBendingModule(frames: FramesStore, conv: ConventionsStore): StatikaModule {
   function Screen({ chrome }: { chrome: Chrome }) {
@@ -24,5 +26,10 @@ export function createBendingModule(frames: FramesStore, conv: ConventionsStore)
       projectTitle: frames.projectTitle,
     },
     Screen,
+    tasks: taskEntries(BENDING_PRESETS),
+    loadTask: (k) => {
+      const p = BENDING_PRESETS[k as BendingPresetKey];
+      frames.loadStructure(p.build(frames.ids), p.title);
+    },
   };
 }

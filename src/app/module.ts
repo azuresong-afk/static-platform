@@ -4,6 +4,7 @@
  * и общие клавиши.
  */
 import type { ComponentType, ReactNode } from 'react';
+import type { TaskEntry } from '../shared/tasks';
 
 /** То, что оболочка вызывает у активного раздела. */
 export interface ModuleStore {
@@ -36,6 +37,10 @@ export interface StatikaModule {
   accepts?: string[];
   /** Экран раздела. Отчёт для печати раздел тоже рисует сам. */
   Screen: ComponentType<{ chrome: Chrome }>;
+  /** Готовые задачи раздела (для «Задачника»): ключ и название; источник — в начале названия. */
+  tasks?: TaskEntry[];
+  /** Загрузить готовую задачу по ключу (как выбор в списке «Готовая задача»). */
+  loadTask?: (key: string) => void;
 }
 
 /** Раздел из дорожной карты, который ещё не готов: его файл не открывается, а объясняется почему. */

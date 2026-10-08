@@ -1,18 +1,31 @@
 /**
- * Оболочка приложения: вкладки разделов, открытие и сохранение файлов, общие клавиши.
+ * Оболочка приложения: навигация по задачникам и разделам, «Задачник», открытие и сохранение файлов, общие клавиши.
  * Состояние каждого раздела живёт в его хранилище и сохраняется при переключении вкладок.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readEnvelope } from '../shared/projectFile';
 import { download, FileBar, type FileActions } from './FileBar';
 import type { PlannedModule, StatikaModule } from './module';
+import { blockOf, NAV } from './nav';
 import { ROADMAP_TAB } from './roadmap';
 import { RoadmapScreen } from './RoadmapScreen';
+import { TASKS_TAB, TasksScreen } from './TasksScreen';
 
 const TAB_KEY = 'statika.tab';
+/** Последний открытый раздел каждого блока: щелчок по блоку возвращает в него. */
+const BLOCK_KEY = 'statika.blocktabs';
+
+function readLast(): Record<string, string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(BLOCK_KEY) ?? '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
 
 function initialTab(modules: StatikaModule[]): string {
-  const ids = [...modules.map((m) => m.id), ROADMAP_TAB];
+  const ids = [...modules.map((m) => m.id), ROADMAP_TAB, TASKS_TAB];
   const hash = location.hash.slice(1);
   if (ids.includes(hash)) return hash;
   try {
@@ -26,18 +39,35 @@ function initialTab(modules: StatikaModule[]): string {
 
 export function Shell({ modules, planned }: { modules: StatikaModule[]; planned: PlannedModule[] }) {
   const [active, setActive] = useState(() => initialTab(modules));
-  // На вкладке «Дорожная карта» своего проекта нет: сохранять и отменять нечего, а сообщения об ошибках
-  // при открытии файла показывает первый раздел.
-  const onMap = active === ROADMAP_TAB;
-  const m = modules.find((x) => x.id === active) ?? modules[0];
+  const [last, setLast] = useState(readLast);
+  /** Меню-оглавление на узком экране. */
+  const [menu, setMenu] = useState(false);
+  /** Шапка прячется при прокрутке вниз и возвращается при прокрутке вверх. */
+  const [hidden, setHidden] = useState(false);
+  // На «Дорожной карте» и в «Задачнике» своего проекта нет: сохранять и отменять нечего, а сообщения об ошибках
+  // при открытии файла показывает последний открытый раздел.
+  const onMap = active === ROADMAP_TAB || active === TASKS_TAB;
+  const m = modules.find((x) => x.id === active) ?? modules.find((x) => x.id === last['@']) ?? modules[0];
 
   const switchTo = useCallback((id: string) => {
     setActive(id);
+    setMenu(false);
     try {
       localStorage.setItem(TAB_KEY, id);
     } catch {
       /* вкладка не запомнится */
     }
+    const b = blockOf(id);
+    if (b)
+      setLast((prev) => {
+        const next = { ...prev, [b.id]: id, '@': id };
+        try {
+          localStorage.setItem(BLOCK_KEY, JSON.stringify(next));
+        } catch {
+          /* не запомнится */
+        }
+        return next;
+      });
   }, []);
 
   // Файл открывается в том разделе, к которому относится; вкладка переключается сама.
@@ -132,20 +162,154 @@ export function Shell({ modules, planned }: { modules: StatikaModule[]; planned:
     };
   }, []);
 
+  // Активные блок и раздел видны на узком экране: прокручиваем ряды навигации к ним.
+  useEffect(() => {
+    for (const sel of ['.nav-blocks button[aria-current="true"]', '.tabs button[aria-selected="true"]']) {
+      const el = document.querySelector(sel) as HTMLElement | null;
+      const row = el?.parentElement;
+      if (el && row && row.scrollWidth > row.clientWidth) row.scrollLeft = el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2;
+    }
+  }, [active]);
+
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const h = (document.querySelector('.nav') as HTMLElement | null)?.offsetHeight ?? 100;
+      if (y > lastY + 6 && y > h + 60) setHidden(true);
+      else if (y < lastY - 6 || y <= h) setHidden(false);
+      lastY = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Меню закрывается клавишей Esc.
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenu(false);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [menu]);
+
+  const block = onMap ? undefined : blockOf(m.id);
+  const course = block ? NAV.find((c) => c.blocks.includes(block)) : undefined;
+  const taskCount = modules.reduce((n, x) => n + (x.tasks?.length ?? 0), 0);
+  const tabName = (id: string) => modules.find((x) => x.id === id)?.tab ?? id;
+  const here = active === TASKS_TAB ? 'Задачник' : active === ROADMAP_TAB ? 'Дорожная карта' : (block?.title ?? '');
   const tabs = (
-    <nav className="tabs" role="tablist" aria-label="Разделы">
-      {modules.map((x) => (
-        <button key={x.id} type="button" role="tab" data-tab={x.id} aria-selected={!onMap && x.id === m.id} onClick={() => switchTo(x.id)}>
-          {x.tab}
+    <nav className={hidden && !menu ? 'nav nav-hide' : 'nav'} aria-label="Разделы" onFocus={() => setHidden(false)}>
+      <div className="nav-mob">
+        <button type="button" className="nav-menu" aria-expanded={menu} aria-controls="nav-sheet" onClick={() => setMenu((x) => !x)}>
+          <span className="nav-burger" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="nav-where">
+            <small>{course ? `${course.book} · ${course.title.toLowerCase()}` : 'Механика'}</small>
+            {here}
+          </span>
+          <span className="nav-caret" aria-hidden="true">
+            ▾
+          </span>
         </button>
-      ))}
-      <button type="button" role="tab" className="tab-map" data-tab={ROADMAP_TAB} aria-selected={onMap} onClick={() => switchTo(ROADMAP_TAB)}>
-        Дорожная карта
-        <small>{planned.length} впереди</small>
-      </button>
+      </div>
+      {menu && (
+        <>
+          <div className="nav-veil" onClick={() => setMenu(false)} />
+          <div className="nav-sheet" id="nav-sheet">
+            {NAV.map((c) => (
+              <section key={c.id}>
+                <h3>
+                  {c.book} · {c.title.toLowerCase()}
+                </h3>
+                {c.blocks.map((b) => (
+                  <div key={b.id} className="nav-sheet-block">
+                    {c.blocks.length > 1 && (
+                      <h4>
+                        {b.title} <small>{b.refs.replace(/^[^,]*,\s*/, '')}</small>
+                      </h4>
+                    )}
+                    <ul>
+                      {b.tabs.map((id) => (
+                        <li key={id}>
+                          <button type="button" data-go={id} aria-current={!onMap && m.id === id ? 'true' : undefined} onClick={() => switchTo(id)}>
+                            {tabName(id)}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </section>
+            ))}
+            <section className="nav-sheet-extra">
+              <button type="button" data-go={TASKS_TAB} aria-current={active === TASKS_TAB ? 'true' : undefined} onClick={() => switchTo(TASKS_TAB)}>
+                Задачник <small>{taskCount} задач</small>
+              </button>
+              <button type="button" data-go={ROADMAP_TAB} aria-current={active === ROADMAP_TAB ? 'true' : undefined} onClick={() => switchTo(ROADMAP_TAB)}>
+                Дорожная карта
+              </button>
+            </section>
+          </div>
+        </>
+      )}
+      <div className="nav-top">
+        {NAV.map((c) => (
+          <div key={c.id} className="nav-course" data-course={c.id}>
+            <span className="nav-book">
+              {c.book}
+              <span className="nav-full"> · {c.title.toLowerCase()}</span>
+            </span>
+            <div className="nav-blocks">
+              {c.blocks.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  data-block={b.id}
+                  aria-current={block === b ? 'true' : undefined}
+                  title={b.refs}
+                  onClick={() => switchTo(last[b.id] && b.tabs.includes(last[b.id]) ? last[b.id] : b.tabs[0])}
+                >
+                  <span className="nav-full">{b.title}</span>
+                  <span className="nav-short">{b.short}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="nav-course nav-extra">
+          <span className="nav-book">&nbsp;</span>
+          <div className="nav-blocks">
+            <button type="button" data-tab={TASKS_TAB} aria-current={active === TASKS_TAB ? 'true' : undefined} onClick={() => switchTo(TASKS_TAB)}>
+              Задачник <small>{taskCount}</small>
+            </button>
+            <button type="button" data-tab={ROADMAP_TAB} aria-current={active === ROADMAP_TAB ? 'true' : undefined} onClick={() => switchTo(ROADMAP_TAB)}>
+              <span className="nav-full">Дорожная карта</span>
+              <span className="nav-short">Карта</span>
+              {planned.length ? <small>{planned.length} впереди</small> : null}
+            </button>
+          </div>
+        </div>
+      </div>
+      {block && (
+        <div className="tabs" role="tablist" aria-label={block.title}>
+          {block.tabs.map((id) => {
+            const x = modules.find((y) => y.id === id);
+            return x ? (
+              <button key={id} type="button" role="tab" data-tab={id} aria-selected={id === m.id} onClick={() => switchTo(id)}>
+                {x.tab}
+              </button>
+            ) : null;
+          })}
+          <span className="nav-refs">{block.refs}</span>
+        </div>
+      )}
     </nav>
   );
   const files = <FileBar actions={actions} register={(f) => (openDialog.current = f)} />;
+  if (active === TASKS_TAB) return <TasksScreen chrome={{ tabs, files: null, goto: switchTo }} modules={modules} />;
   if (onMap) return <RoadmapScreen chrome={{ tabs, files: null, goto: switchTo }} />;
   return <m.Screen key={m.id} chrome={{ tabs, files, goto: switchTo }} />;
 }

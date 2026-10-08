@@ -10,6 +10,8 @@ import { HAS_AXIS, KINDS, KIND_NAME, PARAMS, solveInertia, type PartKind } from 
 import { INERTIA_PRESETS, type InertiaPresetKey } from '../presets';
 import { inertiaDoc } from '../text/solution';
 import type { InertiaStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const AX = ['x', 'y', 'z'];
 
@@ -33,11 +35,7 @@ export function InertiaView({ chrome, store }: { chrome: Chrome; store: InertiaS
             <label className="preset">
               Готовая задача
               <select id="ipreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as InertiaPresetKey)}>
-                {(Object.keys(INERTIA_PRESETS) as InertiaPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {INERTIA_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(INERTIA_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

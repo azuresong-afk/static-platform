@@ -10,6 +10,8 @@ import { reduceSystem, solveNode, type NodeForce } from '../model/forces';
 import { CONV_PRESETS, type ConvPresetKey } from '../presets';
 import { nodeDoc, reduceDoc } from '../text/solution';
 import type { ConvStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const KIND: [NodeForce['kind'], string][] = [
   ['known', 'известная сила'],
@@ -53,11 +55,7 @@ export function ConvView({ chrome, store }: { chrome: Chrome; store: ConvStore }
             <label className="preset">
               Готовая задача
               <select id="vpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as ConvPresetKey)}>
-                {(Object.keys(CONV_PRESETS) as ConvPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {CONV_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(CONV_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

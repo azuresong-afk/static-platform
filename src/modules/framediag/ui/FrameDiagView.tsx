@@ -16,6 +16,8 @@ import { analyzeFrame, type FrameResult } from '../model/frame';
 import { renderFrameDiagrams, type DiagKey } from '../draw/frame';
 import { FRAME_PRESETS, type FramePresetKey } from '../presets';
 import { frameDoc } from '../text/solution';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const WHY: Record<Exclude<FrameResult, { ok: true }>['why'], string> = {
   empty: 'В схеме нет ни одного участка — соберите раму во вкладке «Балки и рамы».',
@@ -68,11 +70,7 @@ export function FrameDiagView({ chrome, frames, conv }: { chrome: Chrome; frames
             <label className="preset">
               Готовая задача
               <select id="fdpreset" value={presetKey} onChange={(e) => load(e.target.value as FramePresetKey)}>
-                {(Object.keys(FRAME_PRESETS) as FramePresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {FRAME_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(FRAME_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

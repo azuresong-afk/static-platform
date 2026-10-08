@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { EnergyStore, ENERGY_MODULE } from './ui/store';
 import { EnergyView } from './ui/EnergyView';
+import { taskEntries } from '../../shared/tasks';
+import { ENERGY_PRESETS, type EnergyPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createEnergyModule(): StatikaModule {
     tab: 'Кинетическая энергия',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(ENERGY_PRESETS),
+    loadTask: (k) => store.loadPreset(k as EnergyPresetKey),
   };
 }

@@ -12,13 +12,14 @@ import { solveWheel, type WheelProblem } from '../model/wheel';
 import { MC_PRESETS, type McPresetKey } from '../presets';
 import { pointsDoc, shiftDoc, wheelDoc } from '../text/solution';
 import type { McMode, McStore, WheelNumKey } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const MODES: [McMode, string][] = [
   ['points', 'система точек: центр масс и внешние силы'],
   ['shift', 'сохранение положения центра масс'],
   ['wheel', 'плоское движение колеса'],
 ];
-const GROUP: Record<McMode, string> = { points: 'Центр масс, количество движения (§35–36)', shift: 'Смещение основания (§35)', wheel: 'Плоское движение (§39)' };
 
 export function McView({ chrome, store }: { chrome: Chrome; store: McStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
@@ -38,7 +39,6 @@ export function McView({ chrome, store }: { chrome: Chrome; store: McStore }) {
   const end = (k: string) => () => store.endSession(k);
   const w = s.wheel;
   const NW = (k: WheelNumKey, label: string, neg = true) => <Num key={k} id={`mw-${k}`} label={label} value={w[k]} neg={neg} zero onType={(v) => store.typeWheel(k, v)} onEnd={end(`w:${k}`)} />;
-  const groups = (['points', 'shift', 'wheel'] as McMode[]).map((m) => [m, (Object.keys(MC_PRESETS) as McPresetKey[]).filter((k) => MC_PRESETS[k].problem.mode === m)] as const);
 
   return (
     <>
@@ -53,15 +53,7 @@ export function McView({ chrome, store }: { chrome: Chrome; store: McStore }) {
             <label className="preset">
               Готовая задача
               <select id="mpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as McPresetKey)}>
-                {groups.map(([m, keys]) => (
-                  <optgroup key={m} label={GROUP[m]}>
-                    {keys.map((k) => (
-                      <option key={k} value={k}>
-                        {MC_PRESETS[k].title}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
+                <PresetOptions items={taskEntries(MC_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

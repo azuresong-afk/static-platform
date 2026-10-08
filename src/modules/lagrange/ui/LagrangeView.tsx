@@ -14,6 +14,8 @@ import { renderPlots } from '../draw/plots';
 import { LAGRANGE_PRESETS, type LagrangePresetKey } from '../presets';
 import { lagrangeDoc } from '../text/solution';
 import type { LagrangeStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 /** Поле формулы: ошибка разбора подсвечивается, неверная формула не применяется. */
 function SymField({ id, label, value, ctx, onType, onEnd, err, wide = true }: { id: string; label: string; value: string; ctx: SymContext; onType: (s: string) => void; onEnd: () => void; err?: string; wide?: boolean }) {
@@ -73,11 +75,7 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
             <label className="preset">
               Готовая задача
               <select id="lgpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as LagrangePresetKey)}>
-                {(Object.keys(LAGRANGE_PRESETS) as LagrangePresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {LAGRANGE_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(LAGRANGE_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

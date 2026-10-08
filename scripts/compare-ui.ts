@@ -140,6 +140,8 @@ step('выделить распределённую нагрузку на чер
   await p.mouse.click(x, y);
 });
 step('щелчок мимо — снять выделение', async (p) => {
+  // Чертёж — в середину окна: у приложения сверху шапка навигации, щелчок в её области до чертежа не дойдёт.
+  await p.locator('#svg').evaluate((e) => e.scrollIntoView({ block: 'center' }));
   const b = (await p.locator('#svg').boundingBox())!;
   await p.mouse.click(b.x + 20, b.y + 20);
 });

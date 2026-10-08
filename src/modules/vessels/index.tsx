@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { VesselStore, VESSEL_MODULE } from './ui/store';
 import { VesselView } from './ui/VesselView';
+import { taskEntries } from '../../shared/tasks';
+import { VESSEL_PRESETS, type VesselPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createVesselModule(): StatikaModule {
     tab: 'Сосуды',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(VESSEL_PRESETS),
+    loadTask: (k) => store.loadPreset(k as VesselPresetKey),
   };
 }

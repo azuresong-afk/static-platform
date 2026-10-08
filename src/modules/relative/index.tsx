@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { RelStore, REL_MODULE } from './ui/store';
 import { RelView } from './ui/RelView';
+import { taskEntries } from '../../shared/tasks';
+import { REL_PRESETS, type RelPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createRelModule(): StatikaModule {
     tab: 'Сложное движение',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(REL_PRESETS),
+    loadTask: (k) => store.loadPreset(k as RelPresetKey),
   };
 }

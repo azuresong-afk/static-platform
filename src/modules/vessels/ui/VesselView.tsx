@@ -11,6 +11,8 @@ import { solveVessel, type SegKind } from '../model/vessel';
 import { taskProblem, VESSEL_PRESETS, type VesselPresetKey, type VesselTask } from '../presets';
 import { vesselDoc } from '../text/solution';
 import { MAX_SEGS, type AntNumKey, type VesselNumKey, type VesselStore } from './store';
+import { PresetOptions } from '../../../shared/ui/PresetOptions';
+import { taskEntries } from '../../../shared/tasks';
 
 const KINDS: [SegKind, string][] = [
   ['cyl', 'цилиндр'],
@@ -45,11 +47,7 @@ export function VesselView({ chrome, store }: { chrome: Chrome; store: VesselSto
             <label className="preset">
               Готовая задача
               <select id="vpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as VesselPresetKey)}>
-                {(Object.keys(VESSEL_PRESETS) as VesselPresetKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {VESSEL_PRESETS[k].title}
-                  </option>
-                ))}
+                <PresetOptions items={taskEntries(VESSEL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

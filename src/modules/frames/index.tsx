@@ -3,6 +3,8 @@ import type { Chrome, StatikaModule } from '../../app/module';
 import { FramesView } from './ui/FramesView';
 import { Store } from './ui/store';
 import { StoreContext } from './ui/useStore';
+import { FRAMES_TASKS } from './tasks';
+import { loadFramesTask } from './ui/loadTask';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -31,5 +33,5 @@ export function createFramesModule(): StatikaModule & { store: Store } {
       </StoreContext.Provider>
     );
   }
-  return { id: 'frames', tab: 'Балки и рамы', store, Screen };
+  return { id: 'frames', tab: 'Балки и рамы', store, Screen, tasks: FRAMES_TASKS, loadTask: (k) => loadFramesTask(store, k) };
 }

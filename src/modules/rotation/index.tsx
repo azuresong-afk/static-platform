@@ -2,6 +2,8 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { RotStore, ROT_MODULE } from './ui/store';
 import { RotView } from './ui/RotView';
+import { taskEntries } from '../../shared/tasks';
+import { ROT_PRESETS, type RotPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +31,7 @@ export function createRotationModule(): StatikaModule {
     tab: 'Вращение тела',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: taskEntries(ROT_PRESETS),
+    loadTask: (k) => store.loadPreset(k as RotPresetKey),
   };
 }

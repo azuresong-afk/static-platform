@@ -2,6 +2,9 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { PointStore, POINT_MODULE } from './ui/store';
 import { PointView } from './ui/PointView';
+import { taskEntries } from '../../shared/tasks';
+import { FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS } from './presets';
+import type { AnyPresetKey } from './ui/store';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -29,5 +32,7 @@ export function createPointModule(): StatikaModule {
     tab: 'Динамика точки',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
+    tasks: [...taskEntries(POINT_PRESETS), ...taskEntries(FIRST_PRESETS), ...taskEntries(PLANE_PRESETS)],
+    loadTask: (k) => store.loadPreset(k as AnyPresetKey),
   };
 }
