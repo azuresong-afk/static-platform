@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 25 && seen.length === 25, 'двадцать пять разделов, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 26 && seen.length === 26, 'двадцать шесть разделов, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 27, 'готово двадцать семь пунктов');
+  check((await p.locator('.rm-done').count()) === 28, 'готово двадцать восемь пунктов');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -820,6 +820,42 @@ async function main() {
   check((await p.getAttribute('[data-tab="lagrange"]', 'aria-selected')) === 'true' && (await p.innerText('#lgsolution')) === lgSol, 'файл задачи Лагранжа открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // 33а. Вкладка «Удар и колебания».
+  await tab('oscillation');
+  let os = await p.innerText('#osolution');
+  check(os.includes('x = −0,5 cos 44,29t + 10 sin 44,29t') && os.includes('груз отрывается'), 'Мещерский 32.4: удар о балку — закон движения и отрыв груза', os.slice(0, 400));
+  await p.selectOption('#opreset', 'm3255');
+  os = await p.innerText('#osolution');
+  check(os.includes('число полуразмахов: 4') && os.includes('размах 5,2') && os.includes('размах 0,4'), 'Мещерский 32.55: сухое трение — 4 полуразмаха 5,2 … 0,4 см', os.slice(-500));
+  check((await p.locator('#osvg .os-zone').count()) === 1, 'на графике — область застоя');
+  await p.selectOption('#opreset', 'm3287');
+  check((await p.innerText('#osolution')).includes('резонанс'), 'Мещерский 32.87: резонанс');
+  await p.selectOption('#opreset', 'a104');
+  os = await p.innerText('#osolution');
+  check(os.includes('26,6') && os.includes('прочность обеспечена') && os.includes('108,4'), 'Антонов, рис. 10.4: K_д = 26,6, σ_max = 108,4 МПа', os.slice(-600));
+  await p.selectOption('#opreset', 'm321');
+  await p.selectOption('#ostiff', 'elems');
+  await p.click('#oaddstage');
+  check((await p.locator('#ostages .os-stage').count()) === 2 && (await p.locator('#osvg .os-spring').count()) === 2, 'добавлена вторая ступень пружин');
+  for (const id of ['#o-e00-c', '#o-e10-c']) {
+    await p.locator(id).fill('2');
+    await p.locator(id).blur();
+  }
+  os = await p.innerText('#osolution');
+  check(os.includes('ступени последовательно') && os.includes('c = 1 Г/см'), 'две пружины по 2 Г/см последовательно: c = 1 Г/см', os.slice(0, 500));
+  await p.selectOption('#odamp', 'b');
+  await p.locator('#o-b').fill('0,5');
+  await p.locator('#o-b').blur();
+  check((await p.innerText('#osolution')).includes('затухающие колебания') && (await p.locator('#osvg .os-damper').count()) === 1, 'вязкое сопротивление: затухающие колебания и демпфер на схеме');
+  const [dl34] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const osText = await (await dl34.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const osSol = await p.innerText('#osolution');
+  check(JSON.parse(osText).module === 'oscillation' && JSON.parse(osText).problem.el.stages.length === 2, 'файл задачи о колебаниях');
+  await tab('frames');
+  await openText('os.json', osText, 'ok');
+  check((await p.getAttribute('[data-tab="oscillation"]', 'aria-selected')) === 'true' && (await p.innerText('#osolution')) === osSol, 'файл колебаний открывается в своей вкладке без потерь');
+  await tab('frames');
+
   // 34. Навигация и «Задачник».
   await tab('tasks');
   check((await p.getAttribute('[data-tab="tasks"]', 'aria-current')) === 'true' && (await p.locator('.tk-book').count()) === 3, '«Задачник»: Мещерский, Антонов, примеры приложения');
@@ -853,7 +889,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 27, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 28, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });

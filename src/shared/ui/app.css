@@ -499,6 +499,43 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .rt-line{fill:none;stroke:var(--react);stroke-width:2;stroke-linejoin:round}
 .rt-end{fill:var(--react);stroke:var(--sheet);stroke-width:2}
 .rt-val{font-family:"Golos Text",system-ui,sans-serif;font-size:13px;fill:var(--ink);font-variant-numeric:tabular-nums}
+/* Удар и колебания */
+.os-ground{stroke:var(--ink);stroke-width:1.8}
+.os-hatch{stroke:var(--ink-3);stroke-width:1}
+.os-hatch.os-moving{stroke:var(--load)}
+.os-hatch.os-rough{stroke:var(--warn);stroke-width:1.3}
+.os-spring{fill:none;stroke:var(--react);stroke-width:2;stroke-linejoin:round}
+.os-rod{fill:color-mix(in srgb,var(--react) 18%,var(--sheet));stroke:var(--react);stroke-width:1.6}
+.os-link{stroke:var(--ink-2);stroke-width:1.6}
+.os-beam{stroke:var(--react);stroke-width:4;stroke-linecap:round}
+.os-supp{fill:var(--sheet);stroke:var(--ink);stroke-width:1.3}
+.os-plate{stroke:var(--ink);stroke-width:2.4;stroke-linecap:round}
+.os-damper{fill:none;stroke:var(--ink-2);stroke-width:1.6}
+.os-mass{fill:color-mix(in srgb,var(--load) 12%,var(--sheet));stroke:var(--ink);stroke-width:1.8;stroke-linejoin:round}
+.os-mlab{font-weight:700;font-size:16px;fill:var(--ink)}
+.os-lab{font-size:14px;fill:var(--react)}
+.os-axl{font-size:15px;font-style:italic;fill:var(--ink)}
+.os-dim{fill:none;stroke:var(--ink-3);stroke-width:1;stroke-dasharray:4 3}
+.os-f{stroke:var(--load);stroke-width:2}
+.os-f-f{fill:var(--load)}
+.os-g{stroke:var(--ink-2);stroke-width:1.6}
+.os-g-f{fill:var(--ink-2)}
+.os-ax{stroke:var(--ink);stroke-width:1.4}
+.os-ax-f{fill:var(--ink)}
+.os-rotor{fill:none;stroke:var(--load);stroke-width:1.6;stroke-dasharray:3 2}
+.os-dot{fill:var(--load)}
+.os-env{fill:none;stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:5 4}
+.os-zone{fill:color-mix(in srgb,var(--warn) 12%,transparent)}
+.os-max{fill:var(--load);stroke:var(--sheet);stroke-width:2}
+.os-tline{stroke:var(--react);stroke-width:1;stroke-dasharray:3 3}
+.os-slack{stroke:var(--warn);stroke-width:1.4;stroke-dasharray:6 3}
+.rt-line.os-after{stroke-dasharray:4 4;opacity:.45}
+.os-stage{border:1px solid var(--rule);border-radius:10px;padding:8px 10px;display:grid;gap:8px}
+.os-elem{display:grid;gap:6px;padding-top:6px;border-top:1px dashed var(--rule)}
+.os-elem:first-of-type{border-top:0;padding-top:0}
+.os-head{display:flex;align-items:center;gap:8px}
+.os-head b{flex:1}
+.os-head select{flex:1;min-width:0}
 .mc-path{fill:none;stroke:var(--ink-3);stroke-width:1.4}
 .cv-t{paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
 .cv-rope{stroke:var(--ink-2);stroke-width:1.4}

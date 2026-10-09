@@ -24,6 +24,7 @@ import { createGearModule } from '../modules/gears';
 import { createMechModule } from '../modules/mechanism';
 import { createRelModule } from '../modules/relative';
 import { createTrussModule } from '../modules/truss';
+import { createOscModule } from '../modules/oscillation';
 import { ConventionsStore } from '../shared/conventions';
 import type { PlannedModule, StatikaModule } from './module';
 import { ROADMAP } from './roadmap';
@@ -31,7 +32,7 @@ import { ROADMAP } from './roadmap';
 export function createModules(): StatikaModule[] {
   const frames = createFramesModule();
   const conventions = new ConventionsStore();
-  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createMcModule(), createKinModule(), createGearModule(), createMechModule(), createRelModule(), createVirtualModule(frames.store), createLagrangeModule(), createBendingModule(frames.store, conventions), createFrameDiagModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createSpaceModule(conventions), createCompositeModule(), createVesselModule(), createTorsionModule()];
+  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createMcModule(), createOscModule(), createKinModule(), createGearModule(), createMechModule(), createRelModule(), createVirtualModule(frames.store), createLagrangeModule(), createBendingModule(frames.store, conventions), createFrameDiagModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createSpaceModule(conventions), createCompositeModule(), createVesselModule(), createTorsionModule()];
 }
 
 export const PLANNED: PlannedModule[] = ROADMAP.flatMap((b) => b.items)
