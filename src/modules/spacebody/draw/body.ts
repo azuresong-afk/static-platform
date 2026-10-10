@@ -80,9 +80,9 @@ export function renderBody(body: Body, m: BodyModel, sol: BodySolution | null): 
     out.push(`<text class="t t-ld" x="${r1(P[0] - d[0] * 86)}" y="${r1(P[1] - d[1] * 86 + 5)}" text-anchor="middle">${label(f.L, f.S, ` = ${fmt(f.val)}`)}</text>`);
   }
   const solved = sol?.status === 'ok';
-  for (const u of m.unknowns) {
+  for (const u of [...m.unknowns, ...m.dependents]) {
     const P = S(u.r),
-      val = solved ? sol!.vals[u.key] : null;
+      val = solved ? sol!.vals[u.key] * (u.mult ?? 1) : null;
     const d = dirS(u.u.map((x) => x * (val != null && val < 0 ? -1 : 1)) as V3);
     const isLoad = u.sup == null;
     const cls = isLoad && !solved ? 'ld' : 'rc';

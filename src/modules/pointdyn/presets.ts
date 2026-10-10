@@ -1,4 +1,4 @@
-/** Готовые задачи: Мещерский §27 (прямолинейное движение). Ответы — по книге или по её формулам. */
+/** Готовые задачи: Мещерский §26–27, Яблонский Д.2. Ответы — по книге или по её формулам. */
 import { G } from '../rotation/model/rotation';
 import type { FirstProblem } from './model/first';
 import type { PlaneProblem } from './model/plane';
@@ -95,6 +95,12 @@ export const POINT_PRESETS = {
     book: { t: 141 },
     note: 'Q = 40 т, сопротивление (2,5 + 0,05v)Q кГ = 100 + 2v кГ, тяга F = 200 кГ: F₀ = 100, k₁ = 2. Время 141 с совпадает с книгой; путь по расчёту 237 м, в книге 245 м — по формуле s = (m/k)[(F/k)ln(F/(F − kv)) − v] получается 237 м (при g = 9,8 тоже), считаем это опечаткой книги.',
   },
+  m2740: {
+    title: 'Мещерский 27.40: сопротивление зависит от скорости и пройденного пути',
+    problem: pt({ form: '-2v^2/(3 + x)', v0: 5, t: 1 }),
+    book: { x: 3 * (Math.cbrt(5 * 1 + 1) - 1), v: 45 / (3 * Math.cbrt(6)) ** 2 },
+    note: 'Вес 9,8 Н (m = 1 кг), сопротивление R = −2v²/(3 + s) Н, v₀ = 5 м/с. Книга: s = 3[∛(5t + 1) − 1] м; при t = 1 с s = 2,451 м, v = 45/(3 + s)² = 1,514 м/с.',
+  },
 } satisfies Record<string, PointPreset>;
 
 export type PointPresetKey = keyof typeof POINT_PRESETS;
@@ -159,6 +165,10 @@ const plane = (o: Partial<PlaneProblem>): PlaneProblem => ({ byWeight: false, m:
 const L44 = 100 ** 2 / G;
 const v46 = Math.sqrt(16000 * G) / Math.cos(rad(30));
 const d52 = { k: 0.01, v0: 50, al: 60 };
+// Яблонский, Д.2, пример: m = 1 кг, F = −c·r (c = 4 Н/м), R = −a·v (a = 2 Н·с/м), z₀ = 10 м, ẋ₀ = 20 м/с; ось z — вверх (у нас y).
+// Решение книги: k = √(c/m) = 2, n = a/(2m) = 1, k₁ = √(k² − n²) = √3; x = (ẋ₀/k₁)e^{−nt} sin k₁t,
+// z = (z₀ + g/k²)e^{−nt}(cos k₁t + (n/k₁) sin k₁t) − g/k².
+const yd2 = { k1: Math.sqrt(3), gk: G / 4, t: 1 };
 
 export const PLANE_PRESETS = {
   p2744: {
@@ -207,6 +217,15 @@ export const PLANE_PRESETS = {
     problem: plane({ gravity: false, q: 2, v0: 3, ang: 0, ask: 't', t: Math.PI / 2 }),
     book: { x: 0, y: -3 },
     note: 'm = 1, v₀ = 3, сила q·(v × ẑ), q = 2: радиус mv₀/q = 1,5; через полпериода точка на расстоянии 2R.',
+  },
+  yd2: {
+    title: 'Яблонский, Д.2: притяжение к центру −c·r и сопротивление −a·v (пример)',
+    problem: plane({ formX: '-4x - 2vx', formY: '-4y - 2vy', y0: 10, v0: 20, ang: 0, ask: 't', t: yd2.t }),
+    book: {
+      x: (20 / yd2.k1) * Math.exp(-yd2.t) * Math.sin(yd2.k1 * yd2.t),
+      y: (10 + yd2.gk) * Math.exp(-yd2.t) * (Math.cos(yd2.k1 * yd2.t) + Math.sin(yd2.k1 * yd2.t) / yd2.k1) - yd2.gk,
+    },
+    note: 'Силы заданы составляющими, как в условии: F = −c(x i + z k), c = 4 Н/м; R = −a(ẋ i + ż k), a = 2 Н·с/м; m = 1 кг, z₀ = 10 м, ẋ₀ = 20 м/с. Ответ — по формулам книги при t = 1 с; в книге коэффициенты округлены: 11,56 = 20/1,73 (точно 20/√3 = 11,547), 12,45 и 2,45 (точно 12,4525 и 2,4525).',
   },
 } satisfies Record<string, PlanePreset>;
 export type PlanePresetKey = keyof typeof PLANE_PRESETS;

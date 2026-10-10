@@ -4,10 +4,13 @@
  * Поддерживается: числа (запятая или точка), t, π (pi), e как основание (через exp), + − * / ^, скобки,
  * неявное умножение («2t», «3 sin(2πt)», «0,5(1 − cos t)»), функции sin, cos, tg (tan), ctg, arctg (atan),
  * arcsin, arccos, exp, ln, sqrt, abs, sh (sinh), ch (cosh), th (tanh).
+ * По желанию — и другие переменные (для сил F(t, x, v)): parseExpr(src, { vars: ['x', 'v'] }), evalExpr(e, t, { x, v }).
+ * Производная diff — только по t: такие переменные в ней считаются постоянными (формулы сил не дифференцируются).
  */
 export type Expr =
   | { k: 'num'; v: number }
   | { k: 't' }
+  | { k: 'var'; n: string }
   | { k: 'add' | 'sub' | 'mul' | 'div' | 'pow'; a: Expr; b: Expr }
   | { k: 'neg'; a: Expr }
   | { k: 'fn'; f: Fn; a: Expr };
@@ -42,7 +45,7 @@ export type ParseResult = { ok: true; e: Expr } | { ok: false; error: string };
 
 type Tok = { t: 'num'; v: number } | { t: 'id'; v: string } | { t: 'op'; v: string };
 
-function tokenize(src: string): Tok[] | string {
+function tokenize(src: string, vars: string[] = []): Tok[] | string {
   const s = src.replace(/[−–]/g, '-').replace(/[·×]/g, '*').replace(/\s+/g, ' ');
   const out: Tok[] = [];
   let i = 0;
@@ -78,7 +81,7 @@ function tokenize(src: string): Tok[] | string {
       // Слитные «2πt», «tsin» разбираем жадно по известным словам.
       let word = s.slice(i, j).toLowerCase();
       while (word.length) {
-        const known = ['arcsin', 'arccos', 'arctg', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'sqrt', 'sin', 'cos', 'tan', 'ctg', 'cot', 'exp', 'abs', 'tg', 'ln', 'sh', 'ch', 'th', 'pi', 'π', 't'].find((w) => word.startsWith(w));
+        const known = ['arcsin', 'arccos', 'arctg', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'sqrt', 'sin', 'cos', 'tan', 'ctg', 'cot', 'exp', 'abs', 'tg', 'ln', 'sh', 'ch', 'th', 'pi', 'π', 't', ...vars].find((w) => word.startsWith(w));
         if (!known) return `неизвестное обозначение «${word}»`;
         out.push({ t: 'id', v: known });
         word = word.slice(known.length);
@@ -96,9 +99,11 @@ function tokenize(src: string): Tok[] | string {
   return out;
 }
 
-export function parseExpr(src: string): ParseResult {
+export function parseExpr(src: string, opts: { vars?: string[] } = {}): ParseResult {
   if (!src.trim()) return { ok: true, e: { k: 'num', v: 0 } };
-  const raw = tokenize(src);
+  // Длинные имена — раньше коротких: «vx» — не «v·x».
+  const vars = [...(opts.vars ?? [])].map((v) => v.toLowerCase()).sort((a, b) => b.length - a.length);
+  const raw = tokenize(src, vars);
   if (typeof raw === 'string') return { ok: false, error: raw };
   const toks: Tok[] = raw;
   let p = 0;
@@ -157,6 +162,7 @@ export function parseExpr(src: string): ParseResult {
     }
     if (x.t === 'id') {
       if (x.v === 't') return { k: 't' };
+      if (vars.includes(x.v)) return { k: 'var', n: x.v };
       if (x.v === 'pi' || x.v === 'π') return { k: 'num', v: Math.PI };
       const f = FN_ALIAS[x.v];
       // Аргумент функции: в скобках или следующий множитель («sin 2t» = sin(2t)).
@@ -184,26 +190,28 @@ export function parseExpr(src: string): ParseResult {
   }
 }
 
-export function evalExpr(e: Expr, t: number): number {
+export function evalExpr(e: Expr, t: number, vars?: Record<string, number>): number {
   switch (e.k) {
     case 'num':
       return e.v;
     case 't':
       return t;
+    case 'var':
+      return vars?.[e.n] ?? NaN;
     case 'neg':
-      return -evalExpr(e.a, t);
+      return -evalExpr(e.a, t, vars);
     case 'add':
-      return evalExpr(e.a, t) + evalExpr(e.b, t);
+      return evalExpr(e.a, t, vars) + evalExpr(e.b, t, vars);
     case 'sub':
-      return evalExpr(e.a, t) - evalExpr(e.b, t);
+      return evalExpr(e.a, t, vars) - evalExpr(e.b, t, vars);
     case 'mul':
-      return evalExpr(e.a, t) * evalExpr(e.b, t);
+      return evalExpr(e.a, t, vars) * evalExpr(e.b, t, vars);
     case 'div':
-      return evalExpr(e.a, t) / evalExpr(e.b, t);
+      return evalExpr(e.a, t, vars) / evalExpr(e.b, t, vars);
     case 'pow':
-      return Math.pow(evalExpr(e.a, t), evalExpr(e.b, t));
+      return Math.pow(evalExpr(e.a, t, vars), evalExpr(e.b, t, vars));
     case 'fn': {
-      const x = evalExpr(e.a, t);
+      const x = evalExpr(e.a, t, vars);
       switch (e.f) {
         case 'sin':
           return Math.sin(x);
@@ -242,12 +250,13 @@ export function evalExpr(e: Expr, t: number): number {
 
 const N = (v: number): Expr => ({ k: 'num', v });
 const isN = (e: Expr, v?: number) => e.k === 'num' && (v === undefined || Math.abs(e.v - v) < 1e-15);
-const hasT = (e: Expr): boolean => (e.k === 't' ? true : e.k === 'num' ? false : e.k === 'fn' || e.k === 'neg' ? hasT(e.a) : hasT(e.a) || hasT(e.b));
+const hasT = (e: Expr): boolean => (e.k === 't' ? true : e.k === 'num' || e.k === 'var' ? false : e.k === 'fn' || e.k === 'neg' ? hasT(e.a) : hasT(e.a) || hasT(e.b));
 
 export function simplify(e: Expr): Expr {
   switch (e.k) {
     case 'num':
     case 't':
+    case 'var':
       return e;
     case 'neg': {
       const a = simplify(e.a);
@@ -312,6 +321,7 @@ export function diff(e: Expr): Expr {
     if (!hasT(x)) return N(0);
     switch (x.k) {
       case 'num':
+      case 'var':
         return N(0);
       case 't':
         return N(1);
@@ -374,6 +384,8 @@ export function printExpr(e: Expr, parent = 0): string {
       return e.v < 0 ? wrap(fmtNum(e.v), 2) : fmtNum(e.v);
     case 't':
       return 't';
+    case 'var':
+      return e.n;
     case 'neg':
       return wrap(`−${printExpr(e.a, 3)}`, 2);
     case 'add':
@@ -384,7 +396,7 @@ export function printExpr(e: Expr, parent = 0): string {
       const l = printExpr(e.a, 3),
         r = printExpr(e.b, 3);
       // Число перед буквой или функцией — без знака умножения: 2t, 3sin(t).
-      const tight = e.a.k === 'num' && (e.b.k === 't' || e.b.k === 'fn' || e.b.k === 'pow');
+      const tight = e.a.k === 'num' && (e.b.k === 't' || e.b.k === 'var' || e.b.k === 'fn' || e.b.k === 'pow');
       return wrap(tight ? `${l}${r}` : `${l}·${r}`, 3);
     }
     case 'div':
@@ -398,3 +410,12 @@ export function printExpr(e: Expr, parent = 0): string {
   }
 }
 
+
+/** Входит ли переменная (или t) в формулу. */
+export function usesVar(e: Expr, n: string): boolean {
+  if (e.k === 'num') return false;
+  if (e.k === 't') return n === 't';
+  if (e.k === 'var') return e.n === n;
+  if (e.k === 'neg' || e.k === 'fn') return usesVar(e.a, n);
+  return usesVar(e.a, n) || usesVar(e.b, n);
+}

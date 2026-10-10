@@ -2,7 +2,8 @@
 import { b, sub, v, type AnswerRow, type Block, type Doc, type Inline, type Step } from '../../../shared/doc';
 import { fmt } from '../../../shared/format';
 import { G } from '../../rotation/model/rotation';
-import type { PointProblem, PointResult } from '../model/point';
+import { printExpr, simplify } from '../../../shared/expr';
+import { parseForm, type PointProblem, type PointResult } from '../model/point';
 
 const f = (x: number) => fmt(x, 4);
 const sg = (x: number, first = false) => (x < 0 ? (first ? '−' : ' − ') : first ? '' : ' + ') + f(Math.abs(x));
@@ -32,9 +33,12 @@ export function pointDoc(pr: PointProblem, r: PointResult, opts: { explain?: boo
     if (pr.c) items.push([`упругая сила −cx, c = ${f(pr.c)}`]), terms.push([sg(-pr.c, !terms.length), v('x')]);
     if (pr.kv) items.push([`сопротивление, пропорциональное скорости: −k₁v, k₁ = ${f(pr.kv)}`]), terms.push([sg(-pr.kv, !terms.length), v('v')]);
     if (pr.kq) items.push([`сопротивление, пропорциональное квадрату скорости: −k₂v|v|, k₂ = ${f(pr.kq)}`]), terms.push([sg(-pr.kq, !terms.length), v('v'), '|', v('v'), '|']);
+    const fe = parseForm(pr.form).e;
+    if (fe) items.push([`сила, заданная формулой: F(t, x, v) = ${printExpr(simplify(fe))}`]), terms.push([terms.length ? ' + ' : '', `(${printExpr(simplify(fe))})`]);
     if (r.Ffr) items.push([`нормальная реакция N = P·cos α = ${f(r.P * Math.cos((pr.alpha * Math.PI) / 180))} ${FU}; сила трения F = fN = ${f(pr.f)}·N = ${f(r.Ffr)} ${FU} — против скорости`]), terms.push([sg(-r.Ffr, !terms.length), '·sign ', v('v')]);
     const bl: Block[] = [{ k: 'p', c: [`Ось x направлена ${dirTxt}. Силы, действующие на точку, в проекции на x:`] }, { k: 'ul', items }];
     ex(bl, 'Нормальная реакция плоскости и составляющая силы тяжести, перпендикулярная движению, уравновешены (ускорения поперёк прямой нет), поэтому N = P cos α. Сила трения скольжения направлена против скорости.');
+    if (fe) ex(bl, 'В формуле силы t — время, x — координата, v — проекция скорости на ось x (со знаком: сопротивление против движения записывают через abs(v) или v·abs(v)). Сила входит в уравнение со своим знаком: «+» — по оси x.');
     steps.push({ title: 'Силы, действующие на точку', blocks: bl });
   }
   // 2. Уравнение.

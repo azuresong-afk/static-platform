@@ -43,6 +43,12 @@ export interface BodyForce {
   to?: number;
   /** Модуль неизвестен — ищем (направление известно). */
   unknown?: boolean;
+  /**
+   * Связанная сила: модуль равен k·(модуль силы с номером link), например натяжения ветвей ремня T = 2t.
+   * Если та сила неизвестна, связанная входит в уравнения той же неизвестной; если известна — известна и эта.
+   */
+  link?: number;
+  k?: number;
   /** Обозначение (G, P, T…). */
   name?: string;
 }
@@ -85,6 +91,11 @@ export interface Action {
   key?: string;
   /** Для реакций — номер опоры. */
   sup?: number;
+  /** Связанная сила: множитель к неизвестной key и её обозначение. */
+  mult?: number;
+  of?: { L: string; S: string };
+  /** Известная сила, связанная с известной: T = k·t (только для пояснения; в уравнения входит модулем val). */
+  rel?: { k: number; of: { L: string; S: string } };
 }
 
 export interface Candidate {
@@ -101,12 +112,16 @@ export interface Candidate {
 export interface BodyModel {
   unknowns: (Action & { key: string })[];
   knowns: (Action & { val: number })[];
+  /** Силы, связанные с неизвестными (T = k·t). */
+  dependents: (Action & { key: string })[];
   cands: Candidate[];
 }
 
 export function buildModel(b: Body): BodyModel {
   const unknowns: (Action & { key: string })[] = [];
   const knowns: (Action & { val: number })[] = [];
+  /** Связанные с неизвестными силы (T = k·t): входят в уравнения неизвестной t с множителем k. */
+  const dependents: (Action & { key: string })[] = [];
   const used = new Set<string>();
   let sup = 0;
   const addU = (L: string, S: string, r: V3, u: V3) => {
@@ -127,7 +142,12 @@ export function buildModel(b: Body): BodyModel {
   const cnt: Record<string, number> = {};
   b.forces.forEach((f) => (cnt[f.name ?? 'F'] = (cnt[f.name ?? 'F'] ?? 0) + 1));
   const idx: Record<string, number> = {};
-  b.forces.forEach((f) => {
+  // Связь действует, если ведущая сила существует, не та же и сама не связана.
+  const linkOf = (j: number) => {
+    const f = b.forces[j];
+    return f.link != null && f.link !== j && b.forces[f.link] && b.forces[f.link].link == null ? f.link : null;
+  };
+  const info = b.forces.map((f) => {
     const L = f.name ?? 'F';
     idx[L] = (idx[L] ?? 0) + 1;
     const S = cnt[L] > 1 ? String(idx[L]) : '';
@@ -135,17 +155,30 @@ export function buildModel(b: Body): BodyModel {
     const dir: V3 = f.mode === 'toward' ? sub3(P3(b, f.to ?? 0), r) : (f.c ?? [0, 0, -1]);
     // По составляющим модуль — длина вектора; направление — его орт.
     const mag = f.mode === 'toward' ? f.F : norm(dir);
-    const u = unit(dir);
+    return { L, S, r, u: unit(dir), mag, key: '' };
+  });
+  b.forces.forEach((f, j) => {
+    if (linkOf(j) != null) return;
+    const { L, S, r, u, mag } = info[j];
     if (f.unknown) {
       let key = L + (S ? '_' + S : '');
       while (used.has(key)) key += "'";
       used.add(key);
+      info[j].key = key;
       unknowns.push({ L, S, kind: 'f', r, u, key });
     } else knowns.push({ L, S, kind: 'f', r, u, val: mag });
   });
+  b.forces.forEach((f, j) => {
+    const m = linkOf(j);
+    if (m == null) return;
+    const { L, S, r, u } = info[j];
+    const k = f.k ?? 1;
+    if (info[m].key) dependents.push({ L, S, kind: 'f', r, u, key: info[m].key, mult: k, of: { L: info[m].L, S: info[m].S } });
+    else knowns.push({ L, S, kind: 'f', r, u, val: k * info[m].mag, rel: { k, of: { L: info[m].L, S: info[m].S } } });
+  });
   b.pairs.forEach((p, i) => knowns.push({ L: p.name ?? 'M', S: b.pairs.length > 1 ? String(i + 1) : '', kind: 'm', r: [0, 0, 0], u: unit(p.M), val: norm(p.M) }));
 
-  const all: Action[] = [...unknowns, ...knowns];
+  const all: Action[] = [...unknowns, ...dependents, ...knowns];
   const coef = (a: Action, type: 'F' | 'M', axis: Axis, P: V3 | null) => {
     const e = AX[axis];
     if (type === 'F') return a.kind === 'f' ? dot(a.u, e) : 0;
@@ -160,7 +193,7 @@ export function buildModel(b: Body): BodyModel {
       const k = clean(coef(a, type, axis, Pv));
       if (Math.abs(k) < 1e-12) continue;
       c.terms.push({ a, c: k });
-      if (a.key) c.coeffs[a.key] = (c.coeffs[a.key] ?? 0) + k;
+      if (a.key) c.coeffs[a.key] = (c.coeffs[a.key] ?? 0) + k * (a.mult ?? 1);
       else c.cst += k * (a.val as number);
     }
     cands.push(c);
@@ -169,7 +202,7 @@ export function buildModel(b: Body): BodyModel {
   const supportPts = [...new Set(b.supports.map((s) => s.at))];
   for (const P of supportPts) for (const a of AXES) add('M', a, P);
   for (const a of AXES) add('F', a, null);
-  return { unknowns, knowns, cands };
+  return { unknowns, knowns, dependents, cands };
 }
 
 export type BodyStatus = 'ok' | 'indeterminate' | 'mechanism' | 'noequilibrium' | 'nosupport';

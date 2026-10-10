@@ -4,10 +4,12 @@
  * Точка движется по прямой, наклонённой к горизонту под углом α (0 — горизонталь, 90° — вертикаль).
  * Ось x направлена вдоль прямой вверх или вниз. Силы вдоль x:
  *   проекция силы тяжести ∓P sin α; трение скольжения −f·P·cos α·sign v (N = P cos α);
- *   F₀ + a·t + F₁ sin pt; упругая −c·x; сопротивление −k₁v и −k₂v|v|.
+ *   F₀ + a·t + F₁ sin pt; упругая −c·x; сопротивление −k₁v и −k₂v|v|; любая сила формулой F(t, x, v)
+ *   (притяжение ∝ 1/x², сопротивление, зависящее от пути, −3√v… — Яблонский Д.2, Мещерский 27.35, 27.40).
  * Уравнение m·dv/dt = ΣF_x — то же по форме, что уравнение вращения J·dω/dt = ΣM, поэтому решается тем же
  * интегратором (Рунге — Кутта с контролем шага, точная остановка сухим трением).
  */
+import { parseExpr, evalExpr, usesVar, type Expr } from '../../../shared/expr';
 import { G, solveEq, type EqResult, type RotEq } from '../../rotation/model/rotation';
 
 export interface PointProblem {
@@ -28,6 +30,8 @@ export interface PointProblem {
   c: number;
   kv: number;
   kq: number;
+  /** Дополнительная сила вдоль x — формула от t, x, v (пусто — нет). */
+  form?: string;
   x0: number;
   v0: number;
   /** Что ищем: состояние в момент t, когда v = v1, когда x = x1. */
@@ -54,6 +58,13 @@ export interface PointResult {
 const rad = (a: number) => (a * Math.PI) / 180;
 const clean = (v: number) => (Math.abs(v) < 1e-12 ? 0 : v);
 
+/** Формула силы F(t, x, v): разбор (пусто — силы нет). */
+export function parseForm(src: string | undefined): { e: Expr | null; error: string | null } {
+  if (!src?.trim()) return { e: null, error: null };
+  const r = parseExpr(src, { vars: ['x', 'v'] });
+  return r.ok ? { e: r.e, error: null } : { e: null, error: r.error };
+}
+
 export function toRotEq(pr: PointProblem): { eq: RotEq; mass: number; P: number; Gx: number; Ffr: number } {
   const mass = pr.byWeight ? pr.m / G : pr.m;
   const P = pr.byWeight ? pr.m : pr.m * G;
@@ -78,12 +89,14 @@ export function toRotEq(pr: PointProblem): { eq: RotEq; mass: number; P: number;
     omega1: pr.v1,
     phi1: pr.x1,
   };
+  const fe = parseForm(pr.form).e;
+  if (fe) eq.extra = { f: (t, x, v) => evalExpr(fe, t, { x, v }), t: usesVar(fe, 't'), phi: usesVar(fe, 'x'), w: usesVar(fe, 'v') };
   return { eq, mass, P, Gx, Ffr };
 }
 
 /** Предельная скорость: F(v) = 0 при силах, зависящих только от v, и наличии сопротивления. */
 export function limitSpeed(pr: PointProblem, C: number, Ffr: number): number | null {
-  if (pr.at !== 0 || (pr.F1 !== 0 && pr.p !== 0) || pr.c !== 0 || (pr.kv === 0 && pr.kq === 0)) return null;
+  if (pr.at !== 0 || (pr.F1 !== 0 && pr.p !== 0) || pr.c !== 0 || (pr.kv === 0 && pr.kq === 0) || pr.form?.trim()) return null;
   // Направление установившегося движения — по знаку постоянной силы (с трением против движения).
   const dir = Math.sign(C) || 0;
   if (dir === 0 || Math.abs(C) <= Ffr) return null;
@@ -103,8 +116,13 @@ export function solvePoint(pr: PointProblem): PointResult {
   const errors: string[] = [];
   if (!(pr.m > 0)) errors.push('Масса (вес) точки — положительное число.');
   if (pr.f < 0 || pr.kv < 0 || pr.kq < 0) errors.push('Коэффициенты трения и сопротивления не могут быть отрицательными.');
+  const fe = parseForm(pr.form);
+  if (fe.error) errors.push(`Сила F(t, x, v): ${fe.error}.`);
   const { eq, mass, P, Gx, Ffr } = toRotEq(pr);
   const r = solveEq(eq, false);
-  const all = [...errors, ...r.errors.map((e) => e.replace('Момент инерции', 'Масса').replace('момент инерции', 'масса'))];
+  const all = [
+    ...errors,
+    ...r.errors.map((e) => e.replace('Момент инерции', 'Масса').replace('момент инерции', 'масса').replace('φ =', 'x =').replace('ω =', 'v =')),
+  ];
   return { ok: !all.length && r.ok, errors: all, mass, P, Gx, Ffr, eq: r, vLim: limitSpeed(pr, pr.F0 + Gx, Ffr) };
 }

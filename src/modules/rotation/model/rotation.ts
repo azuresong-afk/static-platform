@@ -55,6 +55,8 @@ export interface RotEq {
   omega1: number;
   /** Целевой угол (координата) — для ask = 'phi'. */
   phi1?: number;
+  /** Дополнительный момент (сила) — произвольная функция состояния; флаги — от чего она зависит. */
+  extra?: { f: (t: number, phi: number, w: number) => number; t: boolean; phi: boolean; w: boolean };
 }
 export interface KItem {
   name: string;
@@ -141,13 +143,16 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
   const Jbody = bodyInertia(e.body, byWeight);
   const J = Jbody + e.loads.reduce((s, l) => s + massOf(l.m, byWeight) * l.r ** 2, 0);
   const Mconst = e.M0 + e.loads.reduce((s, l) => s + (l.down ? 1 : -1) * (byWeight ? l.m : l.m * G) * l.r, 0);
-  const M = (t: number, phi: number, w: number) => Mconst + e.at * t + e.m0 * Math.sin(e.p * t) - e.c * phi - e.Pa * Math.sin(phi) - e.kv * w - e.kq * w * Math.abs(w);
+  const ex = e.extra;
+  const M = (t: number, phi: number, w: number) =>
+    Mconst + e.at * t + e.m0 * Math.sin(e.p * t) - e.c * phi - e.Pa * Math.sin(phi) - e.kv * w - e.kq * w * Math.abs(w) + (ex ? ex.f(t, phi, w) : 0);
   const restoring = e.c + e.Pa;
   const period = restoring > 0 && J > 0 ? 2 * Math.PI * Math.sqrt(J / restoring) : null;
-  const timeDep = e.at !== 0 || (e.m0 !== 0 && e.p !== 0);
-  const phiDep = e.c !== 0 || e.Pa !== 0;
-  const kind: EqResult['kind'] =
-    !timeDep && !phiDep && e.kv === 0 && e.kq === 0
+  const timeDep = e.at !== 0 || (e.m0 !== 0 && e.p !== 0) || !!ex?.t;
+  const phiDep = e.c !== 0 || e.Pa !== 0 || !!ex?.phi;
+  const kind: EqResult['kind'] = ex
+    ? 'general'
+    : !timeDep && !phiDep && e.kv === 0 && e.kq === 0
       ? 'const'
       : !timeDep && !phiDep && e.kq === 0
         ? 'viscous'
@@ -184,6 +189,8 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
     phi = e.phi0,
     w = e.omega0;
   const curve = [{ t, phi, w }];
+  /** Правая часть не определена (формула силы: деление на нуль, корень из отрицательного числа…). */
+  let bad = !Number.isFinite(M(t, phi, w));
   const step = (t0: number, p0: number, w0: number, dt: number): [number, number] => {
     // Направление трения: по ω в начале шага; если тело стоит — по моменту, который его сдвигает.
     const m0 = M(t0, p0, w0);
@@ -206,7 +213,7 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
   const val = (p: number, ww: number) => (byPhi ? p : ww);
   let tStop: number | null = null;
   let found = e.ask !== 't' && Math.abs(val(phi, w) - target) < 1e-15;
-  for (let n = 0; n < 2_000_000 && !found; n++) {
+  for (let n = 0; n < 2_000_000 && !found && !bad; n++) {
     let dt = Math.min(h, tEnd - t);
     if (dt <= 0) break;
     // Контроль шага: два полушага против одного шага.
@@ -214,6 +221,14 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
       const [p1, w1] = step(t, phi, w, dt);
       const [pa, wa] = step(t, phi, w, dt / 2);
       const [p2, w2] = step(t + dt / 2, pa, wa, dt / 2);
+      if (![p1, w1, p2, w2].every(Number.isFinite)) {
+        if (dt > 1e-9 && tries < 29) {
+          dt /= 2;
+          continue;
+        }
+        bad = true;
+        break;
+      }
       const err = Math.max(Math.abs(p2 - p1) / (1 + Math.abs(p2)), Math.abs(w2 - w1) / (1 + Math.abs(w2)));
       // Сухое трение: смена знака ω — останавливаемся точно в нуле (до контроля шага: на изломе он не сходится).
       if (e.Mf > 0 && w !== 0 && ((Math.sign(w2) !== Math.sign(w) && w2 !== 0) || (Math.sign(w1) !== Math.sign(w) && w1 !== 0))) {
@@ -281,6 +296,7 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
       if (err < 1e-13) h = Math.min(dt * 2, hMax);
       break;
     }
+    if (bad) break;
     if (curve.length < 4000 && (curve.length === 0 || t - curve[curve.length - 1].t > 0)) curve.push({ t, phi, w });
     if (tStop != null) {
       if (e.ask === 't') {
@@ -293,6 +309,19 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
     // Установившийся режим (момент зависит только от ω): скорость больше не меняется — цель недостижима
     // (для поиска по углу — только если тело при этом стоит).
     if (e.ask !== 't' && !timeDep && !phiDep && Math.abs(acc(t, phi, w)) < 1e-10 * (1 + Math.abs(w)) && (!byPhi || Math.abs(w) < 1e-12)) break;
+  }
+  if (bad) {
+    const n = (v: number) => String(+v.toPrecision(6)).replace('.', ',').replace('-', '−');
+    return {
+      ...empty,
+      errors: [
+        `Правая часть уравнения не определена при t = ${n(t)} (φ = ${n(phi)}, ω = ${n(w)}): деление на нуль, корень или логарифм из отрицательного числа.`,
+      ],
+      t,
+      phi,
+      w,
+      curve,
+    };
   }
   if (e.ask !== 't' && !found) return { ...empty, ok: true, errors: [], t, phi, w, eps: acc(t, phi, w), note: tStop != null ? 'stuck' : 'never', tStop, curve };
   curve.push({ t, phi, w });

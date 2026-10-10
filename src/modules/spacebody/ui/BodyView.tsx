@@ -173,9 +173,35 @@ export function BodyView({ chrome, store }: { chrome: Chrome; store: BodyStore }
                   <button type="button" className="del" aria-label="Убрать силу" onClick={() => store.removeForce(j)}>
                     ×
                   </button>
-                  <label className="chk" style={{ gridColumn: '1 / -1' }}>
-                    <input type="checkbox" checked={!!f.unknown} onChange={(e) => store.setForce(j, { unknown: e.target.checked || undefined })} /> Модуль неизвестен — найти (направление задано)
-                  </label>
+                  {f.link == null && (
+                    <label className="chk" style={{ gridColumn: '1 / -1' }}>
+                      <input type="checkbox" checked={!!f.unknown} onChange={(e) => store.setForce(j, { unknown: e.target.checked || undefined })} /> Модуль неизвестен — найти (направление задано)
+                    </label>
+                  )}
+                  {b.forces.length > 1 && b.forces.some((g) => g.link === j) ? (
+                    <p className="empty" style={{ gridColumn: '1 / -1', margin: 0 }}>
+                      С модулем этой силы связаны: {b.forces.flatMap((g, i) => (g.link === j ? [`№${i + 1}`] : [])).join(', ')}
+                    </p>
+                  ) : b.forces.length > 1 && (
+                    <div className="sb-link" style={{ gridColumn: '1 / -1' }}>
+                      <label>
+                        Модуль{' '}
+                        <select aria-label="Модуль связан с силой" id={`b-link${j}`} value={f.link ?? ''} onChange={(e) => store.setLink(j, e.target.value === '' ? null : +e.target.value)}>
+                          <option value="">задан сам по себе</option>
+                          {b.forces.map((g, i) =>
+                            i === j || g.link != null ? null : (
+                              <option key={i} value={i}>
+                                = k · сила №{i + 1}
+                                {g.unknown ? ' (неизвестная)' : ''}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+                      {f.link != null && <Num id={`b-k${j}`} label="k" value={f.k ?? 1} onType={(v) => store.typeForce(j, 'k', v)} onEnd={() => store.endSession(`f:${j}:k`)} />}
+                      {f.link != null && <span className="hint">{f.mode === 'comp' ? 'Fx, Fy, Fz задают только направление' : 'модуль F не используется'}</span>}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

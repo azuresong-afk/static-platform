@@ -5,6 +5,24 @@ import type { NoticeData } from '../../../shared/ui/Notice';
 import type { Axis, Body, BodyForce, BodyPair, BodySupport, SupportKind, V3 } from '../model/body';
 import { BODY_PRESETS, type BodyPresetKey } from '../presets';
 
+/** Оставить силы с keep[i] = true и пересчитать номера в связях (связь с удалённой силой снимается). */
+function relink(forces: BodyForce[], keep: boolean[]): BodyForce[] {
+  const map: number[] = [];
+  let n = 0;
+  keep.forEach((k, i) => (map[i] = k ? n++ : -1));
+  return forces
+    .filter((_, i) => keep[i])
+    .map((f) => {
+      if (f.link == null) return f;
+      const to = map[f.link] ?? -1;
+      if (to >= 0) return { ...f, link: to };
+      const g = { ...f };
+      delete g.link;
+      delete g.k;
+      return g;
+    });
+}
+
 export const BODY_MODULE = 'spacebody';
 const MAX_POINTS = 24;
 const LETTERS = 'ABCDEHKLMNOPQRTUVWZ'.split('');
@@ -42,8 +60,11 @@ export function parseBody(raw: unknown): { ok: true; body: Body } | { ok: false;
       ? [{ kind: s.kind as SupportKind, at: s.at as number, ...(s.kind === 'bearing' ? { axis: s.axis as Axis } : {}), ...(s.kind === 'rod' ? { to: s.to as number } : {}), ...(s.kind === 'normal' ? { n: s.n as V3 } : {}) }]
       : (e.push(`Опора №${j + 1}: вид, точка и параметры.`), []),
   );
+  const nf = raw.forces.length;
+  const linkOk = (f: Record<string, unknown>, j: number) =>
+    f.link == null || (Number.isInteger(f.link) && (f.link as number) >= 0 && (f.link as number) < nf && f.link !== j && (f.k == null || (isNum(f.k) && f.k > 0)));
   const forces: BodyForce[] = raw.forces.flatMap((f: unknown, j) =>
-    isObj(f) && idx(f.at) && (f.mode === 'comp' ? isV3(f.c) : f.mode === 'toward' && idx(f.to) && isNum(f.F))
+    isObj(f) && idx(f.at) && (f.mode === 'comp' ? isV3(f.c) : f.mode === 'toward' && idx(f.to) && isNum(f.F)) && linkOk(f, j)
       ? [
           {
             at: f.at as number,
@@ -52,9 +73,10 @@ export function parseBody(raw: unknown): { ok: true; body: Body } | { ok: false;
             ...(f.mode === 'comp' ? { c: f.c as V3 } : { to: f.to as number }),
             ...(f.unknown === true ? { unknown: true } : {}),
             ...(typeof f.name === 'string' ? { name: f.name.slice(0, 3) } : {}),
+            ...(f.link != null ? { link: f.link as number, k: isNum(f.k) ? f.k : 1 } : {}),
           },
         ]
-      : (e.push(`Сила №${j + 1}: точка и составляющие или направление к точке.`), []),
+      : (e.push(`Сила №${j + 1}: точка и составляющие или направление к точке; связь — номер другой силы и k > 0.`), []),
   );
   const pairs: BodyPair[] = Array.isArray(raw.pairs) ? raw.pairs.flatMap((p: unknown) => (isObj(p) && isV3(p.M) ? [{ M: p.M, ...(typeof p.name === 'string' ? { name: p.name.slice(0, 3) } : {}) }] : [])) : [];
   const edges = Array.isArray(raw.edges) ? (raw.edges.filter((q) => Array.isArray(q) && idx(q[0]) && idx(q[1])) as [number, number][]) : [];
@@ -119,7 +141,11 @@ export class BodyStore {
     this.edit((b) => {
       b.points.splice(i, 1);
       b.supports = b.supports.filter((s) => s.at !== i && s.to !== i).map((s) => ({ ...s, at: sh(s.at), ...(s.to != null ? { to: sh(s.to) } : {}) }));
-      b.forces = b.forces.filter((f) => f.at !== i && f.to !== i).map((f) => ({ ...f, at: sh(f.at), ...(f.to != null ? { to: sh(f.to) } : {}) }));
+      const keep = b.forces.map((f) => f.at !== i && f.to !== i);
+      b.forces = relink(
+        b.forces.map((f) => ({ ...f, at: sh(f.at), ...(f.to != null ? { to: sh(f.to) } : {}) })),
+        keep,
+      );
       b.edges = b.edges.filter((q) => !q.includes(i)).map((q) => [sh(q[0]), sh(q[1])] as [number, number]);
       b.faces = b.faces.filter((q) => !q.includes(i)).map((q) => q.map(sh));
     });
@@ -163,11 +189,12 @@ export class BodyStore {
       b.forces[j] = f;
     });
   };
-  typeForce = (j: number, key: 'F' | 0 | 1 | 2, v: number) => {
+  typeForce = (j: number, key: 'F' | 'k' | 0 | 1 | 2, v: number) => {
     this.touch(`f:${j}:${key}`);
     this.edit((b) => {
       const f = b.forces[j];
       if (key === 'F') f.F = v;
+      else if (key === 'k') f.k = v;
       else {
         const c = [...(f.c ?? [0, 0, 0])] as V3;
         c[key] = v;
@@ -177,7 +204,25 @@ export class BodyStore {
   };
   removeForce = (j: number) => {
     this.commit();
-    this.edit((b) => b.forces.splice(j, 1));
+    this.edit((b) => (b.forces = relink(b.forces, b.forces.map((_, i) => i !== j))));
+  };
+  /** Связать модуль силы j с силой link (множитель k) или убрать связь (link = null). */
+  setLink = (j: number, link: number | null) => {
+    this.commit();
+    this.edit((b) => {
+      const f = { ...b.forces[j] };
+      // Цепочек связей нет: ведущая сила сама не связана, и с самой связываемой не связана ни одна другая.
+      if (link != null && (b.forces[link]?.link != null || b.forces.some((g) => g.link === j))) return;
+      if (link == null || link === j) {
+        delete f.link;
+        delete f.k;
+      } else {
+        f.link = link;
+        f.k ??= 1;
+        delete f.unknown;
+      }
+      b.forces[j] = f;
+    });
   };
   undo = () => {
     const p = this.hist.undo(this.snap());

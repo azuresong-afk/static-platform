@@ -58,7 +58,8 @@ export function presetTask(k: AnyPresetKey, base?: PointTask): { task: PointTask
 function parseLine(raw: unknown): PointProblem | null {
   if (!isObj(raw) || !NUM_KEYS.every((k) => isNum(raw[k])) || !['t', 'v', 'x'].includes(raw.ask as string)) return null;
   const nums = Object.fromEntries(NUM_KEYS.map((k) => [k, raw[k]])) as Record<PointNumKey, number>;
-  return { ...nums, byWeight: raw.byWeight === true, up: raw.up === true, ask: raw.ask as PointProblem['ask'] };
+  if (raw.form != null && typeof raw.form !== 'string') return null;
+  return { ...nums, byWeight: raw.byWeight === true, up: raw.up === true, ask: raw.ask as PointProblem['ask'], ...(typeof raw.form === 'string' && raw.form.trim() ? { form: raw.form.slice(0, 200) } : {}) };
 }
 function parseFirst(raw: unknown): FirstProblem | null {
   if (!isObj(raw) || !FIRST_NUM.every((k) => isNum(raw[k])) || !['x', 'y', 'z'].every((k) => typeof raw[k] === 'string') || !['none', '-y', '+y', '-z', '+x', '-x'].includes(raw.gravity as string)) return null;
@@ -68,7 +69,15 @@ function parseFirst(raw: unknown): FirstProblem | null {
 function parsePlane(raw: unknown): PlaneProblem | null {
   if (!isObj(raw) || !PLANE_NUM.every((k) => isNum(raw[k])) || !['t', 'land', 'apex', 'x'].includes(raw.ask as string)) return null;
   const nums = Object.fromEntries(PLANE_NUM.map((k) => [k, raw[k]])) as Record<PlaneNumKey, number>;
-  return { ...nums, byWeight: raw.byWeight === true, gravity: raw.gravity !== false, ask: raw.ask as PlaneProblem['ask'] };
+  if ((raw.formX != null && typeof raw.formX !== 'string') || (raw.formY != null && typeof raw.formY !== 'string')) return null;
+  return {
+    ...nums,
+    byWeight: raw.byWeight === true,
+    gravity: raw.gravity !== false,
+    ask: raw.ask as PlaneProblem['ask'],
+    ...(typeof raw.formX === 'string' && raw.formX.trim() ? { formX: raw.formX.slice(0, 200) } : {}),
+    ...(typeof raw.formY === 'string' && raw.formY.trim() ? { formY: raw.formY.slice(0, 200) } : {}),
+  };
 }
 
 export function parsePoint(raw: unknown): { ok: true; problem: PointTask } | { ok: false; errors: string[] } {
@@ -139,6 +148,14 @@ export class PointStore {
     this.commit();
     this.edit((p) => (p[p.mode].byWeight = on));
   };
+  /** Сила-формула F(t, x, v) (пустая строка — убрать). */
+  typeForm = (s: string) => {
+    this.touch('n:form');
+    this.edit((p) => {
+      if (s.trim()) p.line.form = s.slice(0, 200);
+      else delete p.line.form;
+    });
+  };
   setAsk = (ask: PointProblem['ask']) => {
     this.commit();
     this.edit((p) => (p.line.ask = ask));
@@ -160,6 +177,14 @@ export class PointStore {
   typePlane = (key: PlaneNumKey, v: number) => {
     this.touch(`q:${key}`);
     this.edit((p) => (p.plane[key] = v));
+  };
+  /** Составляющие силы формулами (пустая строка — убрать). */
+  typePlaneForm = (key: 'formX' | 'formY', s: string) => {
+    this.touch(`q:${key}`);
+    this.edit((p) => {
+      if (s.trim()) p.plane[key] = s.slice(0, 200);
+      else delete p.plane[key];
+    });
   };
   setPlaneGravity = (on: boolean) => {
     this.commit();

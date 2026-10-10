@@ -1,9 +1,9 @@
 /** Решения: первая задача динамики (силы по закону движения) и криволинейное движение в плоскости. */
 import { b, sub, v, type AnswerRow, type Block, type Doc, type Inline, type Step } from '../../../shared/doc';
-import { printExpr } from '../../../shared/expr';
+import { printExpr, simplify } from '../../../shared/expr';
 import { fmt } from '../../../shared/format';
 import type { FirstProblem, FirstResult } from '../model/first';
-import type { PlaneProblem, PlaneResult } from '../model/plane';
+import { parsePlaneForm, type PlaneProblem, type PlaneResult } from '../model/plane';
 
 const f = (x: number) => fmt(x, 4);
 const fp = (x: number) => (x < 0 ? `(${f(x)})` : f(x));
@@ -78,6 +78,11 @@ export function planeDoc(pr: PlaneProblem, r: PlaneResult, opts: { explain?: boo
     if (pr.kq) items.push([`сопротивление −k₂|v|v, k₂ = ${f(pr.kq)}`]), X.push(`− ${f(pr.kq)}vẋ`), Y.push(`− ${f(pr.kq)}vẏ`);
     if (pr.c) items.push([`${pr.c > 0 ? 'притяжение к центру' : 'отталкивание от центра'} C(${f(pr.cx)}; ${f(pr.cy)}): −c(r − r_C), c = ${f(pr.c)}`]), X.push(`− ${f(pr.c)}(x − ${f(pr.cx)})`), Y.push(`− ${f(pr.c)}(y − ${f(pr.cy)})`);
     if (pr.q) items.push([`сила, перпендикулярная скорости: q(ẏ; −ẋ), q = ${f(pr.q)}`]), X.push(`+ ${f(pr.q)}ẏ`), Y.push(`− ${f(pr.q)}ẋ`);
+    const fX = parsePlaneForm(pr.formX).e,
+      fY = parsePlaneForm(pr.formY).e;
+    if (fX || fY) items.push([`сила, заданная формулами (vx = ẋ, vy = ẏ, v — модуль скорости): F`, sub('x'), ` = ${fX ? printExpr(simplify(fX)) : '0'}, F`, sub('y'), ` = ${fY ? printExpr(simplify(fY)) : '0'}`]);
+    if (fX) X.push(`+ (${printExpr(simplify(fX))})`);
+    if (fY) Y.push(`+ (${printExpr(simplify(fY))})`);
     const fix = (a: string[]) => (a.length ? a.join(' ').replace(/^\+ /, '').replace(/^− /, '−') : '0').replace(/− −/g, '+ ').replace(/\+ −/g, '− ');
     const bl: Block[] = [
       { k: 'ul', items },
@@ -90,7 +95,7 @@ export function planeDoc(pr: PlaneProblem, r: PlaneResult, opts: { explain?: boo
       },
       { k: 'p', c: [`Начальные условия: x₀ = ${f(pr.x0)}, y₀ = ${f(pr.y0)}; ẋ₀ = v₀ cos α = ${f(vx0)}, ẏ₀ = v₀ sin α = ${f(vy0)} м/с.`] },
     ];
-    const onlyG = !pr.kv && !pr.kq && !pr.c && !pr.q && !pr.Fx && !pr.Fy;
+    const onlyG = !pr.kv && !pr.kq && !pr.c && !pr.q && !pr.Fx && !pr.Fy && !fX && !fY;
     if (onlyG && pr.gravity)
       bl.push({ k: 'eq', lines: [{ c: ['Без сопротивления: x = x₀ + ẋ₀t,  y = y₀ + ẏ₀t − gt²/2 — траектория парабола.'] }] });
     else bl.push({ k: 'p', c: ['Систему решаем численно (метод Рунге — Кутты с контролем шага).'] });

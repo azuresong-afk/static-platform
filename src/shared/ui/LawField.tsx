@@ -1,6 +1,6 @@
 /**
  * Поле формулы от t: ошибка разбора подсвечивается, неверная формула не применяется. prep — подстановка перед проверкой
- * (например, параметр φ в разделе «Плоский механизм» заменяется числом).
+ * (например, параметр φ в разделе «Плоский механизм» заменяется числом); vars — допустимые переменные кроме t (x, v…).
  */
 import { useState } from 'react';
 import { parseExpr } from '../expr';
@@ -13,6 +13,7 @@ export function LawField({
   onEnd,
   wide = true,
   prep = (s: string) => s,
+  vars,
 }: {
   id: string;
   label: string;
@@ -21,10 +22,11 @@ export function LawField({
   onType: (s: string) => void;
   onEnd: () => void;
   prep?: (s: string) => string;
+  vars?: string[];
 }) {
   const [text, setText] = useState<string | null>(null);
   const shown = text ?? value;
-  const r = parseExpr(prep(shown));
+  const r = parseExpr(prep(shown), { vars });
   return (
     <label className="sfield" style={wide ? { gridColumn: '1 / -1' } : undefined}>
       <span>{label}</span>
@@ -39,7 +41,7 @@ export function LawField({
           placeholder="пусто — 0"
           onChange={(e) => {
             setText(e.target.value);
-            if (parseExpr(prep(e.target.value)).ok) onType(e.target.value);
+            if (parseExpr(prep(e.target.value), { vars }).ok) onType(e.target.value);
           }}
           onBlur={() => {
             setText(null);

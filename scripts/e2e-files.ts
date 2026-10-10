@@ -404,6 +404,14 @@ async function main() {
   await tab('spacebody');
   let bs = await p.innerText('#bsolution');
   check(bs.includes('статически определимо') && bs.includes('T = 20 кН') && bs.includes('8,66'), 'Мещерский 8.24: натяжение и реакции', bs.slice(0, 200));
+  await p.selectOption('#bpreset', 'shaft');
+  bs = await p.innerText('#bsolution');
+  check(bs.includes('T = 2·t = 2') && (await p.inputValue('#b-link0')) === '1' && (await p.inputValue('#b-k0')) === '2', 'связанные силы: натяжение ветви ремня T = 2t', bs.slice(0, 300));
+  // t неизвестна, P = 1 задана: (T − t)·0,2 = P·0,1 ⇒ t = 0,5, T = 1.
+  await p.click('#bforces .sbload >> nth=1 >> input[type="checkbox"]');
+  await p.click('#bforces .sbload >> nth=2 >> input[type="checkbox"]');
+  bs = await p.innerText('#bsolution');
+  check(bs.includes('связана с неизвестной') && bs.includes('t = 0,5 кН') && bs.includes('T = 2·t = 1 кН'), 'ведущая сила неизвестна: T входит через t', bs.slice(-400));
   await p.selectOption('#bpreset', 'm826');
   bs = await p.innerText('#bsolution');
   check(bs.includes('2,165') && bs.includes('−3,428'), 'Мещерский 8.26: реакция острия и подшипника', bs.slice(-300));
@@ -535,6 +543,11 @@ async function main() {
   await tab('dalembert');
   const daS = await p.innerText('#dsolution');
   check(daS.includes('Силы инерции, приведённые к центру O') && daS.includes('Уравнения кинетостатики'), 'Мещерский 42.7: силы инерции и кинетостатика', daS.slice(-300));
+  await p.selectOption('#dpreset', 'yd17');
+  const d17 = await p.innerText('#dsolution');
+  check(d17.includes('7,8431') && d17.includes('15,6863') && d17.includes('−65,8084') && (await p.inputValue('#ddrive')) === 'couple', 'Яблонский, Д.17: ε = M/J_z, ω = ετ, реакции', d17.slice(0, 300));
+  await p.selectOption('#ddrive', 'given');
+  check((await p.locator('#d-omega').count()) === 1 && (await p.locator('#d-M').count()) === 0, 'вращение: обратно к заданным ω и ε');
   await p.selectOption('#dpreset', 'm4211');
   check((await p.innerText('#dsolution')).includes('822,'), 'Мещерский 42.11: динамическое давление 822 кГ');
   await p.selectOption('#dgrav', 'none');
@@ -575,6 +588,16 @@ async function main() {
   await p.locator('#pf-x').fill('5t^2');
   await p.locator('#pf-x').blur();
   check((await p.innerText('#psolution')).includes('10t'), 'новая формула: производная 10t');
+  await p.selectOption('#ppreset', 'm2740');
+  const p40 = await p.innerText('#psolution');
+  check(p40.includes('2,4514') && p40.includes('−2v²/(3 + x)') && (await p.inputValue('#p-form')) === '-2v^2/(3 + x)', 'Мещерский 27.40: сила-формула F(t, x, v), путь 2,4514 м', p40.slice(0, 300));
+  await p.locator('#p-form').fill('-2v^2/(3 + y)');
+  check((await p.getAttribute('#p-form', 'class'))?.includes('bad') === true, 'неизвестная переменная в формуле силы подсвечена');
+  await p.locator('#p-form').fill('-v');
+  await p.locator('#p-form').blur();
+  check((await p.innerText('#psolution')).includes('F(t, x, v) = −v'), 'новая сила-формула применена');
+  await p.selectOption('#ppreset', 'yd2');
+  check((await p.innerText('#psolution')).includes('−4x − 2vx') && (await p.inputValue('#pp-formY')) === '-4y - 2vy', 'Яблонский, Д.2: составляющие силы формулами');
   await p.selectOption('#ppreset', 'p2744');
   check((await p.innerText('#psolution')).includes('Высшая точка траектории'), 'Мещерский 27.44: траектория и высшая точка');
   await p.selectOption('#pmode', 'line');

@@ -71,8 +71,25 @@ export function ShaftView({ chrome, store }: { chrome: Chrome; store: ShaftStore
             <div className="cgpar cg0">
               <Num id="d-zA" label="подпятник A: z" value={pr.zA} neg zero onType={(v) => store.typeTop('zA', v)} onEnd={end('t:zA')} />
               <Num id="d-zB" label="подшипник B: z" value={pr.zB} neg zero onType={(v) => store.typeTop('zB', v)} onEnd={end('t:zB')} />
-              <Num id="d-omega" label="ω, рад/с" value={pr.omega} neg zero onType={(v) => store.typeTop('omega', v)} onEnd={end('t:omega')} />
-              <Num id="d-eps" label="ε, рад/с²" value={pr.eps} neg zero onType={(v) => store.typeTop('eps', v)} onEnd={end('t:eps')} />
+              <label className="sfield">
+                <span>вращение</span>
+                <select id="ddrive" value={pr.drive ? 'couple' : 'given'} onChange={(e) => store.setDriven(e.target.value === 'couple')}>
+                  <option value="given">ω и ε заданы</option>
+                  <option value="couple">под действием пары M</option>
+                </select>
+              </label>
+              {pr.drive ? (
+                <>
+                  <Num id="d-M" label={`M, ${pr.byWeight ? 'кГ·м' : 'Н·м'}`} value={pr.drive.M} neg zero onType={(v) => store.typeDrive('M', v)} onEnd={end('d:M')} />
+                  <Num id="d-t" label="момент τ, с" value={pr.drive.t} zero onType={(v) => store.typeDrive('t', v)} onEnd={end('d:t')} />
+                  <Num id="d-omega0" label="ω₀, рад/с" value={pr.drive.omega0} neg zero onType={(v) => store.typeDrive('omega0', v)} onEnd={end('d:omega0')} />
+                </>
+              ) : (
+                <>
+                  <Num id="d-omega" label="ω, рад/с" value={pr.omega} neg zero onType={(v) => store.typeTop('omega', v)} onEnd={end('t:omega')} />
+                  <Num id="d-eps" label="ε, рад/с²" value={pr.eps} neg zero onType={(v) => store.typeTop('eps', v)} onEnd={end('t:eps')} />
+                </>
+              )}
               <label className="sfield">
                 <span>сила тяжести</span>
                 <select id="dgrav" value={pr.gravity} onChange={(e) => store.setGravity(e.target.value as ShaftProblem['gravity'])}>
@@ -127,7 +144,7 @@ export function ShaftView({ chrome, store }: { chrome: Chrome; store: ShaftStore
                 + часть
               </button>
             </div>
-            <p className="empty">Положение части — её центр масс в осях x, y, z; ось части — ось симметрии (у стержня — направление). Длины — в метрах.</p>
+            <p className="empty">Положение части — её центр масс в осях x, y, z; ось части — ось симметрии (у стержня — направление). Длины — в метрах.{pr.drive ? ' Пара сил M действует в плоскости, перпендикулярной оси z; ε = M/J_z, ω = ω₀ + ετ.' : ''}</p>
           </section>
           <section className="panel" aria-label="Решение">
             <div className="sol-head">

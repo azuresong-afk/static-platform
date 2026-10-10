@@ -16,9 +16,11 @@ function eqName(c: Candidate, body: Body): Inline[] {
 function lhs(c: Candidate): Inline[] {
   const out: Inline[] = [];
   c.terms.forEach((t, i) => {
-    const sg = t.c < 0 ? '−' : '+';
-    out.push(i ? ` ${sg} ` : sg === '−' ? '−' : '', S(t.a));
-    if (Math.abs(Math.abs(t.c) - 1) > 1e-12) out.push(`·${f(Math.abs(t.c))}`);
+    // Связанная сила T = k·t записывается через неизвестную t с коэффициентом k.
+    const cc = t.c * (t.a.mult ?? 1);
+    const sg = cc < 0 ? '−' : '+';
+    out.push(i ? ` ${sg} ` : sg === '−' ? '−' : '', S(t.a.of ?? t.a));
+    if (Math.abs(Math.abs(cc) - 1) > 1e-12) out.push(`·${f(Math.abs(cc))}`);
   });
   return out;
 }
@@ -51,13 +53,14 @@ export function bodyDoc(body: Body, m: BodyModel, sol: BodySolution, opts: { exp
       return [`${kindName[s.kind]} `, v(body.points[s.at].name), `${extra} → `, ...join(us.map((u) => [S(u)]), ', ')];
     });
     for (const u of m.unknowns.filter((x) => x.sup == null)) items.push(['Сила ', S(u), ': направление известно, модуль ищем']);
+    for (const d of m.dependents) items.push(['Сила ', S(d), ' = ', `${f(d.mult ?? 1)}·`, S(d.of!), ': связана с неизвестной ', S(d.of!), ' (направление известно)']);
     const bl: Block[] = [{ k: 'p', c: ['Отбрасываем опоры и заменяем их реакциями:'] }, { k: 'ul', items }];
     bl.push({
       k: 'p',
       c: [
         'Известные нагрузки: ',
         ...join(
-          m.knowns.map((k) => [S(k), ` = ${f(k.val)}`, k.kind === 'f' ? ` кН (направление ${k.u.map((x) => f(x)).join('; ')})` : ' кН·м']),
+          m.knowns.map((k) => [S(k), ...(k.rel ? [` = ${f(k.rel.k)}·`, S(k.rel.of)] : []), ` = ${f(k.val)}`, k.kind === 'f' ? ` кН (направление ${k.u.map((x) => f(x)).join('; ')})` : ' кН·м']),
           ', ',
         ),
         '.',
@@ -136,6 +139,10 @@ export function bodyDoc(body: Body, m: BodyModel, sol: BodySolution, opts: { exp
 
   // 5. Ответ.
   const rows: AnswerRow[] = m.unknowns.map((u) => ({ kind: 'main', val: [S(u), ` = ${f(sol.vals[u.key])} кН`], note: sol.vals[u.key] < 0 ? 'направлена противоположно выбранной' : '' }));
+  for (const d of m.dependents) {
+    const val = (d.mult ?? 1) * sol.vals[d.key];
+    rows.push({ kind: 'main', val: [S(d), ` = ${f(d.mult ?? 1)}·`, S(d.of!), ` = ${f(val)} кН`], note: val < 0 ? 'направлена противоположно выбранной' : '' });
+  }
   steps.push({ title: 'Ответ', blocks: [{ k: 'answer', rows }] });
   return { steps };
 }

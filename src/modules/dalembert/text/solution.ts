@@ -26,17 +26,34 @@ export function shaftDoc(pr: ShaftProblem, r: ShaftResult, opts: { explain?: boo
   const FU = pr.byWeight ? 'кГ' : 'Н';
   const MU = pr.byWeight ? 'кГ·м' : 'Н·м';
   const JU = pr.byWeight ? 'кГ·м·с²' : 'кг·м²';
-  const w = pr.omega,
-    e = pr.eps;
+  const w = r.omega,
+    e = r.eps;
+  const dr = pr.drive;
   // 1. Тело.
   {
     const lines: { num?: boolean; c: Inline[] }[] = [
       { c: [v('M'), ` = ${f(r.M)} ${pr.byWeight ? 'кГ·с²/м' : 'кг'}`, pr.byWeight ? ` (вес ${f(r.M * G)} кГ)` : '', `;  центр масс C (${r.C.map(f).join('; ')})`] },
       { c: [v('J'), sub('xz'), ' = Σ', v('m'), v('x'), v('z'), ` = ${f(r.Jxz)};  `, v('J'), sub('yz'), ' = Σ', v('m'), v('y'), v('z'), ` = ${f(r.Jyz)};  `, v('J'), sub('z'), ` = ${f(r.Jz)} ${JU}`] },
     ];
-    const bl: Block[] = [{ k: 'p', c: [`Оси x, y связаны с телом, z — ось вращения; подпятник A в точке z = ${f(pr.zA)}, подшипник B — z = ${f(pr.zB)}. ω = ${f(w)} рад/с, ε = ${f(e)} рад/с².`] }, { k: 'eq', lines }];
+    const motion = dr ? `Тело вращается под действием пары с моментом M = ${f(dr.M)} ${MU} относительно оси z; ω₀ = ${f(dr.omega0)} рад/с, рассматриваемый момент τ = ${f(dr.t)} с.` : `ω = ${f(w)} рад/с, ε = ${f(e)} рад/с².`;
+    const bl: Block[] = [{ k: 'p', c: [`Оси x, y связаны с телом, z — ось вращения; подпятник A в точке z = ${f(pr.zA)}, подшипник B — z = ${f(pr.zB)}. ${motion}`] }, { k: 'eq', lines }];
     ex(bl, 'Центробежные моменты J_xz, J_yz вычислены, как во вкладке «Геометрия масс»: для каждой части — свой центробежный момент плюс m·x_C·z_C (теорема Штейнера). Если J_xz = J_yz = 0, ось z — главная ось инерции в точке O; если к тому же центр масс на оси, она главная центральная, и динамических давлений нет.');
     steps.push({ title: 'Масса, центр масс и центробежные моменты', blocks: bl });
+  }
+  // 1а. Угловое ускорение по моменту пары.
+  if (dr) {
+    const g = Math.abs(r.MG[2]) > 1e-12;
+    const lines: { num?: boolean; c: Inline[] }[] = [
+      { c: ['ΣM', sub('z'), ' = ', v('M'), ...(g ? [' + M', sub('z'), sup('G')] : []), ' − ', v('J'), sub('z'), 'ε = 0'] },
+      { c: ['ε = ', ...(g ? ['(', v('M'), ' + M', sub('z'), sup('G'), ')'] : [v('M')]), '/', v('J'), sub('z'), ` = ${g ? `(${f(dr.M)} + ${fp(r.MG[2])})` : f(dr.M)}/${f(r.Jz)} = `, b(`${f(e)} рад/с²`)] },
+      { c: ['ω = ω', sub('0'), ' + ετ = ', `${f(dr.omega0)} + ${fp(e)}·${f(dr.t)} = `, b(`${f(w)} рад/с`)] },
+    ];
+    const bl: Block[] = [{ k: 'eq', lines }];
+    ex(
+      bl,
+      'Реакции подпятника и подшипника пересекают ось z или параллельны ей и момента относительно неё не дают; силы инерции дают момент −εJ_z. Момент пары постоянен, поэтому ε постоянно: вращение равноускоренное, ω = ω₀ + ετ.',
+    );
+    steps.push({ title: 'Угловое ускорение и угловая скорость', blocks: bl });
   }
   // 2. Силы инерции.
   {
@@ -60,11 +77,13 @@ export function shaftDoc(pr: ShaftProblem, r: ShaftResult, opts: { explain?: boo
       { c: ['ΣF', sub('z'), ' = ', v('Z'), sub('A'), ...(pr.gravity === 'z' ? g : []), ' = 0'] },
       { c: ['ΣM', sub('x'), ` = −${fp(pr.zA)}·`, v('Y'), sub('A'), ` − ${fp(pr.zB)}·`, v('Y'), sub('B'), ' + M', sub('x'), sup('Φ'), ' + M', sub('x'), sup('G'), ' = 0'] },
       { c: ['ΣM', sub('y'), ` = ${fp(pr.zA)}·`, v('X'), sub('A'), ` + ${fp(pr.zB)}·`, v('X'), sub('B'), ' + M', sub('y'), sup('Φ'), ' + M', sub('y'), sup('G'), ' = 0'] },
-      { c: ['ΣM', sub('z'), ' = ', v('M'), sub('вр'), ' + M', sub('z'), sup('Φ'), ' + M', sub('z'), sup('G'), ' = 0 → ', v('M'), sub('вр'), ' = ', b(`${f(r.Mz)} ${MU}`)] },
+      dr
+        ? { c: ['ΣM', sub('z'), ' = ', v('M'), ' + M', sub('z'), sup('Φ'), ' + M', sub('z'), sup('G'), ' = 0 — из этого уравнения найдено ε'] }
+        : { c: ['ΣM', sub('z'), ' = ', v('M'), sub('вр'), ' + M', sub('z'), sup('Φ'), ' + M', sub('z'), sup('G'), ' = 0 → ', v('M'), sub('вр'), ' = ', b(`${f(r.Mz)} ${MU}`)] },
     ];
     const bl: Block[] = [{ k: 'eq', lines }];
     if (pr.gravity !== 'none') bl.push({ k: 'p', c: [`Сила тяжести ${f(-(pr.gravity === 'z' ? r.Gv[2] : r.Gv[1]))} ${FU} — вдоль −${pr.gravity}, приложена в C: её момент относительно O (${r.MG.map(f).join('; ')}).`] });
-    ex(bl, 'Последнее уравнение даёт вращающий момент, который должен действовать на тело, чтобы оно вращалось с заданным ε (при ε = 0 и без сил тяжести он равен нулю).');
+    if (!dr) ex(bl, 'Последнее уравнение даёт вращающий момент, который должен действовать на тело, чтобы оно вращалось с заданным ε (при ε = 0 и без сил тяжести он равен нулю).');
     steps.push({ title: 'Уравнения кинетостатики', blocks: bl });
   }
   // 4. Реакции.
@@ -81,7 +100,10 @@ export function shaftDoc(pr: ShaftProblem, r: ShaftResult, opts: { explain?: boo
     steps.push({ title: 'Реакции опор', blocks: bl });
   }
   const rows: AnswerRow[] = KEYS.map(([k, L, S]) => ({ kind: 'main' as const, val: [v(L), sub(S), ` = ${f(r.total[k])} ${FU}`], note: `динамическая часть ${f(r.dyn[k])}` }));
-  rows.push({ kind: 'aux', val: [v('M'), sub('вр'), ` = ${f(r.Mz)} ${MU}`], note: 'вращающий момент' });
+  if (dr) {
+    rows.push({ kind: 'aux', val: [`ε = ${f(e)} рад/с²`], note: 'угловое ускорение' });
+    rows.push({ kind: 'aux', val: [`ω = ${f(w)} рад/с`], note: `угловая скорость при τ = ${f(dr.t)} с` });
+  } else rows.push({ kind: 'aux', val: [v('M'), sub('вр'), ` = ${f(r.Mz)} ${MU}`], note: 'вращающий момент' });
   steps.push({ title: 'Ответ (реакции; давления на опоры — с обратным знаком)', blocks: [{ k: 'answer', rows }] });
   return { steps };
 }

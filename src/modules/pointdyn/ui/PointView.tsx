@@ -149,7 +149,10 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                   {N('f', 'трение f', false)}
                 </div>
                 <h2>Силы</h2>
-                <div className="cgpar cg0">{FORCES.map(([k, label, neg]) => N(k, label, neg))}</div>
+                <div className="cgpar cg0">
+                  {FORCES.map(([k, label, neg]) => N(k, label, neg))}
+                  <LawField id="p-form" label={`ещё сила F(t, x, v), ${pr.byWeight ? 'кГ' : 'Н'}`} vars={['x', 'v']} value={pr.form ?? ''} onType={store.typeForm} onEnd={() => store.endSession('n:form')} />
+                </div>
                 <h2>Начальные условия и вопрос</h2>
                 <div className="cgpar cg0">
                   {N('x0', 'x₀, м')}
@@ -164,7 +167,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                   </label>
                   {pr.ask === 't' ? N('t', 't, с', false) : pr.ask === 'v' ? N('v1', 'v, м/с') : N('x1', 'x, м')}
                 </div>
-                <p className="empty">α = 0 — горизонталь, 90° — вертикаль. Нормальная реакция N = P cos α. Предельная скорость считается, если силы зависят только от скорости.</p>
+                <p className="empty">α = 0 — горизонталь, 90° — вертикаль. Нормальная реакция N = P cos α. Предельная скорость считается, если силы зависят только от скорости. В формуле силы: t — время, x — координата, v — скорость (со знаком), например −2v^2/(3 + x) или −3sqrt(v).</p>
               </>
             )}
             {task.mode === 'first' && (
@@ -216,6 +219,8 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                   {NP('cx', 'центр: x')}
                   {NP('cy', 'центр: y')}
                   {NP('q', 'q в q(ẏ; −ẋ)')}
+                  <LawField id="pp-formX" label="ещё F_x(t, x, y, vx, vy, v)" vars={['x', 'y', 'vx', 'vy', 'v']} value={pp.formX ?? ''} onType={(s) => store.typePlaneForm('formX', s)} onEnd={() => store.endSession('q:formX')} />
+                  <LawField id="pp-formY" label="ещё F_y(t, x, y, vx, vy, v)" vars={['x', 'y', 'vx', 'vy', 'v']} value={pp.formY ?? ''} onType={(s) => store.typePlaneForm('formY', s)} onEnd={() => store.endSession('q:formY')} />
                 </div>
                 <h2>Начальные условия и вопрос</h2>
                 <div className="cgpar cg0">
@@ -234,7 +239,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                   </label>
                   {pp.ask === 'land' ? NP('y1', 'уровень y, м') : pp.ask === 'x' ? NP('x1', 'x, м') : pp.ask === 't' ? NP('t', 't, с', false) : null}
                 </div>
-                <p className="empty">c &gt; 0 — притяжение к центру, c &lt; 0 — отталкивание; q — сила, перпендикулярная скорости (магнитное поле).</p>
+                <p className="empty">c &gt; 0 — притяжение к центру, c &lt; 0 — отталкивание; q — сила, перпендикулярная скорости (магнитное поле). В формулах: vx = ẋ, vy = ẏ, v — модуль скорости.</p>
               </>
             )}
           </section>
