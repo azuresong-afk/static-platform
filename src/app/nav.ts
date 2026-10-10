@@ -51,7 +51,7 @@ export const NAV: NavCourse[] = [
         title: 'Сопротивление материалов',
         short: 'Сопромат',
         refs: 'Антонов и др., «Прикладная механика»',
-        tabs: ['axial', 'composite', 'torsion', 'bending', 'framediag', 'sections', 'space3', 'vessels'],
+        tabs: ['axial', 'rods', 'composite', 'torsion', 'bending', 'framediag', 'sections', 'space3', 'vessels'],
       },
     ],
   },

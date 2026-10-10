@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 26 && seen.length === 26, 'двадцать шесть разделов, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 27 && seen.length === 27, 'двадцать семь разделов, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 28, 'готово двадцать восемь пунктов');
+  check((await p.locator('.rm-done').count()) === 29, 'готово двадцать девять пунктов');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -856,6 +856,31 @@ async function main() {
   check((await p.getAttribute('[data-tab="oscillation"]', 'aria-selected')) === 'true' && (await p.innerText('#osolution')) === osSol, 'файл колебаний открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // 33б. Вкладка «Стержневые системы».
+  await tab('rods');
+  let rd = await p.innerText('#rdsolution');
+  check(rd.includes('Степень статической неопределимости: 3 − 2 = 1') && rd.includes('= 0,2·F') && rd.includes('= 0,8·F') && rd.includes('= 64 кН'), 'Антонов, рис. 4.4: N = 0,2F и 0,8F, [F]п = 64 кН', rd.slice(0, 400));
+  check(rd.includes('[F]п/[F] = 1,6'), 'предельная нагрузка в 1,6 раза больше допускаемой');
+  check((await p.locator('#rdsvg .rd-ten').count()) === 3 && (await p.locator('#rdsvg .rd-def').count()) >= 3, 'растянутые стержни и план перемещений на схеме');
+  await p.selectOption('#rdpreset', 'a38');
+  check((await p.innerText('#rdsolution')).includes('A ≥ 2,411 см²'), 'Антонов, рис. 3.8: подбор площади, A ≥ 2,411 см²');
+  await p.selectOption('#rdpreset', 'a310');
+  rd = await p.innerText('#rdsolution');
+  check(rd.includes('22,86') && rd.includes('Δl2 = −Δl₁'), 'Антонов, рис. 3.10: монтажное усилие 22,86 кН и совместность Δl₂ = −Δl₁', rd.slice(0, 600));
+  await p.selectOption('#rdpreset', 'a44');
+  await p.click('#rdaddrod');
+  check((await p.locator('#rdrods .rd-item').count()) === 4 && (await p.innerText('#rdsolution')).includes('4 − 2 = 2'), 'четвёртый стержень — система дважды неопределима');
+  await p.selectOption('#rdbody', 'bar');
+  check((await p.locator('#rdsups .rd-item').count()) === 1 && (await p.locator('#rdsvg .rd-bar').count()) === 1, 'узел заменён жёстким брусом с шарнирной опорой');
+  const [dl35] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const rdText = await (await dl35.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const rdSol = await p.innerText('#rdsolution');
+  check(JSON.parse(rdText).module === 'rods' && JSON.parse(rdText).problem.rods.length === 4, 'файл стержневой системы');
+  await tab('frames');
+  await openText('rd.json', rdText, 'ok');
+  check((await p.getAttribute('[data-tab="rods"]', 'aria-selected')) === 'true' && (await p.innerText('#rdsolution')) === rdSol, 'файл стержневой системы открывается в своей вкладке без потерь');
+  await tab('frames');
+
   // 34. Навигация и «Задачник».
   await tab('tasks');
   check((await p.getAttribute('[data-tab="tasks"]', 'aria-current')) === 'true' && (await p.locator('.tk-book').count()) === 3, '«Задачник»: Мещерский, Антонов, примеры приложения');
@@ -889,7 +914,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 28, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 29, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });

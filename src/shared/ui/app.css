@@ -530,6 +530,29 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .os-tline{stroke:var(--react);stroke-width:1;stroke-dasharray:3 3}
 .os-slack{stroke:var(--warn);stroke-width:1.4;stroke-dasharray:6 3}
 .rt-line.os-after{stroke-dasharray:4 4;opacity:.45}
+/* Стержневые системы */
+.rd-ground{stroke:var(--ink);stroke-width:1.8}
+.rd-hatch{stroke:var(--ink-3);stroke-width:1}
+.rd-rod{stroke:var(--ink-2);stroke-width:3;stroke-linecap:round}
+.rd-rod.rd-ten{stroke:var(--react)}
+.rd-rod.rd-com{stroke:var(--load)}
+.rd-rod.rd-zero{stroke:var(--ink-3);stroke-dasharray:6 4}
+.rd-hinge{fill:var(--sheet);stroke:var(--ink);stroke-width:1.6}
+.rd-node{fill:var(--ink);stroke:var(--sheet);stroke-width:2}
+.rd-bar{fill:color-mix(in srgb,var(--ink) 14%,var(--sheet));stroke:var(--ink);stroke-width:1.8}
+.rd-sup{fill:var(--sheet);stroke:var(--ink);stroke-width:1.5;stroke-linejoin:round}
+.rd-supl{font-size:14px;font-weight:600;fill:var(--ink)}
+.rd-load{stroke:var(--load);stroke-width:2}
+.rd-load-f{fill:var(--load)}
+.rd-loadt{font-size:13px;fill:var(--load)}
+.rd-def{stroke:var(--ink-3);stroke-width:1.4;stroke-dasharray:5 4}
+.rd-def.rd-defbar{stroke-width:2.4}
+.rd-defnode{fill:none;stroke:var(--ink-3);stroke-width:1.4;stroke-dasharray:3 2}
+.rd-num{fill:var(--sheet);stroke:var(--ink-2);stroke-width:1.2}
+.rd-numt{font-size:12px;font-weight:700;fill:var(--ink)}
+.rd-val{font-size:13px;fill:var(--ink);font-variant-numeric:tabular-nums}
+.rd-lab{font-size:13px;fill:var(--ink-2)}
+.rd-item{border:1px solid var(--rule);border-radius:10px;padding:8px 10px;display:grid;gap:6px}
 .os-stage{border:1px solid var(--rule);border-radius:10px;padding:8px 10px;display:grid;gap:8px}
 .os-elem{display:grid;gap:6px;padding-top:6px;border-top:1px dashed var(--rule)}
 .os-elem:first-of-type{border-top:0;padding-top:0}
