@@ -11,6 +11,7 @@ export const TYPES: Record<ItemType, { name: string; support?: true }> = {
   roller: { name: 'Шарнирно-подвижная опора', support: true },
   rod: { name: 'Опорный стержень', support: true },
   rough: { name: 'Опора с трением', support: true },
+  slide: { name: 'Скользящая заделка', support: true },
   force: { name: 'Сила' },
   weight: { name: 'Груз' },
   moment: { name: 'Пара сил' },

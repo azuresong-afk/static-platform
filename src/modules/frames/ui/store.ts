@@ -225,6 +225,16 @@ export class Store {
     if (!n || !!n.hinge === on) return;
     this.commit();
     const nodes = this.st.s.nodes.map((x) => (x.id !== nodeId ? x : on ? { id: x.id, hinge: true } : { id: x.id }));
+    // Шарнир и скользящая заделка в одной точке не совмещаются: шарнир заменяет заделку и наоборот.
+    this.set({ s: { ...this.st.s, nodes } });
+  };
+
+  /** Соединение частей скользящей заделкой в точке: угол нормали к направляющей или null — убрать. */
+  setSlideJoint = (nodeId: string, angle: number | null) => {
+    const n = this.st.s.nodes.find((x) => x.id === nodeId);
+    if (!n || (n.slide ?? null) === angle) return;
+    this.commit();
+    const nodes = this.st.s.nodes.map((x) => (x.id !== nodeId ? x : angle == null ? { id: x.id } : { id: x.id, slide: angle }));
     this.set({ s: { ...this.st.s, nodes } });
   };
 

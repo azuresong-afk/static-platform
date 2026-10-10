@@ -110,6 +110,18 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       ];
     if (it.type === 'rod')
       return [`${TYPES.rod.name} `, P(s.P), ' → усилие ', ...u, ` вдоль стержня, угол ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle, 2)}° к оси `, v('x')];
+    if (it.type === 'slide')
+      return [
+        `${TYPES.slide.name} `,
+        P(s.P),
+        it.side === 'tilt' ? ', наклонная направляющая' : `, направляющая ${it.side === 'below' || it.side === 'above' ? 'горизонтальна' : 'вертикальна'}`,
+        ' → реакция ',
+        sym(s.list[0]),
+        ` по нормали к направляющей (угол ${it.side === 'tilt' && it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle as number, 2)}° к оси `,
+        v('x'),
+        ') и реактивный момент ',
+        sym(s.list[1]),
+      ];
     return [`${TYPES[it.type].name} `, P(s.P), `${surf} → реакции `, ...u];
   });
   m.unkLoads.forEach((u) =>
@@ -143,6 +155,8 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
     const types = new Set(m.supports.map((s) => s.it.type));
     const why: string[] = [];
     if (types.has('fixed')) why.push('жёсткая заделка не даёт сечению ни смещаться, ни поворачиваться — две составляющие реакции и реактивный момент');
+    if (types.has('slide'))
+      why.push('скользящая заделка позволяет сечению смещаться только вдоль направляющей и не даёт ему поворачиваться — реакция по нормали к направляющей и реактивный момент');
     if (types.has('pin')) why.push('шарнирно-неподвижная опора не даёт точке смещаться ни по горизонтали, ни по вертикали, но позволяет поворот — две составляющие реакции');
     if (types.has('roller'))
       why.push(
@@ -177,15 +191,18 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   const comp = m.parts.count > 1,
     NP = m.parts.count;
   if (comp) {
-    const hn = m.parts.hinges.map((h) => m.g.name[h]);
+    const hn = m.parts.hinges.filter((h) => m.parts.slides[h] == null).map((h) => m.g.name[h]),
+      sn = m.parts.hinges.filter((h) => m.parts.slides[h] != null).map((h) => m.g.name[h]);
+    const joints: Inline[] = [
+      ...(hn.length ? [`Внутренн${hn.length > 1 ? 'ие шарниры' : 'ий шарнир'} `, ...join(hn.map((n) => [v(n)]), ', ')] : []),
+      ...(hn.length && sn.length ? [' и '] : []),
+      ...(sn.length ? [`${hn.length ? 'с' : 'С'}кользящ${sn.length > 1 ? 'ие заделки' : 'ая заделка'} `, ...join(sn.map((n) => [v(n)]), ', ')] : []),
+    ];
+    const many = hn.length + sn.length > 1;
     const blocks: Block[] = [
       {
         k: 'p',
-        c: [
-          `Внутренн${hn.length > 1 ? 'ие шарниры' : 'ий шарнир'} `,
-          ...join(hn.map((n) => [v(n)]), ', '),
-          ` дел${hn.length > 1 ? 'ят' : 'ит'} конструкцию на ${NP} ${NP < 5 ? 'части' : 'частей'}, каждая — отдельное твёрдое тело:`,
-        ],
+        c: [...joints, ` дел${many ? 'ят' : 'ит'} конструкцию на ${NP} ${NP < 5 ? 'части' : 'частей'}, каждая — отдельное твёрдое тело:`],
       },
       {
         k: 'ul',
@@ -198,28 +215,37 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       const from = us[0]?.hinge?.from ?? 0;
       for (const on of ons) {
         const pair = us.filter((u) => u.hinge!.on === on);
+        const sl = m.parts.slides[h];
         blocks.push({
           k: 'p',
-          c: [
-            'В шарнире ',
-            v(m.g.name[h]),
-            ` на часть ${roman(on)} действуют силы `,
-            ...symList(pair),
-            `, на часть ${roman(from)} — такие же силы в обратную сторону (действие равно противодействию).`,
-          ],
+          c:
+            sl != null
+              ? [
+                  'В скользящей заделке ',
+                  v(m.g.name[h]),
+                  ` на часть ${roman(on)} действуют сила `,
+                  sym(pair[0]),
+                  ` по нормали к направляющей (угол ${fmt(sl, 2)}° к оси `,
+                  v('x'),
+                  ') и пара сил с моментом ',
+                  sym(pair[1]),
+                  `, на часть ${roman(from)} — такие же сила и момент в обратную сторону (действие равно противодействию).`,
+                ]
+              : ['В шарнире ', v(m.g.name[h]), ` на часть ${roman(on)} действуют силы `, ...symList(pair), `, на часть ${roman(from)} — такие же силы в обратную сторону (действие равно противодействию).`],
         });
       }
       if (Object.values(m.labels).some((l) => l.P === m.g.name[h]))
-        blocks.push({ k: 'p', c: ['Опоры и нагрузки, приложенные в самом шарнире ', v(m.g.name[h]), `, отнесены к части ${roman(from)}.`] });
+        blocks.push({ k: 'p', c: [`Опоры и нагрузки, приложенные в самом ${m.parts.slides[h] != null ? 'соединении' : 'шарнире'} `, v(m.g.name[h]), `, отнесены к части ${roman(from)}.`] });
     }
     if (ex)
       blocks.push(
         explain(
-          'Шарнир передаёт силу, но не момент: части могут поворачиваться друг относительно друга. Поэтому в шарнире две неизвестные составляющие силы и нет реактивного момента. ',
+          (hn.length ? 'Шарнир передаёт силу, но не момент: части могут поворачиваться друг относительно друга. Поэтому в шарнире две неизвестные составляющие силы и нет реактивного момента. ' : '') +
+            (sn.length ? 'Скользящая заделка (гладкая втулка) не даёт частям поворачиваться друг относительно друга и смещаться поперёк направляющей, но позволяет скользить вдоль неё: она передаёт силу по нормали к направляющей и момент. ' : ''),
           'Для каждой части составляем свои уравнения равновесия; уравнения для всей конструкции — их сумма, в них внутренние силы в шарнирах взаимно уничтожаются.',
         ),
       );
-    step('Расчленяем конструкцию по шарнирам', blocks);
+    step(sn.length ? (hn.length ? 'Расчленяем конструкцию по соединениям частей' : 'Расчленяем конструкцию по скользящим заделкам') : 'Расчленяем конструкцию по шарнирам', blocks);
   }
 
   // 2. Распределённая нагрузка
@@ -376,7 +402,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
           c: [
             'Неизвестных: ',
             b(String(sol.n)),
-            ` (из них взаимных сил в шарнирах: ${nHinge}). Для каждой из ${NP} частей можно составить три независимых уравнения равновесия, всего `,
+            ` (из них взаимных ${m.parts.hinges.some((h) => m.parts.slides[h] != null) ? 'сил и моментов в соединениях частей' : 'сил в шарнирах'}: ${nHinge}). Для каждой из ${NP} частей можно составить три независимых уравнения равновесия, всего `,
             b(String(nEq)),
             '.',
           ],
@@ -535,7 +561,11 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       anyNeg = true;
       note = u.kind === 'm' ? (u.s > 0 ? 'направлен по часовой стрелке' : 'направлен против часовой стрелки') : 'направлена противоположно принятой на схеме';
     }
-    if (u.hinge) note = `шарнир ${u.hinge.name}: сила на часть ${roman(u.hinge.on)}, на часть ${roman(u.hinge.from)} — в обратную сторону` + (note ? '; ' + note : '');
+    if (u.hinge)
+      note =
+        (u.hinge.slide
+          ? `скользящая заделка ${u.hinge.name}: ${u.kind === 'm' ? 'момент' : 'сила'} на часть ${roman(u.hinge.on)}, на часть ${roman(u.hinge.from)} — в обратную сторону`
+          : `шарнир ${u.hinge.name}: сила на часть ${roman(u.hinge.on)}, на часть ${roman(u.hinge.from)} — в обратную сторону`) + (note ? '; ' + note : '');
     if (aux) note = (note ? note + '; ' : '') + 'промежуточная';
     rows.push({ kind: aux ? 'aux' : 'main', val: [sym(u), ` = ${fmt(val)} ${unitOf(u)}`], note });
     if (u.L === 'Y' && (u.support === 'pin' || u.support === 'fixed')) {

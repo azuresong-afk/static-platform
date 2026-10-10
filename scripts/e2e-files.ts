@@ -904,7 +904,7 @@ async function main() {
 
   // 34. Навигация и «Задачник».
   await tab('tasks');
-  check((await p.getAttribute('[data-tab="tasks"]', 'aria-current')) === 'true' && (await p.locator('.tk-book').count()) === 3, '«Задачник»: Мещерский, Антонов, примеры приложения');
+  check((await p.getAttribute('[data-tab="tasks"]', 'aria-current')) === 'true' && (await p.locator('.tk-book').count()) === 4, '«Задачник»: Мещерский, Антонов, Яблонский, примеры приложения');
   const allTasks = await p.locator('.tk-item').count();
   check(allTasks > 250 && (await p.locator('.filebar').count()) === 0, 'в «Задачнике» все готовые задачи, кнопок файлов нет', String(allTasks));
   await p.fill('#tksearch', '46.19');
@@ -918,6 +918,19 @@ async function main() {
   check((await p.textContent('.notice'))!.includes('Ответ задачника: R_B = 300; R_E = 400') && (await p.innerText('#solution')).includes('300'), 'при загрузке задачи из книги показан ответ задачника');
   const groups = await p.locator('#preset optgroup').evaluateAll((els) => els.map((e) => e.getAttribute('label')));
   check(groups[0]!.startsWith('Мещерский, § 3.') && groups.some((g) => g!.startsWith('Мещерский, § 4.')) && groups[groups.length - 1] === 'Другие примеры', 'список «Готовая задача» сгруппирован: Мещерский по параграфам, затем примеры', groups.join(' | '));
+  // Пример задания С.3 Яблонского: скользящая заделка между частями.
+  await tab('tasks');
+  await p.fill('#tksearch', 'скользящая заделка в C');
+  await p.click('[data-task="frames:yb:С.3b"]');
+  const ybS = await p.innerText('#solution');
+  check(
+    (await p.inputValue('#preset')) === 'yb:С.3b' && (await p.textContent('.notice'))!.includes('X_A = −5,50') && ybS.includes('скользящей заделке') && ybS.includes('−5,5'),
+    'Яблонский С.3: скользящая заделка между частями, X_A = −5,50 как в книге',
+    ybS.slice(0, 300),
+  );
+  check((await p.locator('#svg .islide').count()) === 1, 'на схеме — скользящая заделка между частями');
+  await p.click('[data-add="slide"]');
+  check((await p.innerText('#solution')).includes('Скользящая заделка') && (await p.locator('[data-item][data-kind="sup"]').count()) === 3, 'опора «скользящая заделка» добавляется из палитры');
   await tab('tasks');
   await p.fill('#tksearch', '');
   await p.click('[data-book="ant"]');

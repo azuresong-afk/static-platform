@@ -56,6 +56,7 @@ export function itemTitle(l: ItemLabel): Inline[] {
     case 'roller':
     case 'rod':
     case 'rough':
+    case 'slide':
       return [TYPES[l.type].name + ' ', v(l.P || '')];
     case 'force':
       return ['Сила ', sym({ L: 'F', S: l.S }), ...at(l.P)];

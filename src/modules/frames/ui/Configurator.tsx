@@ -267,6 +267,28 @@ function Hinges({ model }: { model: Model }) {
       ) : (
         <p className="empty">Шарнир можно поставить в точке между участками — сначала разделите участок.</p>
       )}
+      {inner.length > 0 && (
+        <>
+          <div className="sub">Скользящие заделки между частями</div>
+          <div className="targets" id="slidejoints">
+            {inner.map((id) => {
+              const n = st.s.nodes.find((x) => x.id === id);
+              const on = n?.slide != null;
+              // По умолчанию направляющая — вдоль первого участка в точке (втулка), нормаль — поперёк него.
+              const def = Math.round((((g.rays[id][0] ?? 0) + 90) % 360) * 1000) / 1000;
+              return (
+                <span key={id} className="chip" title="Части скользят друг относительно друга вдоль направляющей, но не поворачиваются: передаются сила поперёк направляющей и момент">
+                  <input type="checkbox" data-slide={id} aria-label={`Скользящая заделка в точке ${g.name[id]}`} checked={on} onChange={(e) => store.setSlideJoint(id, e.target.checked ? def : null)} />
+                  <span className="v">{g.name[id]}</span>
+                  {on && (
+                    <NumField value={n!.slide!} unit="°" label="нормаль" data={{ slideang: id }} onValue={(v) => store.setSlideJoint(id, normAng(v))} />
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -421,6 +443,28 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
         </>
       );
       break;
+    case 'slide':
+      fields = (
+        <>
+          {P}
+          <Select
+            it={it}
+            f="side"
+            label="Направляющая"
+            options={[
+              ['below', 'горизонтальная, R вверх'],
+              ['above', 'горизонтальная, R вниз'],
+              ['left', 'вертикальная, R вправо'],
+              ['right', 'вертикальная, R влево'],
+              ['tilt', 'наклонная, задать угол R'],
+            ]}
+          />
+          {it.side === 'tilt' && <Field it={it} f="angle" label="Угол реакции к оси x" unit="°" />}
+          {it.side === 'tilt' && <AngleName it={it} />}
+          <p className="calc wide">Сечение смещается только вдоль направляющей и не поворачивается: реакция R по нормали к ней и момент M.</p>
+        </>
+      );
+      break;
     case 'rough':
       fields = (
         <>
@@ -525,7 +569,7 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
       break;
     }
   }
-  const sup = it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough';
+  const sup = it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough' || it.type === 'slide';
   return (
     <div className={'item' + (it.id === st.sel ? ' sel' : '')} data-item={it.id} data-kind={sup ? 'sup' : 'load'} onClick={() => store.select(it.id)}>
       <div className="item-head">
@@ -594,8 +638,9 @@ export function Configurator({ model }: { model: Model }) {
             ['roller', 'Каток'],
             ['rod', 'Стержень'],
             ['rough', 'Трение'],
+            ['slide', 'Скольз. заделка'],
           ]}
-          portOnly={['rough']}
+          portOnly={['rough', 'slide']}
         />
       </div>
       <div hidden={!show3}>

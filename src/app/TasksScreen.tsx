@@ -61,7 +61,7 @@ export function TasksScreen({ chrome, modules }: { chrome: Chrome; modules: Stat
 
   const item = (r: Row) => {
     const [num, rest] =
-      r.info.book === 'mesh'
+      r.info.book === 'mesh' || r.info.book === 'yab'
         ? [r.info.num, r.info.label.slice(r.info.num.length).replace(/^:\s*/, '')]
         : r.info.book === 'ant'
           ? ['', r.info.label]
@@ -79,6 +79,7 @@ export function TasksScreen({ chrome, modules }: { chrome: Chrome; modules: Stat
 
   const mesh = rows.filter((r) => r.info.book === 'mesh').sort((a, b) => cmp(a.info.order, b.info.order));
   const ant = rows.filter((r) => r.info.book === 'ant').sort((a, b) => cmp(a.info.order, b.info.order));
+  const yab = rows.filter((r) => r.info.book === 'yab').sort((a, b) => cmp(a.info.order, b.info.order));
   const other = rows.filter((r) => r.info.book === 'other');
   const meshParts = groupBy(
     mesh,
@@ -112,6 +113,7 @@ export function TasksScreen({ chrome, modules }: { chrome: Chrome; modules: Stat
                 ['all', `Все (${all.length})`],
                 ['mesh', `Мещерский (${count('mesh')})`],
                 ['ant', `Антонов (${count('ant')})`],
+                ...(count('yab') ? [['yab', `Яблонский (${count('yab')})`] as [Book, string]] : []),
                 ['other', `Примеры (${count('other')})`],
               ] as [Book | 'all', string][]
             ).map(([k, label]) => (
@@ -155,6 +157,23 @@ export function TasksScreen({ chrome, modules }: { chrome: Chrome; modules: Stat
             </h2>
             {groupBy(
               ant,
+              (r) => r.info.group,
+              (r) => r.info.groupTitle,
+            ).map((g) => (
+              <div key={g.id} className="tk-group">
+                <h4>{g.title}</h4>
+                <ul>{g.rows.map(item)}</ul>
+              </div>
+            ))}
+          </section>
+        )}
+        {yab.length > 0 && (
+          <section className="panel tk-book" aria-label="Яблонский">
+            <h2>
+              Сборник заданий для курсовых работ по теоретической механике <span className="tk-ed">под ред. А. А. Яблонского · {yab.length}</span>
+            </h2>
+            {groupBy(
+              yab,
               (r) => r.info.group,
               (r) => r.info.groupTitle,
             ).map((g) => (

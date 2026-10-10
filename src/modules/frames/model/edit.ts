@@ -163,6 +163,16 @@ export function pinSide(g: Geom, id: string): Side {
   return (WALL.find(([, w]) => r.every((d) => angDist(d, w) > 25)) ?? WALL[3])[0];
 }
 
+/** Для скользящей заделки на конце участка — направляющая вдоль участка (втулка), реакция поперёк него. */
+export function slideSide(g: Geom, id: string): Side {
+  const r = g.rays[id] ?? [];
+  if (r.length === 1) {
+    const n = normAng(r[0] + 90);
+    return WALL.reduce((b, w) => (Math.min(angDist(n, w[1]), angDist(normAng(n + 180), w[1])) < Math.min(angDist(n, b[1]), angDist(normAng(n + 180), b[1])) - 1e-9 ? w : b))[0];
+  }
+  return pinSide(g, id);
+}
+
 /** Для заделки на конце участка — стена с противоположной стороны. */
 export function fixedSide(g: Geom, id: string): Side {
   const r = g.rays[id] ?? [];
@@ -192,6 +202,8 @@ export function defaults<T extends ItemType>(s: Structure, type: T): NewItem<T> 
         return { at: last, side: pinSide(g, last), angle: 90 };
       case 'rod':
         return { at: last, angle: 90 };
+      case 'slide':
+        return { at: first, side: slideSide(g, first), angle: 90 };
       case 'rough':
         return { at: first, side: pinSide(g, first), angle: 90, f: 0.3, k: 0 };
       case 'force':

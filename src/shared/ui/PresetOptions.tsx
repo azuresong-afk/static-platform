@@ -9,7 +9,10 @@ export function PresetOptions({ items }: { items: TaskEntry[] }) {
   return (
     <>
       {groups.map((g) => (
-        <optgroup key={g.group} label={g.book === 'mesh' ? `Мещерский, ${g.title}` : g.book === 'ant' ? `Антонов, ${g.title}` : g.title}>
+        <optgroup
+          key={g.group}
+          label={g.book === 'mesh' ? `Мещерский, ${g.title}` : g.book === 'ant' ? `Антонов, ${g.title}` : g.book === 'yab' ? `Яблонский, ${g.title}` : g.title}
+        >
           {g.items.map((it) => (
             <option key={it.key} value={it.key}>
               {it.info.label}

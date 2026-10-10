@@ -238,7 +238,7 @@ export function resolve(s: Structure): Resolved {
       return it;
     }
     if (!(it.at in g.pos)) it.at = first;
-    if (((it.type === 'roller' || it.type === 'rough') && it.side !== 'tilt') || it.type === 'pin' || it.type === 'fixed')
+    if (((it.type === 'roller' || it.type === 'rough' || it.type === 'slide') && it.side !== 'tilt') || it.type === 'pin' || it.type === 'fixed')
       it.angle = SIDES[(it.side as keyof typeof SIDES) || 'below'].ang;
     const [x, y] = g.pos[it.at];
     const r: PointItem = { ...it, x, y };
@@ -256,8 +256,10 @@ export interface Parts {
   segPart: Record<string, number>;
   /** Части, к которым примыкает точка (по возрастанию). У шарнира их две и больше. */
   nodeParts: Record<string, number[]>;
-  /** Действующие шарниры (в порядке обхода): точки со свойством hinge, где сходятся хотя бы две части. */
+  /** Действующие соединения частей (в порядке обхода): шарниры и скользящие заделки, где сходятся хотя бы две части. */
   hinges: string[];
+  /** Соединения скользящей заделкой: узел → угол нормали к направляющей, град. */
+  slides: Record<string, number>;
 }
 
 /**
@@ -265,7 +267,7 @@ export interface Parts {
  * Части нумеруются в порядке обхода (часть 0 содержит первый участок от корня).
  */
 export function partsOf(s: Pick<Structure, 'nodes' | 'segs'>, g: Geom): Parts {
-  const hinge = new Set(s.nodes.filter((n) => n.hinge).map((n) => n.id));
+  const hinge = new Set(s.nodes.filter((n) => n.hinge || n.slide != null).map((n) => n.id));
   const parent: Record<string, string> = {};
   const find = (x: string): string => (parent[x] === x ? x : (parent[x] = find(parent[x])));
   s.segs.forEach((q) => (parent[q.id] = q.id));
@@ -290,7 +292,9 @@ export function partsOf(s: Pick<Structure, 'nodes' | 'segs'>, g: Geom): Parts {
   for (const id of g.order) nodeParts[id] = [...new Set((incident[id] || []).map((sid) => segPart[sid]))].sort((a, b) => a - b);
   if (!s.segs.length) for (const id of g.order) nodeParts[id] = [0];
   const hinges = g.order.filter((id) => hinge.has(id) && nodeParts[id].length >= 2);
-  return { count: Math.max(count, 1), segPart, nodeParts, hinges };
+  const slides: Record<string, number> = {};
+  for (const n of s.nodes) if (n.slide != null && hinges.includes(n.id)) slides[n.id] = n.slide;
+  return { count: Math.max(count, 1), segPart, nodeParts, hinges, slides };
 }
 
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];

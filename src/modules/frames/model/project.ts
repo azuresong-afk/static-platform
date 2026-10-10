@@ -30,12 +30,15 @@ export interface Project {
 
 export function serializeProject(p: Project, now = new Date()): string {
   const structure = {
-    nodes: p.structure.nodes.map((n) => (n.hinge ? { id: n.id, hinge: true } : { id: n.id })),
+    nodes: p.structure.nodes.map((n) => cleanNode(n)),
     segs: p.structure.segs.map(({ id, a, b, dir, len, ang }) => (dir === 'a' ? { id, a, b, dir, len, ang } : { id, a, b, dir, len })),
     items: p.structure.items.map(cleanItem),
   };
   return writeEnvelope(FRAMES_MODULE, p.title, { structure, notTarget: [...p.notTarget] }, now);
 }
+
+/** Точка: идентификатор, признак шарнира, угол скользящей заделки между частями. */
+const cleanNode = (n: Node, id = n.id): Node => (n.slide != null ? { id, slide: n.slide } : n.hinge ? { id, hinge: true } : { id });
 
 /** Только поля, которые относятся к типу элемента (производные вроде x, y не сохраняются). */
 function cleanItem(it: Item): Item {
@@ -54,6 +57,8 @@ function cleanItem(it: Item): Item {
       return pick('at', 'side', 'angle', 'angleName', 'f', 'k');
     case 'rod':
       return pick('at', 'angle', 'angleName');
+    case 'slide':
+      return pick('at', 'side', 'angle', 'angleName');
     case 'force':
       return pick('at', 'F', 'ref', 'rot', 'alpha', 'unknown', 'angleName');
     case 'weight':
@@ -78,6 +83,7 @@ const TYPE_NAMES: Record<string, string> = {
   roller: 'каток',
   rough: 'опора с трением',
   rod: 'опорный стержень',
+  slide: 'скользящая заделка',
   force: 'сила',
   weight: 'груз',
   moment: 'пара сил',
@@ -103,7 +109,8 @@ export function parseProject(text: string): ParseResult {
     if (nodeIds.has(n.id)) return errors.push(`Точка «${n.id}» встречается дважды.`);
     nodeIds.add(n.id);
     if (n.hinge !== undefined && typeof n.hinge !== 'boolean') return errors.push(`Точка «${n.id}»: признак шарнира должен быть true или false.`);
-    nodes.push(n.hinge ? { id: n.id, hinge: true } : { id: n.id });
+    if (n.slide !== undefined && !(typeof n.slide === 'number' && Number.isFinite(n.slide))) return errors.push(`Точка «${n.id}»: угол скользящей заделки должен быть числом.`);
+    nodes.push(cleanNode(n as unknown as Node));
   });
   if (!nodes.length) errors.push('В конструкции нет ни одной точки.');
 
@@ -182,6 +189,9 @@ export function parseProject(text: string): ParseResult {
       case 'rod':
         ok = node('at') && num('angle', 'угол');
         break;
+      case 'slide':
+        ok = node('at') && oneOf('side', [...SIDES, 'tilt'], 'направляющая') && (it.side !== 'tilt' || num('angle', 'угол'));
+        break;
       case 'force':
         ok = node('at') && num('F', 'модуль') && num('alpha', 'угол') && oneOf('ref', REFS, 'направление отсчёта') && oneOf('rot', ROTS, 'сторона отсчёта') && bool('unknown');
         break;
@@ -219,5 +229,5 @@ export function remapIds(s: Structure, ids: IdGen): Structure {
     const id = ids.item();
     return it.type === 'dist' ? { ...it, id, from: nm.get(it.from)!, to: nm.get(it.to)! } : { ...it, id, at: nm.get(it.at)! };
   }) as Item[];
-  return { nodes: s.nodes.map((n) => (n.hinge ? { id: nm.get(n.id)!, hinge: true } : { id: nm.get(n.id)! })), segs, items };
+  return { nodes: s.nodes.map((n) => cleanNode(n, nm.get(n.id)!)), segs, items };
 }

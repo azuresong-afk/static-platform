@@ -12,6 +12,12 @@ export interface Node {
   id: string;
   /** Внутренний шарнир: участки, сходящиеся в точке, соединены шарнирно (передают силу, но не момент). */
   hinge?: boolean;
+  /**
+   * Соединение скользящей заделкой (гладкой втулкой): части могут смещаться друг относительно друга вдоль направляющей,
+   * но не поперёк и не поворачиваются — передают силу по нормали к направляющей и момент. Значение — угол нормали
+   * (направления взаимной силы R) к оси x, град.
+   */
+  slide?: number;
 }
 
 /** Участок рамы: из узла a в узел b (a — родитель в дереве обхода). */
@@ -80,6 +86,18 @@ export interface RoughItem extends AtItem {
   /** Коэффициент трения качения, м (0 — не учитывать). */
   k?: number;
 }
+/**
+ * Скользящая заделка (ползун с заделкой, «гладкая втулка»): точка может смещаться вдоль направляющей, но не поперёк неё,
+ * и не может поворачиваться — реакция R по нормали к направляющей и реактивный момент M. Направляющая задаётся,
+ * как у катка: стороной (below/above — горизонтальная, left/right — вертикальная) или углом реакции (tilt).
+ */
+export interface SlideItem extends AtItem {
+  type: 'slide';
+  side: Side | 'tilt';
+  /** Угол реакции R к оси x, град. */
+  angle?: number;
+  angleName?: string;
+}
 export interface RodItem extends AtItem {
   type: 'rod';
   /** Угол стержня к оси x, град. Положительное S направлено под этим углом. */
@@ -117,7 +135,7 @@ export interface DistItem {
   dir: LoadDir;
 }
 
-export type SupportItem = FixedItem | PinItem | RollerItem | RodItem | RoughItem;
+export type SupportItem = FixedItem | PinItem | RollerItem | RodItem | RoughItem | SlideItem;
 export type LoadItem = ForceItem | WeightItem | MomentItem | DistItem;
 export type Item = SupportItem | LoadItem;
 export type ItemType = Item['type'];
@@ -130,7 +148,7 @@ export interface Structure {
 }
 
 export const isSupport = (it: Item): it is SupportItem =>
-  it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough';
+  it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough' || it.type === 'slide';
 
 /** Omit, применённый к каждому варианту объединения по отдельности. */
 export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;

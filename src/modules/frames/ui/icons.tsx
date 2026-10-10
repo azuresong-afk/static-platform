@@ -21,6 +21,13 @@ export const SUPPORT_ICONS = {
       <path d="M6 22h24" />
     </svg>
   ),
+  slide: (
+    <svg viewBox="0 0 36 26" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M4 13h20" />
+      <path d="M14 8h18M14 18h18" />
+      <path d="M18 8l3-4M24 8l3-4M30 8l3-4M18 18l3 4M24 18l3 4M30 18l3 4" strokeWidth="1.1" />
+    </svg>
+  ),
   rod: (
     <svg viewBox="0 0 36 26" fill="none" stroke="currentColor" strokeWidth="1.6">
       <path d="M12 4l12 16" />

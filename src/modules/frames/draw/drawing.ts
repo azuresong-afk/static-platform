@@ -107,6 +107,13 @@ function drawSupport(it: PointItem, px: number, py: number) {
     inner = `<line x1="${px - 36}" y1="${py + 3}" x2="${px + 36}" y2="${py + 3}" class="sup" stroke-width="2.4"/>`;
     for (let x = px - 32; x <= px + 36; x += 5) inner += `<line x1="${x}" y1="${py + 3}" x2="${x - 7}" y2="${py + 11}" class="hatch"/>`;
   }
+  // Скользящая заделка: втулка (две направляющие вдоль, перпендикулярно реакции) со штриховкой снаружи.
+  if (it.type === 'slide') {
+    for (const dy of [-7, 7]) {
+      inner += `<line x1="${px - 22}" y1="${py + dy}" x2="${px + 22}" y2="${py + dy}" class="sup" stroke-width="2.4"/>`;
+      for (let x = px - 18; x <= px + 22; x += 8) inner += `<line x1="${x}" y1="${py + dy}" x2="${x - 6}" y2="${py + dy + Math.sign(dy) * 7}" class="hatch"/>`;
+    }
+  }
   if (it.type === 'fixed') {
     inner = `<line x1="${px - 40}" y1="${py}" x2="${px + 40}" y2="${py}" class="sup" stroke-width="2.4"/>`;
     for (let x = px - 36; x <= px + 40; x += 8) inner += `<line x1="${x}" y1="${py}" x2="${x - 9}" y2="${py + 9}" class="hatch"/>`;
@@ -376,6 +383,17 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
   // Внутренние шарниры: кружок на стержне (в конструкции без шарниров ничего не добавляется).
   m.parts.hinges.forEach((h) => {
     const [hx, hy] = sp(h);
+    const sl = m.parts.slides[h];
+    if (sl != null) {
+      // Скользящая заделка между частями: втулка вдоль направляющей (перпендикулярно нормали sl).
+      const t = (sl * Math.PI) / 180,
+        u = [Math.sin(t), Math.cos(t)],
+        n = [Math.cos(t), -Math.sin(t)];
+      let g = '';
+      for (const k of [-6, 6]) g += `<line x1="${r1(hx - u[0] * 15 + n[0] * k)}" y1="${r1(hy - u[1] * 15 + n[1] * k)}" x2="${r1(hx + u[0] * 15 + n[0] * k)}" y2="${r1(hy + u[1] * 15 + n[1] * k)}" class="sup" stroke-width="2.2"/>`;
+      o.push(`<g class="islide">${g}<title>Скользящая заделка между частями</title></g>`);
+      return;
+    }
     o.push(`<circle cx="${r1(hx)}" cy="${r1(hy)}" r="6.5" class="hinge ihinge" stroke-width="2"><title>Внутренний шарнир</title></circle>`);
   });
   // нагрузки
@@ -491,7 +509,7 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
     }
     const t = ((it.angle || 0) * Math.PI) / 180;
     if (TYPES[it.type].support || it.type === 'force') occ[it.at].push([-Math.cos(t), Math.sin(t)]);
-    if (it.type === 'fixed') occ[it.at].push([Math.sin(t), Math.cos(t)], [-Math.sin(t), -Math.cos(t)]);
+    if (it.type === 'fixed' || it.type === 'slide') occ[it.at].push([Math.sin(t), Math.cos(t)], [-Math.sin(t), -Math.cos(t)]);
     if (it.type === 'weight') occ[it.at].push(G.adj[it.at].has('d') ? [0, -1] : [0, 1]);
     if (it.type === 'moment') occ[it.at].push([0.7, 0.7]);
   }

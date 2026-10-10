@@ -5,7 +5,7 @@ import { Notice } from '../../../shared/ui/Notice';
 import { analyze } from '../analyze';
 import { renderDrawing, type View } from '../draw/drawing';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
-import { FRAMES_BOOK, FRAMES_TASKS } from '../tasks';
+import { FRAMES_BOOK, FRAMES_TASKS, YAB_FRAMES } from '../tasks';
 import { loadFramesTask } from './loadTask';
 import { Canvas } from './Canvas';
 import { Configurator } from './Configurator';
@@ -21,7 +21,7 @@ export function FramesView({ chrome }: { chrome: Chrome }) {
   const a = useMemo(() => analyze(st.s, { notTarget: nt, explain: st.explain }), [st.s, nt, st.explain]);
   const drawing = useMemo(() => renderDrawing(st.s, a.model, a.solution, { view: st.view, sel: st.sel }), [st.s, a, st.view, st.sel]);
   // Задача Мещерского загружается как своя схема с названием задачи — список показывает её по названию.
-  const presetValue = st.preset !== 'custom' ? st.preset : (FRAMES_BOOK.find((t) => t.title === st.title)?.key ?? 'custom');
+  const presetValue = st.preset !== 'custom' ? st.preset : ([...FRAMES_BOOK, ...YAB_FRAMES].find((t) => t.title === st.title)?.key ?? 'custom');
 
   return (
     <>

@@ -40,8 +40,11 @@ export interface Action extends Sym {
   /** Обозначение угла и его значение, как их ввёл пользователь (для записи sin α вместо sin 60°). */
   angleName?: string;
   userAngle?: number;
-  /** Взаимная реакция во внутреннем шарнире: действует на часть on, на часть from — в обратную сторону. */
-  hinge?: { node: string; name: string; on: number; from: number };
+  /**
+   * Взаимная реакция во внутреннем соединении: действует на часть on, на часть from — в обратную сторону.
+   * slide — соединение скользящей заделкой (сила по нормали к направляющей и момент), иначе — шарнир (X, Y).
+   */
+  hinge?: { node: string; name: string; on: number; from: number; slide?: boolean };
 }
 export type Unknown = Action & { key: string };
 export type Known = Action & { val: number };
@@ -178,7 +181,7 @@ export function buildModel(s: Structure): Model {
     return kk;
   };
   for (const it of items) {
-    if (it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough') {
+    if (it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough' || it.type === 'slide') {
       const P = g.name[it.at],
         list: Unknown[] = [];
       const add = (letter: string, props: Pick<Action, 'kind'> & Partial<Action>) => {
@@ -211,6 +214,13 @@ export function buildModel(s: Structure): Model {
         const angle = it.angle as number;
         const named = it.angleName && (it.type === 'rod' || it.side === 'tilt') ? { angleName: it.angleName, userAngle: angle } : {};
         add(it.type === 'roller' ? 'R' : 'S', { kind: 'f', ...dirOf(angle), angle, ...named });
+      }
+      if (it.type === 'slide') {
+        // Скользящая заделка: реакция по нормали к направляющей (как у катка) и реактивный момент (как у заделки).
+        const angle = it.angle as number;
+        const named = it.angleName && it.side === 'tilt' ? { angleName: it.angleName, userAngle: angle } : {};
+        add('R', { kind: 'f', ...dirOf(angle), angle, ...named });
+        add('M', { kind: 'm', s: 1 });
       }
       if (it.type === 'rough') {
         // Нормальная реакция — по углу поверхности, сила трения — вдоль поверхности (нормаль, повёрнутая на −90°),
@@ -336,8 +346,19 @@ export function buildModel(s: Structure): Model {
     const P = g.name[h],
       ps = parts.nodeParts[h],
       [x, y] = g.pos[h];
+    const sa = parts.slides[h];
     for (let j = 1; j < ps.length; j++) {
       const S = ps.length === 2 ? P : P + j;
+      if (sa != null) {
+        // Скользящая заделка между частями: взаимная сила по нормали к направляющей и взаимный момент.
+        const hinge = { node: h, name: P, on: ps[j], from: ps[0], slide: true };
+        const d = dirOf(sa);
+        const R: Unknown = { key: mkKey('R_' + S), L: 'R', S, kind: 'f', x, y, ...d, angle: sa, s: 0, itemId: 'hinge:' + h, part: ps[j], hinge };
+        const Mm: Unknown = { key: mkKey('M_' + S), L: 'M', S, kind: 'm', x, y, dx: 0, dy: 0, angle: 0, s: 1, itemId: 'hinge:' + h, part: ps[j], hinge };
+        unknowns.push(R, Mm);
+        hingeActs.push(R, { ...R, dx: -d.dx, dy: -d.dy, angle: (sa + 180) % 360, part: ps[0] }, Mm, { ...Mm, s: -1, part: ps[0] });
+        continue;
+      }
       const hinge = { node: h, name: P, on: ps[j], from: ps[0] };
       for (const [L, dx, dy, angle] of [
         ['X', 1, 0, 0],

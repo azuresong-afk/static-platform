@@ -36,6 +36,8 @@ export function givenData(items: Item[], m: Model): Given {
           `, коэффициент трения f = ${fmt(it.f)}`,
           ...((it.k ?? 0) > 0 ? [`, трения качения k = ${fmt(it.k!)} м`] : []),
         ];
+      case 'slide':
+        return [...head, it.side === 'tilt' ? `, наклонная направляющая, реакция под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle ?? 90, 2)}° к оси x` : `, направляющая ${it.side === 'below' || it.side === 'above' ? 'горизонтальна' : 'вертикальна'}`];
       case 'rod':
         return [...head, `, стержень под углом ${it.angleName ? it.angleName + ' = ' : ''}${fmt(it.angle, 2)}° к оси x`];
       case 'force':
@@ -51,8 +53,15 @@ export function givenData(items: Item[], m: Model): Given {
       }
     }
   });
-  const hn = m.parts.hinges.map((h) => g.name[h]);
-  const hinges: Inline[] = hn.length ? [`Внутренн${hn.length > 1 ? 'ие шарниры' : 'ий шарнир'}: `, ...hn.flatMap((n, i) => (i ? [', ', v(n)] : [v(n)]))] : [];
+  const hn = m.parts.hinges.filter((h) => m.parts.slides[h] == null).map((h) => g.name[h]);
+  const sl = m.parts.hinges.filter((h) => m.parts.slides[h] != null);
+  const hinges: Inline[] = [
+    ...(hn.length ? [`Внутренн${hn.length > 1 ? 'ие шарниры' : 'ий шарнир'}: `, ...hn.flatMap((n, i) => (i ? [', ', v(n)] : [v(n)]))] : []),
+    ...(hn.length && sl.length ? ['; '] : []),
+    ...(sl.length
+      ? [`соединени${sl.length > 1 ? 'я' : 'е'} скользящей заделкой: `, ...sl.flatMap((h, i): Inline[] => [...(i ? [', '] : []), v(g.name[h]), ` (нормаль к направляющей под углом ${fmt(m.parts.slides[h], 2)}° к оси x)`])]
+      : []),
+  ];
   const inclined = g.segOrder.filter((q) => q.dir === 'a').map((q): Inline[] => [v(g.name[q.a]), '–', v(g.name[q.b]), `: ${segText(q)}`]);
   return { size: sizeText(m), points, inclined, items: rows, hinges };
 }
