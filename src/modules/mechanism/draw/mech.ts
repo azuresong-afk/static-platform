@@ -1,6 +1,10 @@
-/** Чертёж механизма в масштабе: звенья, опоры, ползуны, колёса; векторы скоростей (и МЦС) или ускорений (и МЦУ). */
+/**
+ * Чертёж механизма в масштабе: звенья, опоры, ползуны, колёса, кулисные камни; векторы скоростей (и МЦС) или ускорений
+ * (и МЦУ); нагрузки — силы и пары. Отдельно — график величины по параметру положения φ.
+ */
 import { fmt } from '../../../shared/format';
 import { num, type MechProblem, type MechResult } from '../model/mech';
+import type { MechSolution, PlotResult } from '../model/solve';
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const W = 1000,
@@ -17,7 +21,7 @@ function arrow(a: P2, bb: P2, cls: string) {
   return `<line class="${cls}" x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(bb[0] - ux * 8)}" y2="${r1(bb[1] - uy * 8)}"/><path class="${cls}-f" d="M${r1(bb[0])} ${r1(bb[1])}L${r1(bb[0] - ux * 11 - uy * 4.5)} ${r1(bb[1] - uy * 11 + ux * 4.5)}L${r1(bb[0] - ux * 11 + uy * 4.5)} ${r1(bb[1] - uy * 11 - ux * 4.5)}Z"/>`;
 }
 
-export function renderMech(pr: MechProblem, r: MechResult, show: 'v' | 'a'): { svg: string; viewBox: string } {
+export function renderMech(pr: MechProblem, r: MechResult | MechSolution, show: 'v' | 'a'): { svg: string; viewBox: string } {
   const out: string[] = [`<rect width="${W}" height="${H}" fill="var(--sheet)"/>`];
   const pos = r.pos;
   const names = Object.keys(pos);
@@ -78,6 +82,24 @@ export function renderMech(pr: MechProblem, r: MechResult, show: 'v' | 'a'): { s
       out.push(`<line class="mc-ground" x1="${r1(T[0] - u[0] * 200)}" y1="${r1(T[1] - u[1] * 200)}" x2="${r1(T[0] + u[0] * 200)}" y2="${r1(T[1] + u[1] * 200)}"/>`);
     }
   }
+  // Кулисы: прорезь вдоль прямой G₁G₂ (продолжена за камень) и камень.
+  for (const c of pr.cons) {
+    if (c.k !== 'guide' || !pos[c.p] || !pos[c.g1] || !pos[c.g2]) continue;
+    const A = S(pos[c.g1]),
+      B = S(pos[c.g2]),
+      Pp = S(pos[c.p]);
+    const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    if (!(L > 0)) continue;
+    const u: P2 = [(B[0] - A[0]) / L, (B[1] - A[1]) / L],
+      n: P2 = [-u[1], u[0]];
+    const t = (Pp[0] - A[0]) * u[0] + (Pp[1] - A[1]) * u[1];
+    const t0 = Math.min(0, t - 30),
+      t1 = Math.max(L, t + 30);
+    for (const sgn of [1, -1])
+      out.push(`<line class="mc-slot" x1="${r1(A[0] + u[0] * t0 + n[0] * 5 * sgn)}" y1="${r1(A[1] + u[1] * t0 + n[1] * 5 * sgn)}" x2="${r1(A[0] + u[0] * t1 + n[0] * 5 * sgn)}" y2="${r1(A[1] + u[1] * t1 + n[1] * 5 * sgn)}"/>`);
+    const deg = (Math.atan2(u[1], u[0]) * 180) / Math.PI;
+    out.push(`<rect class="mc-slider mc-stone" x="${r1(Pp[0] - 11)}" y="${r1(Pp[1] - 7)}" width="22" height="14" transform="rotate(${r1(deg)} ${r1(Pp[0])} ${r1(Pp[1])})"/>`);
+  }
   // Колёса.
   const wheelBodies = new Set(wheelR.map((w) => w.b));
   for (const w of wheelR)
@@ -112,6 +134,49 @@ export function renderMech(pr: MechProblem, r: MechResult, show: 'v' | 'a'): { s
     const aux = r.ok ? r.points.find((p) => p.name === n)?.aux : false;
     out.push(`<circle class="${aux ? 'mc-aux' : 'mc-joint'}" cx="${r1(x)}" cy="${r1(y)}" r="${aux ? 3 : 4.5}"/><text class="t mc-t" x="${r1(x + 9)}" y="${r1(y - 9)}">${esc(n)}</text>`);
   }
+  // Нагрузки: силы — стрелки к точке приложения, пары — дуги со стрелкой.
+  const X = 'forces' in r ? r.forces?.X : null;
+  for (const l of pr.loads ?? []) {
+    if (l.k === 'force' && pos[l.p]) {
+      let base = 0;
+      if (l.ref && pos[l.ref] && pos[l.ref2]) base = Math.atan2(pos[l.ref2][1] - pos[l.ref][1], pos[l.ref2][0] - pos[l.ref][0]);
+      const th = base + ((num(l.ang) ?? 0) * Math.PI) / 180;
+      const val = l.unknown ? X : num(l.F);
+      const sg = val != null && val < 0 ? -1 : 1;
+      const d: P2 = [Math.cos(th) * sg, -Math.sin(th) * sg];
+      const T = S(pos[l.p]);
+      // Стрелка — к точке приложения; если с той стороны вектор скорости (ускорения) точки — от точки.
+      const ps = r.ok ? r.points.find((q) => q.name === l.p) : undefined;
+      const w = ps ? (show === 'v' ? ps.v : ps.a) : null;
+      const wm = w ? Math.hypot(w[0], w[1]) : 0;
+      const clash = !!w && wm > 0 && (-d[0] * w[0] + d[1] * w[1]) / wm > Math.cos((25 * Math.PI) / 180);
+      const tail: P2 = clash ? [T[0] + d[0] * 6, T[1] + d[1] * 6] : [T[0] - d[0] * 62, T[1] - d[1] * 62];
+      const head: P2 = clash ? [T[0] + d[0] * 62, T[1] + d[1] * 62] : [T[0] - d[0] * 6, T[1] - d[1] * 6];
+      out.push(arrow(tail, head, l.unknown ? 'mc-unk' : 'mc-load'));
+      const lp: P2 = clash ? [head[0] + d[0] * 8, head[1] + d[1] * 8] : [tail[0] - d[0] * 6, tail[1] - d[1] * 6];
+      const dd = clash ? [-d[0], -d[1]] : d;
+      out.push(`<text class="t mc-lt${l.unknown ? ' mc-unkt' : ''}" x="${r1(lp[0] + (dd[1] > 0 ? 6 : -6))}" y="${r1(lp[1] + 4)}" text-anchor="${dd[0] > 0.3 ? 'end' : dd[0] < -0.3 ? 'start' : 'middle'}">${l.unknown ? (val != null ? `X = ${fmt(Math.abs(val), 3)}` : 'X') : `F = ${fmt(Math.abs(val ?? 0), 3)}`}</text>`);
+    } else if (l.k === 'couple') {
+      const bp = pr.bodies.find((q) => q.name === l.b);
+      const ps = (bp?.pts ?? []).filter((q) => pos[q]);
+      if (!ps.length) continue;
+      const c = S([ps.reduce((s2, q) => s2 + pos[q][0], 0) / ps.length, ps.reduce((s2, q) => s2 + pos[q][1], 0) / ps.length]);
+      const val = l.unknown ? X : num(l.M);
+      const ccw = (val ?? 1) >= 0;
+      const R = 22;
+      // Дуга на 270°: против часовой — от 0° к 270° (на экране y вниз).
+      const a0 = ccw ? 0 : 270,
+        a1 = ccw ? 270 : 0;
+      const pnt = (a: number): P2 => [c[0] + R * Math.cos((a * Math.PI) / 180), c[1] - R * Math.sin((a * Math.PI) / 180)];
+      const p0 = pnt(a0),
+        p1 = pnt(a1);
+      const cls = l.unknown ? 'mc-unk' : 'mc-load';
+      out.push(`<path class="${cls}" fill="none" d="M${r1(p0[0])} ${r1(p0[1])}A${R} ${R} 0 1 ${ccw ? 0 : 1} ${r1(p1[0])} ${r1(p1[1])}"/>`);
+      const tg: P2 = ccw ? [Math.sin((a1 * Math.PI) / 180), Math.cos((a1 * Math.PI) / 180)] : [-Math.sin((a1 * Math.PI) / 180), -Math.cos((a1 * Math.PI) / 180)];
+      out.push(`<path class="${cls}-f" d="M${r1(p1[0] + tg[0] * 6)} ${r1(p1[1] + tg[1] * 6)}L${r1(p1[0] - tg[0] * 5 - tg[1] * 4.5)} ${r1(p1[1] - tg[1] * 5 + tg[0] * 4.5)}L${r1(p1[0] - tg[0] * 5 + tg[1] * 4.5)} ${r1(p1[1] - tg[1] * 5 - tg[0] * 4.5)}Z"/>`);
+      out.push(`<text class="t mc-lt${l.unknown ? ' mc-unkt' : ''}" x="${r1(c[0] + R + 6)}" y="${r1(c[1] - R)}">${l.unknown ? (val != null ? `X = ${fmt(Math.abs(val), 3)}` : 'X') : `M = ${fmt(Math.abs(val ?? 0), 3)}`}</text>`);
+    }
+  }
   if (r.ok) {
     // Векторы: длина пропорциональна модулю, наибольший — 90 px.
     const vs = r.points.filter((p) => !p.aux).map((p) => ({ p, w: show === 'v' ? p.v : p.a }));
@@ -135,6 +200,76 @@ export function renderMech(pr: MechProblem, r: MechResult, show: 'v' | 'a'): { s
       out.push(`<circle class="mc-icr" cx="${r1(x)}" cy="${r1(y)}" r="5"/><text class="t mc-t mc-ct" x="${r1(x + 8)}" y="${r1(y + 18)}">${show === 'v' ? 'P' : 'Q'}<tspan class="mc-sub" dy="4">${esc(c.body)}</tspan></text>`);
     }
   }
-  out.push(`<text class="tb-note" x="16" y="${H - 14}">${show === 'v' ? 'Скорости точек (в одном масштабе) и мгновенные центры скоростей P звеньев.' : 'Ускорения точек (в одном масштабе) и мгновенные центры ускорений Q звеньев.'} Положение — в масштабе.</text>`);
+  const phi = 'phi' in r && r.phi != null ? ` φ = ${fmt(r.phi, 2)}°.` : '';
+  out.push(`<text class="tb-note" x="16" y="${H - 14}">${show === 'v' ? 'Скорости точек (в одном масштабе) и мгновенные центры скоростей P звеньев.' : 'Ускорения точек (в одном масштабе) и мгновенные центры ускорений Q звеньев.'} Положение — в масштабе.${phi}</text>`);
   return { svg: out.join(''), viewBox: `0 0 ${W} ${H}` };
+}
+
+function ticks(lo: number, hi: number, n = 5): number[] {
+  if (hi - lo < 1e-12) {
+    const d = Math.abs(lo) > 1e-12 ? Math.abs(lo) * 0.5 : 1;
+    lo -= d;
+    hi += d;
+  }
+  const raw = (hi - lo) / n;
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const st = [1, 2, 2.5, 5, 10].map((k) => k * p).find((q) => q >= raw) ?? 10 * p;
+  const out: number[] = [];
+  for (let x = Math.ceil(lo / st - 1e-9) * st; x <= hi + 1e-9 * st; x += st) out.push(Math.abs(x) < st * 1e-9 ? 0 : x);
+  return out;
+}
+
+/** График величины по параметру φ: кривая, текущее положение, наибольшее и наименьшее значения. */
+export function renderPlot(pl: PlotResult): { svg: string; viewBox: string } {
+  const Wp = 1000,
+    Hp = 360;
+  const x0 = 90,
+    y0 = 40,
+    w = Wp - 130,
+    h = Hp - 100;
+  const out: string[] = [`<rect width="${Wp}" height="${Hp}" fill="var(--sheet)"/>`];
+  const ys = pl.ys.filter((y): y is number => y != null);
+  if (!ys.length) {
+    out.push(`<text class="tb-note" x="16" y="${Hp / 2}">Во всём диапазоне механизм не собирается — проверьте построение и диапазон φ.</text>`);
+    return { svg: out.join(''), viewBox: `0 0 ${Wp} ${Hp}` };
+  }
+  let lo = Math.min(...ys),
+    hi = Math.max(...ys);
+  const ty = ticks(lo, hi);
+  lo = Math.min(lo, ty[0]);
+  hi = Math.max(hi, ty[ty.length - 1]);
+  const xa = pl.xs[0],
+    xb = pl.xs[pl.xs.length - 1];
+  const tx = ticks(xa, xb, 8);
+  const X = (x: number) => x0 + ((x - xa) / (xb - xa || 1)) * w,
+    Y = (v: number) => y0 + h - ((v - lo) / (hi - lo || 1)) * h;
+  const dy = ty.length > 1 ? Math.abs(ty[1] - ty[0]) : 1;
+  const dig = Math.max(0, Math.ceil(-Math.log10(dy || 1)) + 1);
+  for (const v of ty) out.push(`<line class="rt-grid" x1="${x0}" y1="${r1(Y(v))}" x2="${x0 + w}" y2="${r1(Y(v))}"/><text class="rt-tick" x="${x0 - 8}" y="${r1(Y(v) + 4)}" text-anchor="end">${fmt(v, dig)}</text>`);
+  for (const t of tx) if (t >= xa - 1e-9 && t <= xb + 1e-9) out.push(`<line class="rt-grid" x1="${r1(X(t))}" y1="${y0}" x2="${r1(X(t))}" y2="${y0 + h}"/><text class="rt-tick" x="${r1(X(t))}" y="${y0 + h + 18}" text-anchor="middle">${fmt(t, 1)}</text>`);
+  if (lo < 0 && hi > 0) out.push(`<line class="rt-axis" x1="${x0}" y1="${r1(Y(0))}" x2="${x0 + w}" y2="${r1(Y(0))}"/>`);
+  out.push(`<line class="rt-axis" x1="${x0}" y1="${y0}" x2="${x0}" y2="${y0 + h}"/><line class="rt-axis" x1="${x0}" y1="${y0 + h}" x2="${x0 + w}" y2="${y0 + h}"/>`);
+  out.push(`<text class="rt-title" x="${x0}" y="${y0 - 16}">${esc(pl.label)}</text><text class="rt-tick" x="${x0 + w}" y="${y0 + h + 38}" text-anchor="end">φ, °</text>`);
+  // Кривая с разрывами там, где механизм не собирается.
+  let seg: string[] = [];
+  const segs: string[][] = [];
+  pl.ys.forEach((y, i) => {
+    if (y == null) {
+      if (seg.length > 1) segs.push(seg);
+      seg = [];
+    } else seg.push(`${r1(X(pl.xs[i]))} ${r1(Y(y))}`);
+  });
+  if (seg.length > 1) segs.push(seg);
+  for (const sg of segs) out.push(`<path class="rt-line" d="M${sg.join('L')}"/>`);
+  const mark = (p: { x: number; y: number } | null, cls: string, txt: string, below: boolean) => {
+    if (!p) return;
+    out.push(`<circle class="${cls}" cx="${r1(X(p.x))}" cy="${r1(Y(p.y))}" r="4.5"/><text class="rt-val" x="${r1(Math.min(X(p.x) + 8, x0 + w - 150))}" y="${r1(below ? Y(p.y) + 18 : Y(p.y) - 8)}">${txt}</text>`);
+  };
+  if (pl.max && pl.min && pl.max.y - pl.min.y > 1e-12 * Math.max(1, Math.abs(pl.max.y))) {
+    mark(pl.max, 'os-max', `max ${fmt(pl.max.y, 4)} (φ ${pl.approx ? '≈' : '='} ${fmt(pl.max.x, 1)}°)`, Y(pl.max.y) < y0 + 20);
+    mark(pl.min, 'os-max', `min ${fmt(pl.min.y, 4)} (φ ${pl.approx ? '≈' : '='} ${fmt(pl.min.x, 1)}°)`, Y(pl.min.y) < y0 + h - 20);
+  }
+  if (pl.cur.y != null && pl.cur.x >= xa - 1e-9 && pl.cur.x <= xb + 1e-9)
+    out.push(`<line class="os-tline" x1="${r1(X(pl.cur.x))}" y1="${y0}" x2="${r1(X(pl.cur.x))}" y2="${y0 + h}"/><circle class="rt-end" cx="${r1(X(pl.cur.x))}" cy="${r1(Y(pl.cur.y))}" r="5"><title>φ = ${fmt(pl.cur.x, 2)}°: ${fmt(pl.cur.y, 4)}</title></circle>`);
+  return { svg: out.join(''), viewBox: `0 0 ${Wp} ${Hp}` };
 }

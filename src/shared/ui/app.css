@@ -589,6 +589,14 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .mc-ct{fill:var(--bad);font-size:13px}
 .mc-sub{font-size:10px}
 .mc-chips{display:flex;flex-wrap:wrap;gap:2px 10px}
+.mc-slot{stroke:var(--ink-2);stroke-width:1.4}
+.mc-stone{fill:color-mix(in srgb,var(--ink-3) 18%,var(--sheet))}
+.mc-load{stroke:var(--load);stroke-width:2.2}
+.mc-load-f{fill:var(--load)}
+.mc-unk{stroke:var(--warn);stroke-width:2.2;stroke-dasharray:6 3}
+.mc-unk-f{fill:var(--warn)}
+.mc-lt{font-size:13px;fill:var(--load);paint-order:stroke;stroke:var(--sheet);stroke-width:4px}
+.mc-unkt{fill:var(--warn);font-weight:700}
 .rl-path{fill:none;stroke:var(--ink-3);stroke-width:1.8;stroke-dasharray:7 5}
 .rl-axis{stroke:var(--ink);stroke-width:1.6;stroke-dasharray:14 4 3 4}
 .rl-e{stroke:var(--ink-2);stroke-width:2;fill:none}

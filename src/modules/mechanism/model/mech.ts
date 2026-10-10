@@ -1,9 +1,10 @@
 /**
- * Плоский механизм в заданном положении (Мещерский §16, 18).
+ * Плоский механизм в заданном положении (Мещерский §16, 18, 22, 23, 38, 46).
  *
  * Точки задаются построениями (координаты, от точки по длине и углу, пересечение двух окружностей, точка на прямой
- * на заданном расстоянии, точка на отрезке — доля его длины). Звенья — жёсткие тела из точек. Связи: неподвижный шарнир, ползун на прямой направляющей,
- * качение колеса без скольжения по неподвижной прямой, зацепление (качение) двух колёс. Ведущие: угловая скорость
+ * на заданном расстоянии, точка на отрезке — доля его длины, пересечение двух прямых). Звенья — жёсткие тела из точек. Связи: неподвижный шарнир, ползун на прямой направляющей,
+ * качение колеса без скольжения по неподвижной прямой, зацепление (качение) двух колёс, кулисный камень (точка скользит
+ * вдоль прямой, жёстко связанной с другим звеном), поступательное движение звена. Ведущие: угловая скорость
  * и ускорение звена, проекция скорости и ускорения точки на направление, вектор скорости и ускорения точки.
  *
  * Скорости. Для звена с точками A (полюс) и B: v_B = v_A + ω × AB. Связи и ведущие дают остальные уравнения; система
@@ -14,17 +15,29 @@
  * Зацепление колёс (e — орт C₁→C₂, τ — e, повёрнутый на 90°, d₁ = (P − C₁)·e, d₂ = (P − C₂)·e, P — точка касания):
  * (v₁ − v₂)·e = 0, (v₁ − v₂)·τ + ω₁d₁ − ω₂d₂ = 0;
  * (a₁ − a₂)·e = |v₁ − v₂|²/L, (a₁ − a₂)·τ + ε₁d₁ − ε₂d₂ = −((v₁ − v₂)·τ)((v₁ − v₂)·e)/L.
+ * Кулисный камень: точка A скользит вдоль прямой G₁G₂ звена b (u — орт G₁→G₂, n — u, повёрнутый на 90°, r = A − G₁).
+ * Относительная скорость v_r = v_A − v_e направлена вдоль u, v_e = v_G₁ + ω_b × r: (v_A − v_G₁)·n − ω_b(r·u) = 0.
+ * Ускорения (теорема Кориолиса a_A = a_e + a_r + a_c, a_c = 2ω_b × v_r): (a_A − a_G₁)·n − ε_b(r·u) = 2ω_b v_r − ω_b²(r·n).
  * Положительные ω, ε — против часовой стрелки. Точки, не входящие ни в одно звено, — вспомогательные (для построения),
- * неподвижные.
+ * неподвижные; вспомогательная точка может быть неподвижной осью качающейся кулисы (кулисный камень).
+ *
+ * Силы и массы (механизм с одной степенью свободы). Возможные скорости точек пропорциональны действительным, поэтому
+ * условие равновесия (принцип возможных перемещений) — сумма мощностей сил на найденных скоростях равна нулю:
+ * Σ F·v + Σ M·ω = 0. Кинетическая энергия T = Σ (m v_C²/2 + J_C ω²/2) = J_пр ω²/2 (J_пр — момент инерции, приведённый
+ * к ведущему звену). Параметр положения φ (градусы) можно использовать в любом числовом поле; по нему строится график
+ * и интегрируется работа сил в теореме об изменении кинетической энергии: J_пр(φ)ω²/2 − J_пр(φ₀)ω₀²/2 = ∫ M_пр dφ.
  */
 import { evalExpr, parseExpr } from '../../../shared/expr';
 
 export type PtDef =
   | { k: 'xy'; x: string; y: string }
-  | { k: 'polar'; from: string; L: string; ang: string }
+  /** От точки from на длину L под углом ang к оси x или (to задана) к направлению from→to. */
+  | { k: 'polar'; from: string; L: string; ang: string; to?: string }
   | { k: 'two'; p1: string; L1: string; p2: string; L2: string; side: 1 | -1 }
   | { k: 'line'; from: string; L: string; through: string; ang: string; side: 1 | -1 }
-  | { k: 'seg'; p1: string; p2: string; t: string };
+  | { k: 'seg'; p1: string; p2: string; t: string }
+  /** Пересечение двух прямых: каждая — через точку и вторую точку (q) или через точку под углом (q = ''). */
+  | { k: 'cross'; p1: string; q1: string; a1: string; p2: string; q2: string; a2: string };
 
 export interface MPoint {
   name: string;
@@ -38,20 +51,49 @@ export type MCons =
   | { k: 'fixed'; p: string }
   | { k: 'slider'; p: string; ang: string }
   | { k: 'roll'; b: string; c: string; r: string; ang: string }
-  | { k: 'gear'; b1: string; c1: string; r1: string; b2: string; c2: string; r2: string; int: boolean };
+  | { k: 'gear'; b1: string; c1: string; r1: string; b2: string; c2: string; r2: string; int: boolean }
+  | { k: 'guide'; p: string; b: string; g1: string; g2: string }
+  | { k: 'trans'; b: string };
 export type MDrive =
   | { k: 'omega'; b: string; w: string; e: string }
   | { k: 'proj'; p: string; ang: string; v: string; a: string }
   | { k: 'vec'; p: string; v: string; vang: string; a: string; aang: string };
+
+/**
+ * Нагрузки: сила в точке (угол — от оси x или от направления отрезка ref→ref2, против часовой стрелки), пара сил на звене
+ * (+ против часовой стрелки), момент сопротивления в шарнире между звеньями b1 и b2 (b2 = '' — неподвижная опора).
+ * Одна сила или пара может быть неизвестной (unknown) — её находят из условия равновесия.
+ */
+export type MLoad =
+  | { k: 'force'; p: string; F: string; ang: string; ref: string; ref2: string; unknown: boolean }
+  | { k: 'couple'; b: string; M: string; unknown: boolean }
+  | { k: 'hinge'; b1: string; b2: string; M: string };
+/** Массы: точечная (ползун, камень), однородный стержень между двумя точками звена, тело с центром масс c и моментом инерции. */
+export type MMass =
+  | { k: 'point'; p: string; m: string }
+  | { k: 'rod'; p1: string; p2: string; m: string }
+  | { k: 'body'; b: string; c: string; m: string; shape: 'disk' | 'ring' | 'J'; r: string; J: string };
 
 export interface MechProblem {
   points: MPoint[];
   bodies: MBody[];
   cons: MCons[];
   drives: MDrive[];
+  /** Считать ускорения (для задач статики не нужны). По умолчанию — да. */
+  acc?: boolean;
+  loads?: MLoad[];
+  masses?: MMass[];
+  /** Ускорение свободного падения для веса масс (ось y вверх); '' или 0 — механизм в горизонтальной плоскости. */
+  g?: string;
+  /** Параметр положения φ, °: значение и диапазон графика. */
+  param?: { val: string; from: string; to: string } | null;
+  /** Теорема об изменении кинетической энергии: начальное положение φ₀ и скорость ведущего в нём. */
+  energy?: { phi0: string; w0: string } | null;
+  /** Величина на графике по φ (ключ из plotKeys). */
+  plot?: string;
 }
 
-type V2 = [number, number];
+export type V2 = [number, number];
 export interface BodyState {
   name: string;
   omega: number;
@@ -69,9 +111,27 @@ export interface PointState {
   v: V2;
   a: V2;
 }
+/** Кулисный камень: относительное, переносное и абсолютное движение точки. */
+export interface GuideState {
+  p: string;
+  b: string;
+  g1: string;
+  g2: string;
+  /** Орт прямой G₁→G₂. */
+  u: V2;
+  /** Относительная скорость вдоль u (со знаком) и относительное ускорение вдоль u. */
+  vr: number;
+  ar: number;
+  /** Переносные скорость и ускорение (точки звена b, совпадающей с камнем), кориолисово ускорение. */
+  ve: V2;
+  ae: V2;
+  ac: V2;
+}
 export interface MechResult {
   ok: boolean;
   errors: string[];
+  /** Кулисные камни. */
+  guides: GuideState[];
   /** Координаты точек (если положение построено). */
   pos: Record<string, V2>;
   points: PointState[];
@@ -133,7 +193,13 @@ export function buildPositions(points: MPoint[]): { pos: Record<string, V2>; err
       const F = P(d.from),
         L = N(d.L, 'длина'),
         a = N(d.ang, 'угол');
-      if (F && L != null && a != null) pos[p.name] = [F[0] + L * Math.cos(rad(a)), F[1] + L * Math.sin(rad(a))];
+      const To = d.to ? P(d.to) : null;
+      let base = 0;
+      if (F && To) {
+        if (!(len(sub2(To, F)) > 0)) errors.push(`${where}: направление на ${d.to} не определено — точка совпадает с ${d.from}.`);
+        base = Math.atan2(To[1] - F[1], To[0] - F[0]);
+      }
+      if (F && L != null && a != null && (!d.to || To)) pos[p.name] = [F[0] + L * Math.cos(base + rad(a)), F[1] + L * Math.sin(base + rad(a))];
     } else if (d.k === 'two') {
       const A = P(d.p1),
         B = P(d.p2),
@@ -156,6 +222,35 @@ export function buildPositions(points: MPoint[]): { pos: Record<string, V2>; err
         B = P(d.p2),
         t = N(d.t, 'доля');
       if (A && B && t != null) pos[p.name] = [A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])];
+    } else if (d.k === 'cross') {
+      const line = (pp: string, q: string, a: string, which: string): [V2, V2] | null => {
+        const A = P(pp);
+        if (!A) return null;
+        if (q) {
+          const B = P(q);
+          if (!B) return null;
+          const dd = sub2(B, A);
+          if (!(len(dd) > 0)) {
+            errors.push(`${where}: прямая ${which} — точки ${pp} и ${q} совпадают.`);
+            return null;
+          }
+          return [A, dd];
+        }
+        const ang = N(a, `угол прямой ${which}`);
+        return ang == null ? null : [A, [Math.cos(rad(ang)), Math.sin(rad(ang))]];
+      };
+      const L1 = line(d.p1, d.q1, d.a1, '1'),
+        L2 = line(d.p2, d.q2, d.a2, '2');
+      if (L1 && L2) {
+        const [A, u] = L1,
+          [B, w] = L2;
+        const den = u[0] * w[1] - u[1] * w[0];
+        if (Math.abs(den) < 1e-12 * len(u) * len(w)) errors.push(`${where}: прямые параллельны — точки пересечения нет.`);
+        else {
+          const t = ((B[0] - A[0]) * w[1] - (B[1] - A[1]) * w[0]) / den;
+          pos[p.name] = [A[0] + t * u[0], A[1] + t * u[1]];
+        }
+      }
     } else {
       const F = P(d.from),
         Q = P(d.through),
@@ -224,9 +319,10 @@ interface Row {
   rhs: number;
 }
 
-export function solveMech(pr: MechProblem): MechResult {
+/** Кинематика механизма в одном положении (параметр φ уже подставлен). Полный расчёт — solveMech в solve.ts. */
+export function kinematics(pr: MechProblem): MechResult {
   const { pos, errors } = buildPositions(pr.points);
-  const empty = (errs: string[]): MechResult => ({ ok: false, errors: errs, pos, points: [], bodies: [], order: [], pole: {}, wheels: [], dof: null });
+  const empty = (errs: string[]): MechResult => ({ ok: false, errors: errs, guides: [], pos, points: [], bodies: [], order: [], pole: {}, wheels: [], dof: null });
   const pidx = new Map(pr.points.map((p, i) => [p.name, i]));
   const bidx = new Map(pr.bodies.map((b, i) => [b.name, i]));
   const NP = pr.points.length,
@@ -272,6 +368,17 @@ export function solveMech(pr: MechProblem): MechResult {
       const a = rad(NUM(c.ang, `${w}: угол прямой`));
       return { k: c.k, b: BD(c.b, w), c: PT(c.c, w), r: NUM(c.r, `${w}: радиус`), t: [Math.cos(a), Math.sin(a)] as V2, n: [-Math.sin(a), Math.cos(a)] as V2 };
     }
+    if (c.k === 'guide') {
+      const b = BD(c.b, w),
+        g1 = PT(c.g1, w),
+        g2 = PT(c.g2, w),
+        p = PT(c.p, w);
+      const body = pr.bodies.find((q) => q.name === c.b);
+      if (body && (!body.pts.includes(c.g1) || !body.pts.includes(c.g2))) errors.push(`${w}: точки ${c.g1} и ${c.g2} прямой должны принадлежать звену ${c.b}.`);
+      if (body?.pts.includes(c.p)) errors.push(`${w}: камень ${c.p} не может принадлежать самому звену ${c.b}, по которому скользит.`);
+      return { k: c.k, b, g1, g2, p };
+    }
+    if (c.k === 'trans') return { k: c.k, b: BD(c.b, w) };
     return { k: c.k, b1: BD(c.b1, w), c1: PT(c.c1, w), r1: NUM(c.r1, `${w}: радиус 1`), b2: c.b2 ? BD(c.b2, w) : -1, c2: PT(c.c2, w), r2: NUM(c.r2, `${w}: радиус 2`), int: c.int };
   });
   const drives = pr.drives.map((d, di) => {
@@ -295,16 +402,40 @@ export function solveMech(pr: MechProblem): MechResult {
       if (!(c.r1! > 0) || !(c.r2! > 0)) errors.push('Радиусы колёс — положительные числа.');
       else if (Math.abs(L - need) > 1e-6 * Math.max(1, need)) errors.push(`Зацепление ${pr.points[c.c1!].name}–${pr.points[c.c2!].name}: расстояние между центрами ${+L.toFixed(6)}, а должно быть ${+need.toFixed(6)} (${c.int ? '|r₁ − r₂|' : 'r₁ + r₂'}).`);
     }
+  for (const c of cons)
+    if (c.k === 'guide') {
+      const G1 = X(c.g1!),
+        G2 = X(c.g2!);
+      if (G1 && G2 && !(len(sub2(G2, G1)) > 1e-12 * Math.max(1, len(G1), len(G2)))) errors.push(`Кулисный камень ${pr.points[c.p!].name}: точки ${pr.points[c.g1!].name} и ${pr.points[c.g2!].name} прямой совпадают.`);
+    }
   if (errors.length) return empty(errors);
   const inBody = new Set(pr.bodies.flatMap((b) => b.pts));
   const auxIdx = pr.points.map((p, i) => (inBody.has(p.name) ? -1 : i)).filter((i) => i >= 0);
   for (const i of auxIdx) {
     const nm = pr.points[i].name;
-    const used = pr.drives.some((d) => d.k !== 'omega' && d.p === nm) || pr.cons.some((c) => (c.k === 'fixed' || c.k === 'slider' ? c.p === nm : c.k === 'roll' ? c.c === nm : c.c1 === nm || (c.c2 === nm && c.b2 !== '')));
+    // Вспомогательная (неподвижная) точка может быть осью качающейся кулисы — камнем, по которому скользит звено.
+    const used =
+      pr.drives.some((d) => d.k !== 'omega' && d.p === nm) ||
+      pr.cons.some((c) =>
+        c.k === 'fixed' || c.k === 'slider' ? c.p === nm : c.k === 'roll' ? c.c === nm : c.k === 'gear' ? c.c1 === nm || (c.c2 === nm && c.b2 !== '') : false,
+      );
     if (used) errors.push(`Точка ${nm} участвует в связях или ведущих, но не входит ни в одно звено.`);
   }
   if (errors.length) return empty(errors);
 
+  /** Кулисный камень: орт прямой u, нормаль n, r = A − G₁. */
+  const guideGeom = (g1: number, g2: number, p: number) => {
+    const d = sub2(X(g2), X(g1)),
+      L = len(d);
+    const u: V2 = [d[0] / L, d[1] / L];
+    return { u, n: perp(u), r: sub2(X(p), X(g1)) };
+  };
+  /** Относительная скорость камня вдоль u: v_r = (v_A − v_G₁ − ω × r)·u. */
+  const guideVr = (g1: number, b: number, p: number, G: { u: V2; r: V2 }, vel: (i: number) => V2, om: (b: number) => number) => {
+    const d = sub2(vel(p), vel(g1)),
+      w = om(b);
+    return dot(d, G.u) + w * dot(G.r, perp(G.u));
+  };
   /** Строки уравнений: kin = 'v' — скорости, 'a' — ускорения (правая часть зависит от найденных скоростей). */
   const rows = (kin: 'v' | 'a', V: number[] | null, withDrives = true): Row[] => {
     const R: Row[] = [];
@@ -330,7 +461,7 @@ export function solveMech(pr: MechProblem): MechResult {
       } else if (c.k === 'roll') {
         R.push({ c: { [vx(c.c!)]: c.n![0], [vy(c.c!)]: c.n![1] }, rhs: 0 });
         R.push({ c: { [vx(c.c!)]: c.t![0], [vy(c.c!)]: c.t![1], [wb(c.b!)]: c.r! }, rhs: 0 });
-      } else {
+      } else if (c.k === 'gear') {
         const C1 = X(c.c1!),
           C2 = X(c.c2!),
           L = len(sub2(C2, C1));
@@ -347,6 +478,26 @@ export function solveMech(pr: MechProblem): MechResult {
         if (c.b2! >= 0) ct[wb(c.b2!)] = (ct[wb(c.b2!)] ?? 0) - d2;
         R.push({ c: ce, rhs: kin === 'a' ? dot(dv, dv) / L : 0 });
         R.push({ c: ct, rhs: kin === 'a' ? -(dot(dv, t) * dot(dv, e)) / L : 0 });
+      } else if (c.k === 'guide') {
+        const G = guideGeom(c.g1!, c.g2!, c.p!);
+        const co: Record<number, number> = {};
+        const add = (k: number, v: number) => (co[k] = (co[k] ?? 0) + v);
+        add(vx(c.p!), G.n[0]);
+        add(vy(c.p!), G.n[1]);
+        add(vx(c.g1!), -G.n[0]);
+        add(vy(c.g1!), -G.n[1]);
+        add(wb(c.b!), -dot(G.r, G.u));
+        let rhs = 0;
+        if (kin === 'a') {
+          const w = om(c.b!),
+            vr = guideVr(c.g1!, c.b!, c.p!, G, vel, om);
+          rhs = 2 * w * vr - w * w * dot(G.r, G.n);
+        }
+        R.push({ c: co, rhs });
+      } else if (c.k === 'trans') {
+        R.push({ c: { [wb(c.b!)]: 1 }, rhs: 0 });
+      } else {
+        throw new Error('неизвестная связь');
       }
     }
     if (withDrives)
@@ -380,10 +531,13 @@ export function solveMech(pr: MechProblem): MechResult {
     return { ...empty([`Механизм не определён: не хватает связей или ведущих звеньев (подвижность ${dof}, ведущих уравнений ${drives.reduce((s, d) => s + (d.k === 'vec' ? 2 : 1), 0)}). Не найдены: ${names.slice(0, 4).join(', ')}${names.length > 4 ? '…' : ''}.`]), dof };
   }
   const V = S.x;
-  const sa = dense(rows('a', V));
-  const SA = solveRect(sa.A, sa.b);
-  if (SA.inconsistent) return { ...empty(['Ускорения не согласуются со связями — проверьте данные ведущих звеньев.']), dof };
-  const A = SA.x;
+  let A: number[] = new Array(n).fill(0);
+  if (pr.acc !== false) {
+    const sa = dense(rows('a', V));
+    const SA = solveRect(sa.A, sa.b);
+    if (SA.inconsistent) return { ...empty(['Ускорения не согласуются со связями — проверьте данные ведущих звеньев.']), dof };
+    A = SA.x;
+  }
   const scale = Math.max(1, ...V.map(Math.abs), ...A.map(Math.abs));
   const points: PointState[] = pr.points.map((p, i) => ({ name: p.name, aux: !inBody.has(p.name), pos: X(i), v: [clean(V[vx(i)], scale), clean(V[vy(i)], scale)], a: [clean(A[vx(i)], scale), clean(A[vy(i)], scale)] }));
   const bodies: BodyState[] = pr.bodies.map((b, k) => {
@@ -422,5 +576,22 @@ export function solveMech(pr: MechProblem): MechResult {
     left.delete(pick.name);
   }
   const wheels = pr.cons.flatMap((c) => (c.k === 'roll' ? [{ b: c.b, c: c.c, r: num(c.r) ?? 0 }] : c.k === 'gear' ? [{ b: c.b1, c: c.c1, r: num(c.r1) ?? 0 }, ...(c.b2 ? [{ b: c.b2, c: c.c2, r: num(c.r2) ?? 0 }] : [{ b: '', c: c.c2, r: num(c.r2) ?? 0 }])] : []));
-  return { ok: true, errors: [], pos, points, bodies, order, pole, wheels, dof };
+  const guides: GuideState[] = [];
+  for (const c of cons) {
+    if (c.k !== 'guide') continue;
+    const G = guideGeom(c.g1!, c.g2!, c.p!);
+    const vel = (i: number): V2 => [V[vx(i)], V[vy(i)]],
+      acc = (i: number): V2 => [A[vx(i)], A[vy(i)]];
+    const w = V[wb(c.b!)],
+      e = A[wb(c.b!)];
+    const pr2 = perp(G.r);
+    const vr = guideVr(c.g1!, c.b!, c.p!, G, vel, (b) => V[wb(b)]);
+    const ve: V2 = [vel(c.g1!)[0] + w * pr2[0], vel(c.g1!)[1] + w * pr2[1]];
+    const ae: V2 = [acc(c.g1!)[0] + e * pr2[0] - w * w * G.r[0], acc(c.g1!)[1] + e * pr2[1] - w * w * G.r[1]];
+    const ac: V2 = [2 * w * vr * G.n[0], 2 * w * vr * G.n[1]];
+    const ar = dot(sub2(sub2(acc(c.p!), ae), ac), G.u);
+    const cl = (q: V2): V2 => [clean(q[0], scale), clean(q[1], scale)];
+    guides.push({ p: pr.points[c.p!].name, b: pr.bodies[c.b!].name, g1: pr.points[c.g1!].name, g2: pr.points[c.g2!].name, u: G.u, vr: clean(vr, scale), ar: clean(ar, scale), ve: cl(ve), ae: cl(ae), ac: cl(ac) });
+  }
+  return { ok: true, errors: [], guides, pos, points, bodies, order, pole, wheels, dof };
 }

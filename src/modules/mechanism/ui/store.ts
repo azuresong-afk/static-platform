@@ -2,7 +2,7 @@
 import { History } from '../../../shared/history';
 import { isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
-import type { MBody, MCons, MDrive, MechProblem, MPoint, PtDef } from '../model/mech';
+import type { MBody, MCons, MDrive, MechProblem, MLoad, MMass, MPoint, PtDef } from '../model/mech';
 import { MECH_PRESETS, type MechPresetKey } from '../presets';
 
 export const MECH_MODULE = 'mechanism';
@@ -36,13 +36,15 @@ function parseDef(raw: unknown): PtDef | null {
     case 'xy':
       return { k: 'xy', x: str(raw, 'x', '0'), y: str(raw, 'y', '0') };
     case 'polar':
-      return { k: 'polar', from: str(raw, 'from'), L: str(raw, 'L', '1'), ang: str(raw, 'ang', '0') };
+      return { k: 'polar', from: str(raw, 'from'), L: str(raw, 'L', '1'), ang: str(raw, 'ang', '0'), ...(typeof raw.to === 'string' ? { to: str(raw, 'to') } : {}) };
     case 'two':
       return { k: 'two', p1: str(raw, 'p1'), L1: str(raw, 'L1', '1'), p2: str(raw, 'p2'), L2: str(raw, 'L2', '1'), side: side(raw) };
     case 'line':
       return { k: 'line', from: str(raw, 'from'), L: str(raw, 'L', '1'), through: str(raw, 'through'), ang: str(raw, 'ang', '0'), side: side(raw) };
     case 'seg':
       return { k: 'seg', p1: str(raw, 'p1'), p2: str(raw, 'p2'), t: str(raw, 't', '1/2') };
+    case 'cross':
+      return { k: 'cross', p1: str(raw, 'p1'), q1: str(raw, 'q1'), a1: str(raw, 'a1', '0'), p2: str(raw, 'p2'), q2: str(raw, 'q2'), a2: str(raw, 'a2', '90') };
   }
   return null;
 }
@@ -57,6 +59,34 @@ function parseCons(raw: unknown): MCons | null {
       return { k: 'roll', b: str(raw, 'b'), c: str(raw, 'c'), r: str(raw, 'r', '1'), ang: str(raw, 'ang', '0') };
     case 'gear':
       return { k: 'gear', b1: str(raw, 'b1'), c1: str(raw, 'c1'), r1: str(raw, 'r1', '1'), b2: str(raw, 'b2'), c2: str(raw, 'c2'), r2: str(raw, 'r2', '1'), int: raw.int === true };
+    case 'guide':
+      return { k: 'guide', p: str(raw, 'p'), b: str(raw, 'b'), g1: str(raw, 'g1'), g2: str(raw, 'g2') };
+    case 'trans':
+      return { k: 'trans', b: str(raw, 'b') };
+  }
+  return null;
+}
+function parseLoad(raw: unknown): MLoad | null {
+  if (!isObj(raw)) return null;
+  switch (raw.k) {
+    case 'force':
+      return { k: 'force', p: str(raw, 'p'), F: str(raw, 'F', '1'), ang: str(raw, 'ang', '0'), ref: str(raw, 'ref'), ref2: str(raw, 'ref2'), unknown: raw.unknown === true };
+    case 'couple':
+      return { k: 'couple', b: str(raw, 'b'), M: str(raw, 'M', '1'), unknown: raw.unknown === true };
+    case 'hinge':
+      return { k: 'hinge', b1: str(raw, 'b1'), b2: str(raw, 'b2'), M: str(raw, 'M', '1') };
+  }
+  return null;
+}
+function parseMass(raw: unknown): MMass | null {
+  if (!isObj(raw)) return null;
+  switch (raw.k) {
+    case 'point':
+      return { k: 'point', p: str(raw, 'p'), m: str(raw, 'm', '1') };
+    case 'rod':
+      return { k: 'rod', p1: str(raw, 'p1'), p2: str(raw, 'p2'), m: str(raw, 'm', '1') };
+    case 'body':
+      return { k: 'body', b: str(raw, 'b'), c: str(raw, 'c'), m: str(raw, 'm', '1'), shape: raw.shape === 'ring' ? 'ring' : raw.shape === 'J' ? 'J' : 'disk', r: str(raw, 'r', '1'), J: str(raw, 'J', '1') };
   }
   return null;
 }
@@ -91,7 +121,19 @@ export function parseMech(raw: unknown): { ok: true; problem: MechProblem } | { 
   const cons = arr('cons').map(parseCons);
   const drives = arr('drives').map(parseDrive);
   if (cons.some((c) => !c) || drives.some((d) => !d)) return { ok: false, errors: ['Связь или ведущее звено записаны неверно.'] };
-  return { ok: true, problem: { points, bodies, cons: cons as MCons[], drives: drives as MDrive[] } };
+  const opt = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as unknown[]).slice(0, MAX_ITEMS) : []);
+  const loads = opt('loads').map(parseLoad);
+  const masses = opt('masses').map(parseMass);
+  if (loads.some((l) => !l) || masses.some((m) => !m)) return { ok: false, errors: ['Нагрузка или масса механизма записаны неверно.'] };
+  const problem: MechProblem = { points, bodies, cons: cons as MCons[], drives: drives as MDrive[] };
+  if (raw.acc === false) problem.acc = false;
+  if (loads.length) problem.loads = loads as MLoad[];
+  if (masses.length) problem.masses = masses as MMass[];
+  if (typeof raw.g === 'string' && raw.g) problem.g = str(raw, 'g');
+  if (isObj(raw.param)) problem.param = { val: str(raw.param, 'val', '0'), from: str(raw.param, 'from', '0'), to: str(raw.param, 'to', '360') };
+  if (isObj(raw.energy)) problem.energy = { phi0: str(raw.energy, 'phi0', '0'), w0: str(raw.energy, 'w0', '0') };
+  if (typeof raw.plot === 'string' && raw.plot) problem.plot = str(raw, 'plot');
+  return { ok: true, problem };
 }
 
 /* ---------- значения по умолчанию для новых элементов ---------- */
@@ -109,6 +151,8 @@ export function newDef(k: PtDef['k'], names: string[]): PtDef {
       return { k, from: a, L: '1', through: b, ang: '0', side: 1 };
     case 'seg':
       return { k, p1: a, p2: b, t: '1/2' };
+    case 'cross':
+      return { k, p1: a, q1: '', a1: '0', p2: b, q2: '', a2: '90' };
   }
 }
 export function newCons(k: MCons['k'], pts: string[], bodies: string[]): MCons {
@@ -123,6 +167,30 @@ export function newCons(k: MCons['k'], pts: string[], bodies: string[]): MCons {
       return { k, b, c: p, r: '1', ang: '0' };
     case 'gear':
       return { k, b1: b, c1: p, r1: '1', b2: '', c2: pts[1] ?? p, r2: '1', int: false };
+    case 'guide':
+      return { k, p: pts[pts.length - 1] ?? p, b: bodies[bodies.length - 1] ?? b, g1: p, g2: pts[1] ?? p };
+    case 'trans':
+      return { k, b: bodies[bodies.length - 1] ?? b };
+  }
+}
+export function newLoad(k: MLoad['k'], pts: string[], bodies: string[]): MLoad {
+  switch (k) {
+    case 'force':
+      return { k, p: pts[pts.length - 1] ?? '', F: '1', ang: '-90', ref: '', ref2: '', unknown: false };
+    case 'couple':
+      return { k, b: bodies[0] ?? '', M: '1', unknown: false };
+    case 'hinge':
+      return { k, b1: bodies[0] ?? '', b2: '', M: '1' };
+  }
+}
+export function newMass(k: MMass['k'], pts: string[], bodies: string[]): MMass {
+  switch (k) {
+    case 'point':
+      return { k, p: pts[pts.length - 1] ?? '', m: '1' };
+    case 'rod':
+      return { k, p1: pts[0] ?? '', p2: pts[1] ?? '', m: '1' };
+    case 'body':
+      return { k, b: bodies[0] ?? '', c: pts[0] ?? '', m: '1', shape: 'disk', r: '1', J: '1' };
   }
 }
 export function newDrive(k: MDrive['k'], pts: string[], bodies: string[]): MDrive {
@@ -203,14 +271,19 @@ export class MechStore {
       const R = (s: string) => (s === old ? nm : s);
       for (const q of p.points) {
         const d = q.def as unknown as Record<string, unknown>;
-        for (const f of ['from', 'p1', 'p2', 'through']) if (typeof d[f] === 'string') d[f] = R(d[f] as string);
+        for (const f of ['from', 'p1', 'p2', 'through', 'q1', 'q2', 'to']) if (typeof d[f] === 'string') d[f] = R(d[f] as string);
       }
       for (const b of p.bodies) b.pts = b.pts.map(R);
       for (const c of p.cons) {
         const o = c as unknown as Record<string, unknown>;
-        for (const f of ['p', 'c', 'c1', 'c2']) if (typeof o[f] === 'string') o[f] = R(o[f] as string);
+        for (const f of ['p', 'c', 'c1', 'c2', 'g1', 'g2']) if (typeof o[f] === 'string') o[f] = R(o[f] as string);
       }
       for (const d of p.drives) if (d.k !== 'omega') d.p = R(d.p);
+      for (const x of [...(p.loads ?? []), ...(p.masses ?? [])]) {
+        const o = x as unknown as Record<string, unknown>;
+        for (const f of ['p', 'c', 'p1', 'p2', 'ref', 'ref2']) if (typeof o[f] === 'string') o[f] = R(o[f] as string);
+      }
+      if (p.plot?.includes(':')) p.plot = p.plot.replace(/^(x|y|v|vx|vy|a|ax|ay|vr|ar):(.*)$/, (m, k, n) => (n === old ? `${k}:${nm}` : m));
     });
   };
   renameBody = (i: number, name: string) => {
@@ -221,11 +294,12 @@ export class MechStore {
       p.bodies[i].name = nm;
       if (!old || p.bodies.some((q, j) => j !== i && q.name === nm)) return;
       const R = (s: string) => (s === old ? nm : s);
-      for (const c of p.cons) {
+      for (const c of [...p.cons, ...(p.loads ?? []), ...(p.masses ?? [])]) {
         const o = c as unknown as Record<string, unknown>;
         for (const f of ['b', 'b1', 'b2']) if (typeof o[f] === 'string') o[f] = R(o[f] as string);
       }
       for (const d of p.drives) if (d.k === 'omega') d.b = R(d.b);
+      if (p.plot?.includes(':')) p.plot = p.plot.replace(/^(w|e):(.*)$/, (m, k, n) => (n === old ? `${k}:${nm}` : m));
     });
   };
   setPointKind = (i: number, k: PtDef['k']) =>
@@ -266,6 +340,37 @@ export class MechStore {
   };
   setDriveKind = (i: number, k: MDrive['k']) => this.change((p) => (p.drives[i] = newDrive(k, p.points.map((q) => q.name), p.bodies.map((b) => b.name))));
   removeDrive = (i: number) => this.change((p) => p.drives.splice(i, 1));
+  /* Силы и массы. */
+  addLoad = (k: MLoad['k']) => {
+    if ((this.st.problem.loads ?? []).length >= MAX_ITEMS) return;
+    this.change((p) => (p.loads = [...(p.loads ?? []), newLoad(k, p.points.map((q) => q.name), p.bodies.map((b) => b.name))]));
+  };
+  setLoadKind = (i: number, k: MLoad['k']) => this.change((p) => (p.loads![i] = newLoad(k, p.points.map((q) => q.name), p.bodies.map((b) => b.name))));
+  removeLoad = (i: number) => this.change((p) => p.loads!.splice(i, 1));
+  /** Направление силы: от оси x (ref = '') или от направления отрезка ref→ref2. */
+  setLoadRef = (i: number, ref: string, ref2: string) =>
+    this.change((p) => {
+      const l = p.loads![i];
+      if (l.k === 'force') (l.ref = ref), (l.ref2 = ref2);
+    });
+  /** Отметка «неизвестная» — только у одной нагрузки. */
+  setUnknown = (i: number, on: boolean) =>
+    this.change((p) =>
+      p.loads!.forEach((l, j) => {
+        if (l.k !== 'hinge') l.unknown = j === i ? on : false;
+      }),
+    );
+  addMass = (k: MMass['k']) => {
+    if ((this.st.problem.masses ?? []).length >= MAX_ITEMS) return;
+    this.change((p) => (p.masses = [...(p.masses ?? []), newMass(k, p.points.map((q) => q.name), p.bodies.map((b) => b.name))]));
+  };
+  setMassKind = (i: number, k: MMass['k']) => this.change((p) => (p.masses![i] = newMass(k, p.points.map((q) => q.name), p.bodies.map((b) => b.name))));
+  removeMass = (i: number) => this.change((p) => p.masses!.splice(i, 1));
+  setAcc = (on: boolean) => this.change((p) => (on ? delete p.acc : (p.acc = false)));
+  setParam = (on: boolean) => this.change((p) => (p.param = on ? { val: '30', from: '0', to: '360' } : null));
+  setEnergy = (on: boolean) => this.change((p) => (p.energy = on ? { phi0: p.param?.from ?? '0', w0: '0' } : null));
+  setPlot = (key: string) => this.change((p) => (p.plot = key));
+  setGravity = (on: boolean) => this.change((p) => (p.g = on ? '9.81' : ''));
   undo = () => {
     const s = this.hist.undo(this.snap());
     if (s) this.set(s);

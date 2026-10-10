@@ -680,6 +680,27 @@ async function main() {
   await tab('frames');
   await openText('me.json', meText, 'ok');
   check((await p.getAttribute('[data-tab="mechanism"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === meSol, 'файл механизма открывается в своей вкладке без потерь');
+  // 27а. Кулисы, силы, массы, параметр положения.
+  await p.selectOption('#mpreset', 'm2322');
+  const kuS = await p.innerText('#msolution');
+  check(kuS.includes('Кулисный камень') && kuS.includes('1,2096') && kuS.includes('103,68'), 'Мещерский 23.22–23.23: ε кулисы 1,21, w_r = 103,7', kuS.slice(0, 300));
+  check((await p.locator('#msvg .mc-stone').count()) === 1 && (await p.locator('#mplotsvg .rt-line').count()) >= 1, 'на чертеже — кулисный камень, под ним — график по φ');
+  await p.fill('#m-param-val', '0');
+  await p.locator('#m-param-val').blur();
+  check((await p.innerText('#msolution')).includes('154,2857'), 'φ = 0: w_r = 154,3 см/с²');
+  await p.selectOption('#mpreset', 'm4610');
+  const eqS = await p.innerText('#msolution');
+  check(eqS.includes('принцип возможных перемещений') && /X = 80\b/.test(eqS) && (await p.locator('#msvg .mc-unk').count()) >= 1, 'Мещерский 46.10: Q = 80 из принципа возможных перемещений', eqS.slice(0, 300));
+  await p.selectOption('#mpreset', 'm3849');
+  const meEn = await p.innerText('#msolution');
+  check(meEn.includes('Теорема об изменении кинетической энергии') && meEn.includes('3,07'), 'Мещерский 38.49: ω = √(3π) = 3,07 по теореме об энергии', meEn.slice(0, 300));
+  await p.selectOption('#mpreset', 'm1615');
+  await p.click('#mparam');
+  await p.fill('#m-points-1-def-ang', 'φ');
+  await p.locator('#m-points-1-def-ang').blur();
+  await p.click('#maddm-point');
+  const pmS = await p.innerText('#msolution');
+  check(!pmS.includes('проверьте') && pmS.includes('Кинетическая энергия механизма') && pmS.includes('Параметр положения'), 'φ в поле угла и точечная масса — решение с кинетической энергией', pmS.slice(0, 300));
   await tab('frames');
 
   // 28. Вкладка «Сложное движение».
