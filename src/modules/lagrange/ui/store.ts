@@ -46,7 +46,9 @@ export function parseProblem(raw: unknown): { ok: true; problem: LagProblem } | 
   if (!isStr(raw.T) || !isStr(raw.P)) errors.push('T и Π — формулы (строки).');
   if (!isNum(raw.tEnd) || raw.tEnd < 0) errors.push('Время интегрирования — неотрицательное число.');
   if (errors.length) return { ok: false, errors };
-  return { ok: true, problem: { coords, params, T: raw.T as string, P: raw.P as string, tEnd: raw.tEnd as number } };
+  const es = raw.eqSearch;
+  if (es != null && !(isObj(es) && isNum(es.from) && isNum(es.to) && es.to > es.from)) return { ok: false, errors: ['Поиск равновесия: отрезок from < to.'] };
+  return { ok: true, problem: { coords, params, T: raw.T as string, P: raw.P as string, tEnd: raw.tEnd as number, ...(isObj(es) ? { eqSearch: { from: es.from as number, to: es.to as number } } : {}) } };
 }
 
 export class LagrangeStore {
@@ -85,6 +87,18 @@ export class LagrangeStore {
   typeText = (key: 'T' | 'P', v: string) => {
     this.touch(key);
     this.setProblem({ ...this.st.problem, [key]: v });
+  };
+  /** Поиск положений равновесия (отрезок по умолчанию — от −π до π: для угла один оборот). */
+  setEqSearch = (on: boolean) => {
+    if (on === !!this.st.problem.eqSearch) return;
+    this.commit();
+    this.setProblem({ ...this.st.problem, eqSearch: on ? { from: -3.1415, to: 3.1416 } : null });
+  };
+  typeEqRange = (key: 'from' | 'to', v: number) => {
+    const es = this.st.problem.eqSearch;
+    if (!es) return;
+    this.touch(`eq:${key}`);
+    this.setProblem({ ...this.st.problem, eqSearch: { ...es, [key]: v } });
   };
   typeTime = (v: number) => {
     this.touch('tEnd');

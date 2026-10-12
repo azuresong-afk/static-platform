@@ -10,6 +10,9 @@ import { Num } from '../../../shared/ui/Num';
 import { parseSym, varName, prettyName, normName, type SymContext } from '../../../shared/sym';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { solveLagrange } from '../model/lagrange';
+import { findEquilibria } from '../model/equil';
+import { equilSteps } from '../text/equil';
+import type { Doc } from '../../../shared/doc';
 import { renderPlots } from '../draw/plots';
 import { LAGRANGE_PRESETS, type LagrangePresetKey } from '../presets';
 import { lagrangeDoc } from '../text/solution';
@@ -55,7 +58,22 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
   const pr = st.problem;
   const r = useMemo(() => solveLagrange(pr), [pr]);
   const ok = r.ok ? r : null;
-  const doc = useMemo(() => (ok ? lagrangeDoc(pr, ok, { explain: st.explain }) : null), [pr, ok, st.explain]);
+  const eqr = useMemo(() => findEquilibria(pr), [pr]);
+  // Без T — только статика: положения равновесия и устойчивость по Π.
+  const statOnly = !r.ok && r.field === 'T' && !pr.T.trim() && !!eqr;
+  const doc = useMemo((): Doc | null => {
+    const es = eqr?.ok ? equilSteps(eqr, { explain: st.explain, hasT: !!pr.T.trim() }) : null;
+    const eqErr = eqr && !eqr.ok ? [{ title: 'Положения равновесия', blocks: [{ k: 'badge' as const, tone: 'bad' as const, text: 'проверьте данные' }, { k: 'p' as const, c: [eqr.error] }] }] : [];
+    if (ok) {
+      const base = lagrangeDoc(pr, ok, { explain: st.explain });
+      const ans = base.steps[base.steps.length - 1];
+      const blk = ans.blocks[0];
+      const rows = es && blk.k === 'answer' ? [...blk.rows, ...es.rows] : null;
+      return { steps: [...base.steps.slice(0, -1), ...(es?.steps ?? []), ...eqErr, rows && blk.k === 'answer' ? { ...ans, blocks: [{ ...blk, rows }] } : ans] };
+    }
+    if (statOnly) return { steps: [...(es?.steps ?? []), ...eqErr, ...(es ? [{ title: 'Ответ', blocks: [{ k: 'answer' as const, rows: es.rows }] }] : [])] };
+    return null;
+  }, [pr, ok, eqr, statOnly, st.explain]);
   const plots = useMemo(() => (ok ? renderPlots(ok) : null), [ok]);
   const ctx: SymContext = { coords: pr.coords.map((c) => normName(c.name.trim())), params: pr.params.map((p) => normName(p.name.trim())) };
   const err = (field: string) => (!r.ok && r.field === field ? r.error : undefined);
@@ -106,7 +124,7 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
             </div>
           ) : (
             <div className="dg-empty" role="status">
-              <p>{!r.ok ? r.error : 'Задайте время интегрирования, чтобы увидеть графики движения.'}</p>
+              <p>{statOnly ? 'Кинетическая энергия не задана — только положения равновесия и их устойчивость (движение не интегрируется).' : !r.ok ? r.error : 'Задайте время интегрирования, чтобы увидеть графики движения.'}</p>
             </div>
           )}
         </section>
@@ -148,6 +166,23 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
                 + координата
               </button>
             </div>
+            <label className="toggle">
+              <input type="checkbox" id="lgeq" checked={!!pr.eqSearch} onChange={(e) => store.setEqSearch(e.target.checked)} />
+              найти положения равновесия и исследовать их устойчивость
+            </label>
+            {pr.eqSearch && pr.coords.length === 1 && (
+              <div className="sgrid">
+                <Num id="lg-eqfrom" label={`поиск: ${dotted(pr.coords[0].name, 0)} от`} value={pr.eqSearch.from} neg zero onType={(v) => store.typeEqRange('from', v)} onEnd={() => store.endSession('eq:from')} />
+                <Num id="lg-eqto" label="до" value={pr.eqSearch.to} neg zero onType={(v) => store.typeEqRange('to', v)} onEnd={() => store.endSession('eq:to')} />
+              </div>
+            )}
+            {pr.eqSearch && (
+              <p className="empty">
+                {pr.coords.length === 1
+                  ? 'Углы — в радианах (−3,1415 … 3,1416 — один оборот). Кинетическую энергию T для равновесия можно не задавать; если она задана, найдутся и частоты малых колебаний.'
+                  : 'Для нескольких координат положение равновесия уточняется методом Ньютона от приближения q* в таблице.'}
+              </p>
+            )}
             <div className="sub">Энергия</div>
             <div className="sgrid">
               <SymField id="lg-T" label={`T(q, ${pr.coords.map((c) => dotted(c.name, 1)).join(', ')})`} value={pr.T} ctx={ctx} err={err('T')} onType={(v) => store.typeText('T', v)} onEnd={() => store.endSession('T')} />

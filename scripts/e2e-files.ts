@@ -882,6 +882,22 @@ async function main() {
   await tab('frames');
   await openText('lg.json', lgText, 'ok');
   check((await p.getAttribute('[data-tab="lagrange"]', 'aria-selected')) === 'true' && (await p.innerText('#lgsolution')) === lgSol, 'файл задачи Лагранжа открывается в своей вкладке без потерь');
+  // 33а. Положения равновесия и устойчивость.
+  await p.selectOption('#lgpreset', 'yd22');
+  lg = await p.innerText('#lgsolution');
+  check(
+    lg.includes('6 положений равновесия') && lg.includes('φ* = 1,9702 (112,89°): K = W″ = 0,1528 > 0 — минимум W, равновесие устойчиво') && lg.includes('излом W') && (await p.innerText('.dg-empty')).includes('только положения равновесия'),
+    'Яблонский, Д.22: шесть положений равновесия, излом при φ = 0, статика без T',
+    lg.slice(0, 400),
+  );
+  await p.selectOption('#lgpreset', 'm4827');
+  lg = await p.innerText('#lgsolution');
+  check(lg.includes('W = Π − T₀') && lg.includes('(52,18°)') && lg.includes('Малые колебания') && (await p.isChecked('#lgeq')), 'Мещерский 48.27: относительное равновесие cos θ = g/(aω²) и уравнения движения', lg.slice(-500));
+  await p.fill('#lg-eqto', '1');
+  await p.locator('#lg-eqto').blur();
+  check(!(await p.innerText('#lgsolution')).includes('180°'), 'отрезок поиска сужен — верхнего положения нет');
+  await p.click('#lgeq');
+  check(!(await p.innerText('#lgsolution')).includes('Положения равновесия'), 'поиск выключен');
   await tab('frames');
 
   // 33а. Вкладка «Удар и колебания».

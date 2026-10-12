@@ -55,6 +55,8 @@ export interface LagProblem {
   P: string;
   /** Время интегрирования, с. */
   tEnd: number;
+  /** Поиск положений равновесия: отрезок для одной координаты (для нескольких — метод Ньютона от q* координат). */
+  eqSearch?: { from: number; to: number } | null;
 }
 
 export interface CoordDerivation {
