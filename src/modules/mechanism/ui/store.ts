@@ -2,11 +2,12 @@
 import { History } from '../../../shared/history';
 import { isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
-import type { MBody, MCons, MDrive, MechProblem, MLoad, MMass, MPoint, PtDef } from '../model/mech';
+import type { MBody, MCons, MDrive, MechProblem, MLaw, MLoad, MMass, MPoint, PtDef } from '../model/mech';
 import { MECH_PRESETS, type MechPresetKey } from '../presets';
 
 export const MECH_MODULE = 'mechanism';
 export const MAX_ITEMS = 24;
+export const MAX_LAWS = 8;
 
 export interface MechState {
   problem: MechProblem;
@@ -133,6 +134,16 @@ export function parseMech(raw: unknown): { ok: true; problem: MechProblem } | { 
   if (isObj(raw.param)) problem.param = { val: str(raw.param, 'val', '0'), from: str(raw.param, 'from', '0'), to: str(raw.param, 'to', '360') };
   if (isObj(raw.energy)) problem.energy = { phi0: str(raw.energy, 'phi0', '0'), w0: str(raw.energy, 'w0', '0') };
   if (typeof raw.plot === 'string' && raw.plot) problem.plot = str(raw, 'plot');
+  if (isObj(raw.time)) {
+    const tm = raw.time;
+    const laws: MLaw[] = [];
+    for (const l of Array.isArray(tm.laws) ? (tm.laws as unknown[]).slice(0, MAX_LAWS) : []) {
+      if (!isObj(l) || typeof l.name !== 'string' || typeof l.f !== 'string' || !['angle', 'length'].includes(l.kind as string)) return { ok: false, errors: ['Закон движения записан неверно (имя, формула от t, вид angle или length).'] };
+      laws.push({ name: str(l, 'name').slice(0, 12), f: str(l, 'f'), kind: l.kind as MLaw['kind'] });
+    }
+    problem.time = { t: str(tm, 't', '0'), from: str(tm, 'from', '0'), to: str(tm, 'to', '1'), laws };
+    delete problem.param;
+  }
   return { ok: true, problem };
 }
 
@@ -367,7 +378,25 @@ export class MechStore {
   setMassKind = (i: number, k: MMass['k']) => this.change((p) => (p.masses![i] = newMass(k, p.points.map((q) => q.name), p.bodies.map((b) => b.name))));
   removeMass = (i: number) => this.change((p) => p.masses!.splice(i, 1));
   setAcc = (on: boolean) => this.change((p) => (on ? delete p.acc : (p.acc = false)));
-  setParam = (on: boolean) => this.change((p) => (p.param = on ? { val: '30', from: '0', to: '360' } : null));
+  setParam = (on: boolean) =>
+    this.change((p) => {
+      p.param = on ? { val: '30', from: '0', to: '360' } : null;
+      if (on) p.time = null;
+    });
+  /** Законы движения по времени (взамен параметра φ; теорема об энергии в этом режиме не считается). */
+  setTime = (on: boolean) =>
+    this.change((p) => {
+      p.time = on ? { t: '1', from: '0', to: '4', laws: [{ name: 'φ', f: 'πt/6', kind: 'angle' }] } : null;
+      if (on) (p.param = null), (p.energy = null);
+    });
+  addLaw = () => {
+    const tm = this.st.problem.time;
+    if (!tm || tm.laws.length >= MAX_LAWS) return;
+    const used = new Set(tm.laws.map((l) => l.name));
+    const name = ['ψ', 'θ', 's', 'xC', 'yC', 'α', 'β', 'χ'].find((n) => !used.has(n)) ?? 'q';
+    this.change((p) => p.time!.laws.push({ name, f: '0', kind: name === 's' || name.startsWith('x') || name.startsWith('y') ? 'length' : 'angle' }));
+  };
+  removeLaw = (i: number) => this.change((p) => p.time?.laws.splice(i, 1));
   setEnergy = (on: boolean) => this.change((p) => (p.energy = on ? { phi0: p.param?.from ?? '0', w0: '0' } : null));
   setPlot = (key: string) => this.change((p) => (p.plot = key));
   setGravity = (on: boolean) => this.change((p) => (p.g = on ? '9.81' : ''));

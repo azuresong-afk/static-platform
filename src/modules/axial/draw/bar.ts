@@ -5,7 +5,7 @@
 import { renderBands } from '../../../shared/draw/diagrams';
 import { fmt } from '../../../shared/format';
 import type { Bar, BarSolution } from '../model/bar';
-import { heldBySupport } from '../model/bar';
+import { effectiveBar, heldBySupport } from '../model/bar';
 
 export const W = 1000;
 const OX = 110;
@@ -21,7 +21,9 @@ export function scaleOf(b: Bar): (z: number) => number {
   return (z: number) => r1(OX + z * SC);
 }
 
-export function renderBar(b: Bar, sol: BarSolution | null): { svg: string; viewBox: string } {
+export function renderBar(b0: Bar, sol: BarSolution | null): { svg: string; viewBox: string } {
+  // При выключенном нагреве участки не подкрашиваются.
+  const b = effectiveBar(b0);
   const X = scaleOf(b);
   const H = 250,
     y = 120;

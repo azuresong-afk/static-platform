@@ -7,10 +7,10 @@ import { Notice } from '../../../shared/ui/Notice';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { renderMech, renderPlot } from '../draw/mech';
 import { type MCons, type MDrive, type MechProblem, type MLoad, type MMass, type PtDef } from '../model/mech';
-import { plotKeys, solveMech } from '../model/solve';
+import { plotKeys, solveMech, substTime, type LawState } from '../model/solve';
 import { MECH_PRESETS, type MechPresetKey } from '../presets';
 import { mechDoc } from '../text/solution';
-import { MAX_ITEMS, type MechStore } from './store';
+import { MAX_ITEMS, MAX_LAWS, type MechStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
 
@@ -22,7 +22,8 @@ export function MechView({ chrome, store }: { chrome: Chrome; store: MechStore }
   const figA = useMemo(() => renderMech(pr, r, 'a'), [pr, r]);
   const doc = useMemo(() => mechDoc(pr, r, { explain: st.explain }), [pr, r, st.explain]);
   const plot = useMemo(() => (r.plot ? renderPlot(r.plot) : null), [r]);
-  const keys = useMemo(() => (pr.param ? plotKeys(pr) : []), [pr]);
+  const keys = useMemo(() => (pr.param || pr.time ? plotKeys(pr) : []), [pr]);
+  const axis = pr.time ? 't' : 'φ';
 
   return (
     <>
@@ -75,11 +76,11 @@ export function MechView({ chrome, store }: { chrome: Chrome; store: MechStore }
             <svg id="msvg" className="sketch" viewBox={fig.viewBox} role="img" aria-label="Механизм со скоростями или ускорениями точек" dangerouslySetInnerHTML={{ __html: fig.svg }} />
           </div>
         </section>
-        {pr.param && (
-          <section className="sheet" aria-label="График по φ">
+        {(pr.param || pr.time) && (
+          <section className="sheet" aria-label={`График по ${axis}`}>
             <div className="bar">
               <label className="field mc-plotsel">
-                <span>График по φ</span>
+                <span>График по {axis}</span>
                 <select id="mplot" value={keys.some((k) => k[0] === pr.plot) ? pr.plot : ''} onChange={(e) => store.setPlot(e.target.value)}>
                   <option value="">— выберите величину —</option>
                   {keys.map(([k, t]) => (
@@ -92,7 +93,7 @@ export function MechView({ chrome, store }: { chrome: Chrome; store: MechStore }
             </div>
             {plot && (
               <div className="canvas">
-                <svg id="mplotsvg" className="sketch" viewBox={plot.viewBox} role="img" aria-label="График величины по параметру φ" dangerouslySetInnerHTML={{ __html: plot.svg }} />
+                <svg id="mplotsvg" className="sketch" viewBox={plot.viewBox} role="img" aria-label={pr.time ? 'График величины по времени t' : 'График величины по параметру φ'} dangerouslySetInnerHTML={{ __html: plot.svg }} />
               </div>
             )}
           </section>
@@ -199,8 +200,11 @@ function Sel({ id, label, value, opts, onPick }: { id: string; label: string; va
 
 function Editor({ store, pr }: { store: MechStore; pr: MechProblem }) {
   const end = (k: string) => () => store.endSession(k);
-  // φ допустим в числовых полях, когда задан параметр положения (кроме полей самого параметра).
-  const prep = (path: (string | number)[]) => (pr.param && path[0] !== 'param' ? (s: string) => s.replace(/φ|phi/g, '(1)') : undefined);
+  // φ допустим в числовых полях, когда задан параметр положения (кроме полей самого параметра); в режиме законов
+  // движения — имена законов со штрихами и t (кроме полей самих законов и момента t).
+  const probe: LawState[] = (pr.time?.laws ?? []).map((l) => ({ name: l.name.trim(), kind: l.kind, v: 1, v1: 1, v2: 1 }) as LawState);
+  const prep = (path: (string | number)[]) =>
+    pr.time ? (path[0] !== 'time' ? (s: string) => substTime(s, probe, 1) : undefined) : pr.param && path[0] !== 'param' ? (s: string) => s.replace(/φ|phi/g, '(1)') : undefined;
   const T = (path: (string | number)[], label: string, value: string) => (
     <LawField key={path.join('.')} id={`m-${path.join('-')}`} label={label} value={value} wide={false} prep={prep(path)} onType={(v) => store.type(path, v)} onEnd={end(path.join('.'))} />
   );
@@ -212,7 +216,9 @@ function Editor({ store, pr }: { store: MechStore; pr: MechProblem }) {
   return (
     <>
       <h2>Точки</h2>
-      <p className="empty">Числа — формулы без t: 15/cos(π/6), 30sqrt(3); углы — в градусах от оси x против часовой стрелки. Ссылаться можно на точки выше.</p>
+      <p className="empty">
+        Числа — формулы: 15/cos(π/6), 30sqrt(3); углы — в градусах от оси x против часовой стрелки. Ссылаться можно на точки выше.{pr.time ? ' Законы движения: имя — значение (угол в градусах), имя\' и имя\'\' — производные по t, t — момент времени.' : ''}
+      </p>
       <div className="asteps" id="mpoints">
         {pr.points.map((q, i) => {
           const d = q.def;
@@ -402,6 +408,42 @@ function Editor({ store, pr }: { store: MechStore; pr: MechProblem }) {
         <input type="checkbox" id="mparam" checked={!!pr.param} onChange={(e) => store.setParam(e.target.checked)} />
         параметр положения φ (график, теорема об энергии)
       </label>
+      <label className="toggle">
+        <input type="checkbox" id="mtime" checked={!!pr.time} onChange={(e) => store.setTime(e.target.checked)} />
+        законы движения по времени (φ(t), x(t)…; график по t)
+      </label>
+      {pr.time && (
+        <>
+          <div className="cgpar">
+            {T(['time', 't'], 'момент t, с', pr.time.t)}
+            {T(['time', 'from'], 'график: от, с', pr.time.from)}
+            {T(['time', 'to'], 'до, с', pr.time.to)}
+          </div>
+          <div className="asteps" id="mlaws">
+            {pr.time.laws.map((l, i) => (
+              <div key={i} className="cvrow mc-law">
+                <span className="inp cv-name">
+                  <input type="text" aria-label="Имя закона" id={`m-time-laws-${i}-name`} value={l.name} onChange={(e) => store.type(['time', 'laws', i, 'name'], e.target.value.replace(/\s/g, '').slice(0, 12))} onBlur={end(`time.laws.${i}.name`)} />
+                </span>
+                <LawField id={`m-time-laws-${i}-f`} label="(t) =" value={l.f} wide={false} onType={(v) => store.type(['time', 'laws', i, 'f'], v)} onEnd={end(`time.laws.${i}.f`)} />
+                <Sel id={`m-time-laws-${i}-kind`} label="вид" value={l.kind} opts={[['angle', 'угол, рад'], ['length', 'длина']]} onPick={(v) => store.pick(['time', 'laws', i, 'kind'], v)} />
+                <button type="button" className="del" aria-label="Убрать закон" onClick={() => store.removeLaw(i)}>
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="segbtns">
+            <button type="button" id="maddlaw" disabled={pr.time.laws.length >= MAX_LAWS} onClick={store.addLaw}>
+              + закон
+            </button>
+          </div>
+          <p className="empty">
+            Угол задаётся формулой в радианах (как в задачнике: φ = π/6·sin(πt/2)); в полях «φ» — его значение в градусах, «φ'» и «φ''» — угловая скорость и ускорение. Ведущие задайте через производные: ω = φ', ε = φ''; скорость точки — x', ускорение — x''.
+            Скорости и ускорения точек сверяются с производными их положений по времени.
+          </p>
+        </>
+      )}
       {pr.param && (
         <>
           <div className="cgpar">
@@ -507,10 +549,12 @@ function Editor({ store, pr }: { store: MechStore; pr: MechProblem }) {
         учитывать вес масс (ось y — вверх)
       </label>
       {pr.g ? <div className="cgpar">{T(['g'], 'g', pr.g)}</div> : null}
-      <label className="toggle">
-        <input type="checkbox" id="menergy" checked={!!pr.energy} onChange={(e) => store.setEnergy(e.target.checked)} />
-        теорема об изменении кинетической энергии: скорость в положении φ
-      </label>
+      {!pr.time && (
+        <label className="toggle">
+          <input type="checkbox" id="menergy" checked={!!pr.energy} onChange={(e) => store.setEnergy(e.target.checked)} />
+          теорема об изменении кинетической энергии: скорость в положении φ
+        </label>
+      )}
       {pr.energy && (
         <div className="cgpar">
           {T(['energy', 'phi0'], 'начальное φ₀, °', pr.energy.phi0)}

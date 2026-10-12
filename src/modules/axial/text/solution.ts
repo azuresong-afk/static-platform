@@ -6,7 +6,7 @@
 import { b as bold, join, sub, v, type Block, type Doc, type Inline, type Step } from '../../../shared/doc';
 import { fmt } from '../../../shared/format';
 import { roman } from '../../frames/model/geometry';
-import { heldBySupport, type Bar, type BarSolution } from '../model/bar';
+import { effectiveBar, heldBySupport, type Bar, type BarSolution } from '../model/bar';
 import { pointName } from '../draw/bar';
 
 const f = (x: number, d = 3) => fmt(x, d);
@@ -17,7 +17,9 @@ const Nn = (i: number): Inline[] => [v('N'), sub(roman(i))];
 const An = (i: number): Inline[] => [v('A'), sub(roman(i))];
 const cA = (c: number): string => (Math.abs(c - 1) < 1e-12 ? 'A' : `${f(c, 2)}A`);
 
-export function axialDoc(b: Bar, sol: BarSolution, opts: { explain?: boolean } = {}): Doc {
+export function axialDoc(b0: Bar, sol: BarSolution, opts: { explain?: boolean } = {}): Doc {
+  // При выключенном нагреве ΔT участков не учитываются.
+  const b = effectiveBar(b0);
   const n = b.steps.length;
   const steps: Step[] = [];
   const ex = (bl: Block[], ...c: Inline[]) => {
@@ -74,7 +76,7 @@ export function axialDoc(b: Bar, sol: BarSolution, opts: { explain?: boolean } =
         ],
       },
     ];
-    const areaTxt = find ? 'A' : `${f(sol.A)} см²`;
+    const areaTxt = find && !sol.heatArea ? 'A' : `${f(sol.A)} см²${sol.heatArea ? ', найденной ниже' : ''}`;
     bl.push({
       k: 'eq',
       lines: [
@@ -179,8 +181,89 @@ export function axialDoc(b: Bar, sol: BarSolution, opts: { explain?: boolean } =
     steps.push({ title: 'Продольные силы по участкам (метод сечений)', blocks: bl });
   }
 
-  // 4. Площадь A из условия прочности.
-  if (find) {
+  // 4. Площадь A из условия прочности при нагреве (две заделки): σ_i = a_i/A + b_i.
+  if (find && sol.heatArea && sol.indet) {
+    const ha = sol.heatArea;
+    const S = b.sigmaAllow;
+    const H = -sol.indet.heat / (10 * sol.indet.flex);
+    const bound = (i: number, kind: 'min' | 'max'): Inline[] => {
+      const a = ha.a[i],
+        bb = ha.b[i];
+      // min: растяжение от сил (a > 0) ограничено сверху, сжатие (a < 0) — снизу; max — наоборот.
+      const upper = (kind === 'min') === a > 0;
+      const lhs: Inline[] = [`${f(a, 2)}/`, v('A'), bb < 0 ? ` − ${f(-bb, 3)}` : ` + ${f(bb, 3)}`, upper ? ` ≤ ${f(S, 1)}` : ` ≥ −${f(S, 1)}`];
+      const val = kind === 'min' ? ha.min : (ha.max as number);
+      const den = upper ? S - bb : -S - bb;
+      return [`участок ${roman(i)}: `, ...lhs, '  ⇒  ', v('A'), kind === 'min' ? ' ≥ ' : ' ≤ ', `${f(Math.abs(a), 2)}/${f(Math.abs(den), 3)} = `, bold(`${f(val)} см²`)];
+    };
+    const bl: Block[] = [
+      {
+        k: 'p',
+        c: [
+          'Продольные силы ',
+          v('N'),
+          sub('i'),
+          ' = ',
+          v('P'),
+          sub('i'),
+          ' + ',
+          v('H'),
+          '·',
+          v('A'),
+          ': часть от сил ',
+          v('P'),
+          sub('i'),
+          ' от площади не зависит, температурная пропорциональна ',
+          v('A'),
+          ` (H = ${f(H, 4)} кН/см²). Напряжения `,
+          v('σ'),
+          sub('i'),
+          ' = 10·',
+          v('N'),
+          sub('i'),
+          '/(',
+          v('c'),
+          sub('i'),
+          '·',
+          v('A'),
+          ') = ',
+          v('a'),
+          sub('i'),
+          '/',
+          v('A'),
+          ' + ',
+          v('b'),
+          sub('i'),
+          ' (МПа, ',
+          v('A'),
+          ' — в см²):',
+        ],
+      },
+      { k: 'eq', lines: ha.a.map((a, i) => ({ c: [v('σ'), sub(roman(i)), ` = ${f(a, 2)}/`, v('A'), ha.b[i] < 0 ? ` − ${f(-ha.b[i], 3)}` : ` + ${f(ha.b[i], 3)}`] as Inline[] })) },
+      { k: 'p', c: ['Условие прочности |', v('σ'), sub('i'), '| ≤ [σ] = ', f(S, 1), ' МПа на каждом участке. Наименьшую площадь даёт:'] },
+      { k: 'eq', lines: [{ c: bound(ha.iMin, 'min') }, ...(ha.max != null && ha.iMax != null ? [{ c: bound(ha.iMax, 'max') }] : [])] },
+    ];
+    if (ha.max != null)
+      bl.push({ k: 'p', c: ['Площадь должна лежать в пределах ', f(ha.min), ' ≤ ', v('A'), ' ≤ ', f(ha.max), ' см²: у слишком толстого бруса сжатие от нагрева больше [σ] и не снимается растяжением от сил. Берём наименьшую: ', v('A'), ' = ', bold(`${f(ha.min)} см²`), '.'] });
+    else bl.push({ k: 'p', c: ['На остальных участках условие при этой площади выполнено. ', v('A'), ' = ', bold(`${f(ha.min)} см²`), '.'] });
+    ex(
+      bl,
+      'Температурные напряжения ',
+      v('b'),
+      sub('i'),
+      ' от площади не зависят: и стесняющая сила, и площадь сечения пропорциональны ',
+      v('A'),
+      '. Напряжения от сил ',
+      v('a'),
+      sub('i'),
+      '/',
+      v('A'),
+      ' убывают с ростом площади. Поэтому условие прочности — неравенства относительно 1/',
+      v('A'),
+      '; если температурное напряжение на участке само по себе больше [σ], подходящей площади может не быть вовсе.',
+    );
+    steps.push({ title: 'Площадь из условия прочности (с нагревом)', blocks: bl });
+  } else if (find) {
     const ratios = sol.steps.map((s, i) => Math.abs(s.N) / b.steps[i].c);
     const k = ratios.indexOf(Math.max(...ratios));
     const bl: Block[] = [
@@ -279,7 +362,8 @@ export function axialDoc(b: Bar, sol: BarSolution, opts: { explain?: boolean } =
   // 9. Ответ.
   {
     const rows: { kind: 'main' | 'aux'; val: Inline[]; note: string }[] = [];
-    if (find) rows.push({ kind: 'main', val: [v('A'), ' = ', f(sol.A), ' см²'], note: 'из условия прочности' });
+    if (find) rows.push({ kind: 'main', val: [v('A'), ' = ', f(sol.A), ' см²'], note: sol.heatArea ? 'наименьшая из условия прочности' : 'из условия прочности' });
+    if (sol.heatArea?.max != null) rows.push({ kind: 'aux', val: [v('A'), sub('max'), ' = ', f(sol.heatArea.max), ' см²'], note: 'наибольшая допустимая площадь' });
     rows.push({ kind: 'main', val: ['|σ|', sub('max'), ' = ', f(Math.abs(sol.sigmaMax.v), 2), ' МПа'], note: `участок ${roman(sol.sigmaMax.i)}` });
     if (sol.nT) rows.push({ kind: 'main', val: [v('n'), ' = ', f(sol.nT, 2)], note: 'запас по пределу текучести' });
     const zi = sol.uMax.z;

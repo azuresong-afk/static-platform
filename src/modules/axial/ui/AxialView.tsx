@@ -6,7 +6,8 @@ import { DocView } from '../../../shared/ui/DocView';
 import { Notice } from '../../../shared/ui/Notice';
 import { Num } from '../../../shared/ui/Num';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
-import { heldBySupport, solveBar, type Bar } from '../model/bar';
+import { effectiveBar, heated, heldBySupport, solveBar, type Bar } from '../model/bar';
+import { fmt } from '../../../shared/format';
 import { pointName, renderBar, renderBarDiagrams } from '../draw/bar';
 import { AXIAL_PRESETS, type AxialPresetKey } from '../presets';
 import { axialDoc } from '../text/solution';
@@ -17,18 +18,26 @@ import { taskEntries } from '../../../shared/tasks';
 const WHY = {
   nosteps: 'Добавьте хотя бы одну ступень.',
   nosupport: 'Нужна хотя бы одна заделка.',
-  findWithHeat: 'При нагреве бруса с двумя заделками площадь A нужно задать (в задаче 1.2 — из решения задачи 1.1): температурные усилия зависят от A.',
+  heatNoArea: 'Подходящей площади нет: напряжения от нагрева от площади не зависят, и при любой A на каком-то участке |σ| > [σ].',
+  heatOnly: 'Сил нет: напряжения от нагрева от площади не зависят, поэтому из условия прочности площадь не находится — задайте A.',
 };
 
 export function AxialView({ chrome, store }: { chrome: Chrome; store: AxialStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
-  const b = st.bar;
+  const raw = st.bar;
+  const heat = heated(raw);
+  // Расчёт, чертёж и текст — с учётом флага нагрева.
+  const b = useMemo(() => effectiveBar(raw), [raw]);
   const sol = useMemo(() => solveBar(b), [b]);
   const ok = sol.ok && Number.isFinite(sol.A) && sol.A > 0 ? sol : null;
   const bar = useMemo(() => renderBar(b, ok), [b, ok]);
   const dg = useMemo(() => (ok ? renderBarDiagrams(b, ok) : null), [b, ok]);
   const doc = useMemo(() => (ok ? axialDoc(b, ok, { explain: st.explain }) : null), [b, ok, st.explain]);
-  const why = !sol.ok ? WHY[sol.why] : !ok ? 'Нагрузки нет: N = 0 на всех участках, площадь из условия прочности не определяется.' : null;
+  const why = !sol.ok
+    ? WHY[sol.why] + (sol.thermal ? ` Напряжения от нагрева по участкам: ${sol.thermal.map((x, i) => `${roman(i)}: ${fmt(x, 2)}`).join('; ')} МПа; [σ] = ${fmt(b.sigmaAllow, 1)} МПа.` : '')
+    : !ok
+      ? 'Нагрузки нет: N = 0 на всех участках, площадь из условия прочности не определяется.'
+      : null;
 
   const radio = <K extends 'supports' | 'areaMode'>(key: K, value: Bar[K], label: string) => (
     <label className="opt">
@@ -96,13 +105,22 @@ export function AxialView({ chrome, store }: { chrome: Chrome; store: AxialStore
             {radio('supports', 'left', 'заделка слева')}
             {radio('supports', 'right', 'заделка справа')}
             {radio('supports', 'both', 'заделки с обеих сторон (статически неопределимый)')}
+            <div className="sub">Нагрев</div>
+            <label className="opt">
+              <input type="radio" name="a-heat" checked={!heat} onChange={() => store.setHeat(false)} />
+              <span>нет</span>
+            </label>
+            <label className="opt">
+              <input type="radio" name="a-heat" checked={heat} onChange={() => store.setHeat(true)} />
+              <span>есть (ΔT по участкам, охлаждение — «−»)</span>
+            </label>
             <div className="sub">Ступени слева направо</div>
-            <div className="asteps">
+            <div className={heat ? 'asteps' : 'asteps a-noheat'}>
               <div className="ahead">
                 <span />
                 <span>длина, м</span>
                 <span>площадь, ×A</span>
-                <span>нагрев, К</span>
+                {heat && <span>нагрев, К</span>}
                 <span />
               </div>
               {b.steps.map((s, i) => (
@@ -110,7 +128,7 @@ export function AxialView({ chrome, store }: { chrome: Chrome; store: AxialStore
                   <span className="segname">{roman(i)}</span>
                   <Num id={`a-l${i}`} label="" value={s.l} onType={(v) => store.typeStep(i, 'l', v)} onEnd={() => store.endSession(`step:${i}:l`)} />
                   <Num id={`a-c${i}`} label="" value={s.c} onType={(v) => store.typeStep(i, 'c', v)} onEnd={() => store.endSession(`step:${i}:c`)} />
-                  <Num id={`a-t${i}`} label="" value={s.dT} neg onType={(v) => store.typeStep(i, 'dT', v)} onEnd={() => store.endSession(`step:${i}:dT`)} />
+                  {heat && <Num id={`a-t${i}`} label="" value={s.dT} neg onType={(v) => store.typeStep(i, 'dT', v)} onEnd={() => store.endSession(`step:${i}:dT`)} />}
                   <button type="button" className="del" aria-label={`Убрать ступень ${roman(i)}`} disabled={b.steps.length <= 1} onClick={() => store.removeStep(i)}>
                     ×
                   </button>
@@ -143,14 +161,16 @@ export function AxialView({ chrome, store }: { chrome: Chrome; store: AxialStore
               {field('sigmaAllow', '[σ]', 'МПа')}
               {field('sigmaT', 'σт (0 — не считать запас)', 'МПа', true)}
               {field('E', 'E', 'МПа')}
-              <Num
-                id="a-alpha"
-                label="α, 10⁻⁶ 1/К"
-                value={Math.round(b.alpha * 1e6 * 1e6) / 1e6}
-                zero
-                onType={(v) => store.typeField('alpha', v / 1e6)}
-                onEnd={() => store.endSession('alpha')}
-              />
+              {heat && (
+                <Num
+                  id="a-alpha"
+                  label="α, 10⁻⁶ 1/К"
+                  value={Math.round(b.alpha * 1e6 * 1e6) / 1e6}
+                  zero
+                  onType={(v) => store.typeField('alpha', v / 1e6)}
+                  onEnd={() => store.endSession('alpha')}
+                />
+              )}
             </div>
           </section>
           <section className="panel" aria-label="Решение">

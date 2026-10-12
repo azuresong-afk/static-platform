@@ -6,7 +6,8 @@
 import { b, sub, sup, v, type AnswerRow, type Block, type Doc, type Inline, type Step } from '../../../shared/doc';
 import { fmt } from '../../../shared/format';
 import type { MechProblem } from '../model/mech';
-import type { MechSolution } from '../model/solve';
+import { lawText, substTime, type MechSolution } from '../model/solve';
+import { num } from '../model/mech';
 
 const f = (x: number) => fmt(x, 4);
 const vec = (p: [number, number]) => `(${f(p[0])}; ${f(p[1])})`;
@@ -22,11 +23,39 @@ export function mechDoc(pr: MechProblem, r: MechSolution, opts: { explain?: bool
   if (!r.ok) return { steps: [{ title: 'Данные', blocks: [{ k: 'badge', tone: 'bad', text: 'проверьте механизм' }, { k: 'ul', items: r.errors.map((x) => [x]) }] }] };
   const P = (n: string) => r.points.find((p) => p.name === n)!;
   const B = (n: string) => r.bodies.find((q) => q.name === n)!;
+  // Значение поля (с законами движения — после подстановки); « = число», если поле записано не числом.
+  const plain = (x: string) => /^\s*[−-]?\d+([.,]\d+)?\s*$/.test(x);
+  const valOf = (x: string) => num(r.time ? substTime(x, r.time.laws, r.time.t) : x);
+  const andVal = (x: string) => {
+    const q = valOf(x);
+    return plain(x) || q == null ? '' : ` = ${f(q)}`;
+  };
+  // Законы движения в момент t.
+  if (r.time) {
+    const lines: { c: Inline[] }[] = [];
+    for (const l of r.time.laws) {
+      const ang = l.kind === 'angle';
+      // Производная-число записывается один раз: «x'' = 4», а не «x'' = 4 = 4».
+      const dv = (e: typeof l.d1, val: number, unit: string): Inline[] => [...(e.k === 'num' ? [' = '] : [` = ${lawText(e)} = `]), b(f(val)), unit];
+      lines.push(
+        { c: [v(l.name), `(t) = ${(pr.time?.laws.find((q) => q.name.trim() === l.name)?.f ?? lawText(l.f)).trim()}  →  `, v(l.name), ' = ', b(f(l.v)), ang ? ` рад = ${f((l.v * 180) / Math.PI)}°` : ''] },
+        { c: [v(l.name), "'", ...dv(l.d1, l.v1, ang ? ' рад/с' : '')] },
+        { c: [v(l.name), "''", ...dv(l.d2, l.v2, ang ? ' рад/с²' : '')] },
+      );
+    }
+    const bl: Block[] = [{ k: 'p', c: [`Момент времени t = ${f(r.time.t)} с. Законы движения и их производные:`] }, { k: 'eq', lines }];
+    ex(
+      bl,
+      'Производные взяты по t символьно. В числовых полях вместо имени закона подставлено его значение (угол — в градусах, как все углы чертежа), вместо имени со штрихами — производные: для угла это угловая скорость и угловое ускорение в рад/с и рад/с². Скорости и ускорения точек дополнительно сверены с производными их положений по времени.',
+    );
+    steps.push({ title: 'Законы движения в момент t', blocks: bl });
+  }
   {
     const lines = r.points.map((p) => ({ c: [b(p.name), ` ${vec(p.pos)}${p.aux ? ' — вспомогательная' : ''}`] as Inline[] }));
     const bl: Block[] = [{ k: 'eq', lines }];
     const nDrive = pr.drives.reduce((s, d) => s + (d.k === 'vec' ? 2 : 1), 0);
     if (r.phi != null) bl.unshift({ k: 'p', c: ['Параметр положения ', v('φ'), ` = ${f(r.phi)}°.`] });
+    if (r.time) bl.unshift({ k: 'p', c: [`Положение — в момент t = ${f(r.time.t)} с (по законам движения).`] });
     bl.push({ k: 'p', c: [`Подвижность механизма — ${r.dof}; задано условий движения: ${nDrive}.`] });
     ex(bl, 'Координаты построены по заданным длинам и углам. Подвижность — число независимых скоростей, которые нужно задать, чтобы движение всех звеньев стало определённым.');
     steps.push({ title: 'Положение механизма', blocks: bl });
@@ -35,8 +64,8 @@ export function mechDoc(pr: MechProblem, r: MechSolution, opts: { explain?: bool
     const lines: { c: Inline[] }[] = [];
     for (const d of pr.drives) {
       if (d.k === 'omega') lines.push({ c: [v('ω'), sub(d.b), ` = ${d.w} = ${f(B(d.b).omega)} рад/с (задана)`] });
-      else if (d.k === 'proj') lines.push({ c: [`проекция скорости точки ${d.p} на направление ${d.ang}° = ${d.v} (задана)`] });
-      else lines.push({ c: [v('v'), sub(d.p), ` = ${d.v} под углом ${d.vang}° к оси x (задана)`] });
+      else if (d.k === 'proj') lines.push({ c: [`проекция скорости точки ${d.p} на направление ${d.ang}°${andVal(d.ang) ? ` (${f(valOf(d.ang)!)}°)` : ''} = ${d.v}${andVal(d.v)} (задана)`] });
+      else lines.push({ c: [v('v'), sub(d.p), ` = ${d.v}${andVal(d.v)} под углом ${d.vang}°${andVal(d.vang) ? ` (${f(valOf(d.vang)!)}°)` : ''} к оси x (задана)`] });
     }
     const bl: Block[] = [{ k: 'eq', lines }];
     for (const name of r.order) {
@@ -66,7 +95,7 @@ export function mechDoc(pr: MechProblem, r: MechSolution, opts: { explain?: bool
   if (r.guides.length) steps.push(guideStep(pr, r, ex));
   if (pr.acc !== false) {
     const lines: { c: Inline[] }[] = [];
-    for (const d of pr.drives) if (d.k === 'omega') lines.push({ c: [v('ε'), sub(d.b), ` = ${d.e} (задано)`] });
+    for (const d of pr.drives) if (d.k === 'omega') lines.push({ c: [v('ε'), sub(d.b), ` = ${d.e}${andVal(d.e)} (задано)`] });
     const bl: Block[] = lines.length ? [{ k: 'eq', lines }] : [];
     for (const name of r.order) {
       const body = B(name),
@@ -166,7 +195,7 @@ function loadName(pr: MechProblem, i: number): Inline[] {
 function dynSteps(pr: MechProblem, r: MechSolution, ex: Ex): Step[] {
   const steps: Step[] = [];
   const F = r.forces;
-  if (r.extraErrors.length) steps.push({ title: 'Силы, массы, график', blocks: [{ k: 'badge', tone: 'bad', text: 'проверьте данные' }, { k: 'ul', items: r.extraErrors.map((x) => [x]) }] });
+  if (r.extraErrors.length) steps.push({ title: r.time ? 'Сверка с законами движения, силы, график' : 'Силы, массы, график', blocks: [{ k: 'badge', tone: 'bad', text: 'проверьте данные' }, { k: 'ul', items: r.extraErrors.map((x) => [x]) }] });
   if (!F) return steps;
   const lead: Inline[] = F.lead.kind === 'omega' ? [v('ω'), sub(F.lead.name)] : [v('v'), sub(F.lead.name)];
   const red = F.lead.kind === 'omega' ? 'момент' : 'сила';
@@ -274,7 +303,15 @@ function dynRows(r: MechSolution): AnswerRow[] {
   if (F?.X != null) rows.push({ kind: 'main', val: [v('X'), ' = ', b(f(F.X))], note: 'неизвестная сила (пара) из условия равновесия' });
   if (r.energy?.lam != null) rows.push({ kind: 'main', val: [F!.lead.kind === 'omega' ? v('ω') : v('v'), sub(F!.lead.name), ' = ', b(f(r.energy.lam))], note: `при φ = ${f(r.energy.phi)}° (теорема об энергии)` });
   if (F && F.masses.length) rows.push({ kind: 'main', val: ['T = ', b(f(F.T)), `, ${F.lead.kind === 'omega' ? 'J' : 'm'}`, sub('пр'), ` = ${f(F.Jred!)}`], note: 'кинетическая энергия при заданном ведущем' });
-  if (r.plot?.max && r.plot.min)
-    rows.push({ kind: 'aux', val: [`${r.plot.label}: max ${f(r.plot.max.y)} при φ ${r.plot.approx ? '≈' : '='} ${fmt(r.plot.max.x, 2)}°, min ${f(r.plot.min.y)} при φ ${r.plot.approx ? '≈' : '='} ${fmt(r.plot.min.x, 2)}°`], note: `по графику на [${fmt(r.plot.xs[0], 2)}°; ${fmt(r.plot.xs[r.plot.xs.length - 1], 2)}°]` });
+  if (r.plot?.max && r.plot.min) {
+    // Ось графика: φ в градусах или t в секундах.
+    const [an, au] = r.plot.axis === 't' ? ['t', ' с'] : ['φ', '°'];
+    const eq = r.plot.approx ? '≈' : '=';
+    rows.push({
+      kind: 'aux',
+      val: [`${r.plot.label}: max ${f(r.plot.max.y)} при ${an} ${eq} ${fmt(r.plot.max.x, 2)}${au}, min ${f(r.plot.min.y)} при ${an} ${eq} ${fmt(r.plot.min.x, 2)}${au}`],
+      note: `по графику на [${fmt(r.plot.xs[0], 2)}${au}; ${fmt(r.plot.xs[r.plot.xs.length - 1], 2)}${au}]`,
+    });
+  }
   return rows;
 }

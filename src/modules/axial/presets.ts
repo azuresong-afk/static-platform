@@ -17,11 +17,11 @@ const steel = { E: 2e5, alpha: 125e-7, sigmaAllow: 150, sigmaT: 240 };
 export const AXIAL_PRESETS = {
   antonov11: {
     title: 'Антонов, задача 1.1, схема 1 (группа 20, Z = 5): найти A',
-    bar: { steps: antonovSteps(0), forces: [0, 200, 100, 0], supports: 'left', areaMode: 'find', A: 1, ...steel } as Bar,
+    bar: { steps: antonovSteps(0), forces: [0, 200, 100, 0], supports: 'left', areaMode: 'find', A: 1, heat: false, ...steel } as Bar,
   },
   antonov12: {
     title: 'Антонов, задача 1.2, схема 1: две заделки, нагрев +10 К',
-    bar: { steps: antonovSteps(10), forces: [0, 200, 100, 0], supports: 'both', areaMode: 'given', A: 6.67, ...steel } as Bar,
+    bar: { steps: antonovSteps(10), forces: [0, 200, 100, 0], supports: 'both', areaMode: 'given', A: 6.67, heat: true, ...steel } as Bar,
   },
   hanging: {
     title: 'Брус с заделкой справа: две ступени, сжатие и растяжение',
@@ -34,6 +34,7 @@ export const AXIAL_PRESETS = {
       supports: 'right',
       areaMode: 'given',
       A: 4,
+      heat: false,
       ...steel,
     } as Bar,
   },

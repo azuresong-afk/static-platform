@@ -6,7 +6,13 @@
  * находится численно; φ̇_g = v_g·d/|d|² (точка с наибольшим |d|). Работа сил на перемещении: dT/dφ = Q(φ) = N_g/φ̇_g —
  * обобщённая сила (от величины ведущей скорости не зависит); моменты сопротивления берутся против направления движения.
  * T(φ) = T(φ₀) + ∫ Q dφ (формула Симпсона), скорость ведущего: λ = √(2T/J_пр).
+ *
+ * Законы движения по времени (вместо φ): каждый закон — формула от t; в момент t его значение и производные (символьно)
+ * подставляются в числовые поля: «φ» — значение (угол — в градусах), «φ'» и «φ''» — производные (угол — в рад/с и рад/с²),
+ * «t» — сам момент. Скорости и ускорения точек сверяются с производными их положений по времени (численно): если
+ * ведущие условия не согласуются с законами, это сообщается.
  */
+import { diff, evalExpr, parseExpr, printExpr, simplify, type Expr } from '../../../shared/expr';
 import { forcesAt, type Forces } from './forces';
 import { buildPositions, kinematics, num, type MechProblem, type MechResult, type V2 } from './mech';
 
@@ -37,6 +43,19 @@ export interface PlotResult {
   min: { x: number; y: number } | null;
   /** Наибольшее и наименьшее — по точкам графика, без уточнения. */
   approx: boolean;
+  /** Ось графика: параметр φ (°) или время t (с). */
+  axis: 'phi' | 't';
+}
+/** Закон движения в момент t: формулы производных и значения (угол — в радианах). */
+export interface LawState {
+  name: string;
+  kind: 'angle' | 'length';
+  f: Expr;
+  d1: Expr;
+  d2: Expr;
+  v: number;
+  v1: number;
+  v2: number;
 }
 export interface MechSolution extends MechResult {
   /** Значение параметра φ, ° (null — параметр не задан). */
@@ -46,6 +65,8 @@ export interface MechSolution extends MechResult {
   extraErrors: string[];
   energy: EnergyResult | null;
   plot: PlotResult | null;
+  /** Законы движения в момент t (null — режим времени не включён). */
+  time: { t: number; laws: LawState[] } | null;
 }
 
 /* Числовые поля, в которых можно писать φ. */
@@ -77,12 +98,154 @@ export function withParam(pr: MechProblem, phi: number): MechProblem {
   };
 }
 
+/* ---------- законы движения по времени ---------- */
+
+const FN_WORDS = [
+  'sin',
+  'cos',
+  'tg',
+  'tan',
+  'ctg',
+  'cot',
+  'arctg',
+  'atan',
+  'arcsin',
+  'asin',
+  'arccos',
+  'acos',
+  'exp',
+  'ln',
+  'sqrt',
+  'abs',
+  'sh',
+  'sinh',
+  'ch',
+  'cosh',
+  'th',
+  'tanh',
+  'pi',
+];
+const LAW_NAME = /^[A-Za-zА-Яа-яΑ-Ωα-ω][A-Za-z0-9А-Яа-яΑ-Ωα-ω]*$/u;
+// Имя не должно быть частью слова; π перед именем — множитель («πt» = π·t).
+const BEFORE = '(?<![A-Za-zА-Яа-яΑ-Ωα-ορ-ω_])';
+const AFTER = "(?![A-Za-zА-Яа-яΑ-Ωα-ω0-9_'′″])";
+const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Законы движения в момент t: разбор, производные, значения; ошибки — понятным текстом. */
+export function lawStates(pr: MechProblem, t: number): { laws: LawState[]; errors: string[] } {
+  const errors: string[] = [];
+  const laws: LawState[] = [];
+  const seen = new Set<string>();
+  for (const l of pr.time?.laws ?? []) {
+    const n = l.name.trim();
+    if (!LAW_NAME.test(n)) errors.push(`Закон «${l.name}»: имя — буква, затем буквы и цифры (φ, ψ, xC, s1).`);
+    else if (n === 't' || n === 'e' || n === 'π' || FN_WORDS.includes(n.toLowerCase())) errors.push(`Закон «${n}»: это имя занято (t, e, π, имена функций).`);
+    else if (seen.has(n)) errors.push(`Закон «${n}» задан дважды.`);
+    seen.add(n);
+    const p = parseExpr(l.f);
+    if (!p.ok) {
+      errors.push(`Закон ${n}(t): ${p.error}.`);
+      continue;
+    }
+    const d1 = diff(p.e),
+      d2 = diff(d1);
+    const v = evalExpr(p.e, t),
+      v1 = evalExpr(d1, t),
+      v2 = evalExpr(d2, t);
+    if (![v, v1, v2].every(Number.isFinite)) errors.push(`Закон ${n}(t): при t = ${t} не определён (деление на нуль, корень из отрицательного числа…).`);
+    laws.push({ name: n, kind: l.kind, f: p.e, d1, d2, v, v1, v2 });
+  }
+  return { laws, errors };
+}
+
+/** Подстановка законов (имя, имя', имя'') и момента t в строку числового поля. */
+export function substTime(s: string, laws: LawState[], t: number): string {
+  let out = s;
+  for (const l of [...laws].sort((a, c) => c.name.length - a.name.length))
+    out = out.replace(new RegExp(`${BEFORE}${escRe(l.name)}(''|″|′′|'|′)?${AFTER}`, 'gu'), (_m, pr?: string) => {
+      const ord = !pr ? 0 : pr === "'" || pr === '′' ? 1 : 2;
+      const val = ord === 0 ? (l.kind === 'angle' ? (l.v * 180) / Math.PI : l.v) : ord === 1 ? l.v1 : l.v2;
+      return `(${val})`;
+    });
+  return out.replace(new RegExp(`${BEFORE}t${AFTER}`, 'gu'), `(${t})`);
+}
+
+/** Задача с подставленными законами в момент t. */
+export function withTime(pr: MechProblem, t: number, laws: LawState[]): MechProblem {
+  const f = (v: string) => substTime(v, laws, t);
+  return {
+    ...pr,
+    points: mapNumeric(pr.points, f),
+    cons: mapNumeric(pr.cons, f),
+    drives: mapNumeric(pr.drives, f),
+    loads: mapNumeric(pr.loads ?? [], f),
+    masses: mapNumeric(pr.masses ?? [], f),
+    g: f(pr.g ?? ''),
+  };
+}
+
+/** Запись производной закона для текста. */
+export const lawText = (e: Expr) => printExpr(simplify(e));
+
+/** Задача в момент t (null — законы не заданы верно). */
+function atTime(pr: MechProblem, t: number): MechProblem | null {
+  const l = lawStates(pr, t);
+  return l.errors.length ? null : withTime(pr, t, l.laws);
+}
+
+/**
+ * Сверка скоростей и ускорений с законами: численные производные положений точек по времени. Если положение
+ * от t не зависит (механизм в одном положении, а t — только в ведущих), сверять не с чем.
+ */
+function timeConsistency(pr: MechProblem, t: number, r: MechResult): string[] {
+  const h = 1e-3;
+  const pa = atTime(pr, t + h),
+    pb = atTime(pr, t - h);
+  if (!pa || !pb) return [];
+  const A = buildPositions(pa.points).pos,
+    Bp = buildPositions(pb.points).pos;
+  const pts = r.points.filter((q) => !q.aux && A[q.name] && Bp[q.name]);
+  const span = Math.max(1, ...r.points.map((q) => Math.hypot(...q.pos)));
+  if (pts.every((q) => Math.hypot(A[q.name][0] - Bp[q.name][0], A[q.name][1] - Bp[q.name][1]) < 1e-12 * span)) return [];
+  const out: string[] = [];
+  const vScale = Math.max(
+    1e-9,
+    ...pts.map((q) => Math.hypot(...q.v)),
+    ...pts.map((q) => Math.hypot(A[q.name][0] - Bp[q.name][0], A[q.name][1] - Bp[q.name][1]) / (2 * h)),
+  );
+  for (const q of pts) {
+    const vn: V2 = [(A[q.name][0] - Bp[q.name][0]) / (2 * h), (A[q.name][1] - Bp[q.name][1]) / (2 * h)];
+    if (Math.hypot(vn[0] - q.v[0], vn[1] - q.v[1]) > 1e-4 * vScale) {
+      out.push(
+        `Скорость точки ${q.name} не согласуется с законами движения: по производной положения v = (${+vn[0].toFixed(4)}; ${+vn[1].toFixed(4)}), по ведущим условиям — (${+q.v[0].toFixed(4)}; ${+q.v[1].toFixed(4)}). Проверьте ведущие: например, ω = φ', ε = φ''.`,
+      );
+      return out;
+    }
+  }
+  if (pr.acc === false) return out;
+  const aOf = (q: (typeof pts)[number]): V2 => [
+    (A[q.name][0] - 2 * q.pos[0] + Bp[q.name][0]) / (h * h),
+    (A[q.name][1] - 2 * q.pos[1] + Bp[q.name][1]) / (h * h),
+  ];
+  const aScale = Math.max(1e-9, ...pts.map((q) => Math.hypot(...q.a)), ...pts.map((q) => Math.hypot(...aOf(q))));
+  for (const q of pts) {
+    const an = aOf(q);
+    if (Math.hypot(an[0] - q.a[0], an[1] - q.a[1]) > 1e-3 * aScale) {
+      out.push(
+        `Ускорение точки ${q.name} не согласуется с законами движения: по второй производной положения a = (${+an[0].toFixed(3)}; ${+an[1].toFixed(3)}), по ведущим условиям — (${+q.a[0].toFixed(3)}; ${+q.a[1].toFixed(3)}). Проверьте ускорения в ведущих: например, ε = φ''.`,
+      );
+      return out;
+    }
+  }
+  return out;
+}
+
 /** Величины для графика: ключ и подпись. */
 export function plotKeys(pr: MechProblem): [string, string][] {
   const out: [string, string][] = [];
   const inBody = new Set(pr.bodies.flatMap((b) => b.pts));
   const lead = pr.drives[0];
-  if (pr.energy && (pr.masses ?? []).length)
+  if (pr.energy && !pr.time && (pr.masses ?? []).length)
     out.push(['W', lead?.k === 'omega' ? `ω ведущего звена ${lead.b} по теореме об энергии` : `скорость ведущей точки по теореме об энергии`]);
   for (const b of pr.bodies) out.push([`w:${b.name}`, `ω звена ${b.name}`]);
   for (const p of pr.points.filter((q) => inBody.has(q.name)))
@@ -243,20 +406,31 @@ function simpson2(f: (x: number, edge: -1 | 0 | 1) => [number, number] | null, a
 }
 
 export function solveMech(pr: MechProblem): MechSolution {
+  if (pr.time) return solveTimed(pr, pr.time);
   const extraErrors: string[] = [];
   let phi: number | null = null;
   if (pr.param) {
     const v = num(pr.param.val);
     if (v == null || usesPhi(pr.param.val)) {
       const r = kinematics(pr);
-      return { ...r, ok: false, errors: [`Параметр φ — не число («${pr.param.val}»).`], phi: null, forces: null, extraErrors, energy: null, plot: null };
+      return {
+        ...r,
+        ok: false,
+        errors: [`Параметр φ — не число («${pr.param.val}»).`],
+        phi: null,
+        forces: null,
+        extraErrors,
+        energy: null,
+        plot: null,
+        time: null,
+      };
     }
     phi = v;
   }
   const s = stateAt(pr, phi);
   if (!s.r.ok) {
     const hint = !pr.param && s.r.errors.some((e) => usesPhi(e)) ? ['Чтобы писать φ в полях, задайте параметр положения φ.'] : [];
-    return { ...s.r, errors: [...s.r.errors, ...hint], phi, forces: null, extraErrors, energy: null, plot: null };
+    return { ...s.r, errors: [...s.r.errors, ...hint], phi, forces: null, extraErrors, energy: null, plot: null, time: null };
   }
   extraErrors.push(...s.fErr);
   let energy: EnergyResult | null = null;
@@ -313,7 +487,58 @@ export function solveMech(pr: MechProblem): MechSolution {
     if (lo == null || hi == null || !(hi > lo)) extraErrors.push('График: диапазон φ задан неверно (нужно «от» < «до»).');
     else if (label) plot = makePlot(pr, pr.plot, label, lo, hi, phi!, energy, extraErrors);
   }
-  return { ...s.r, phi, forces: s.f, extraErrors, energy, plot };
+  return { ...s.r, phi, forces: s.f, extraErrors, energy, plot, time: null };
+}
+
+/** Расчёт в момент t по законам движения; график — по времени. */
+function solveTimed(pr: MechProblem, tm: NonNullable<MechProblem['time']>): MechSolution {
+  const extraErrors: string[] = [];
+  const t = num(tm.t);
+  const fail = (errors: string[]): MechSolution => ({
+    ...kinematics({ ...pr, time: null }),
+    ok: false,
+    errors,
+    phi: null,
+    forces: null,
+    extraErrors,
+    energy: null,
+    plot: null,
+    time: null,
+  });
+  if (t == null || /(^|[^A-Za-zА-Яа-яΑ-Ωα-ω])t($|[^A-Za-zА-Яа-яΑ-Ωα-ω])/u.test(tm.t)) return fail([`Момент времени t — не число («${tm.t}»).`]);
+  if (!tm.laws.length) return fail(['Задайте хотя бы один закон движения (например, φ = πt/6).']);
+  const ls = lawStates(pr, t);
+  if (ls.errors.length) return fail(ls.errors);
+  const p = withTime(pr, t, ls.laws);
+  const s = stateAt(p, null);
+  const time = { t, laws: ls.laws };
+  if (!s.r.ok) return { ...s.r, phi: null, forces: null, extraErrors, energy: null, plot: null, time };
+  extraErrors.push(...s.fErr, ...timeConsistency(pr, t, s.r));
+  if (pr.energy) extraErrors.push('Теорема об энергии считается по параметру положения φ — в режиме законов движения она не используется.');
+  let plot: PlotResult | null = null;
+  if (pr.plot) {
+    const lo = num(tm.from),
+      hi = num(tm.to);
+    const label = plotKeys(pr).find((k) => k[0] === pr.plot)?.[1];
+    if (lo == null || hi == null || !(hi > lo)) extraErrors.push('График: диапазон t задан неверно (нужно «от» < «до»).');
+    else if (label) {
+      const N = 180;
+      const f = (x: number) => {
+        const q = atTime(pr, x);
+        return q ? valueOf(pr.plot!, stateAt(q, null)) : null;
+      };
+      const xs: number[] = [],
+        ys: (number | null)[] = [];
+      for (let i = 0; i <= N; i++) {
+        const x = lo + ((hi - lo) * i) / N;
+        xs.push(x);
+        ys.push(f(x));
+      }
+      const ext = extremes(xs, ys);
+      plot = { key: pr.plot, label, xs, ys, cur: { x: t, y: f(t) }, ...ext, approx: true, axis: 't' };
+    }
+  }
+  return { ...s.r, phi: null, forces: s.f, extraErrors, energy: null, plot, time };
 }
 
 function makePlot(
@@ -361,7 +586,7 @@ function makePlot(
       ys.reverse();
     }
     const ext = extremes(xs, ys);
-    return { key, label, xs, ys, cur: { x: energy.phi, y: energy.lam }, ...ext, approx: true };
+    return { key, label, xs, ys, cur: { x: energy.phi, y: energy.lam }, ...ext, approx: true, axis: 'phi' };
   }
   const xs: number[] = [],
     ys: (number | null)[] = [];
@@ -405,7 +630,7 @@ function makePlot(
       y = f(x);
     return y != null && sgn * y >= sgn * e.y ? { x, y } : e;
   };
-  return { key, label, xs, ys, cur: { x: phi, y: f(phi) }, max: refine(ext.max, 1), min: refine(ext.min, -1), approx: false };
+  return { key, label, xs, ys, cur: { x: phi, y: f(phi) }, max: refine(ext.max, 1), min: refine(ext.min, -1), approx: false, axis: 'phi' };
 }
 
 function extremes(xs: number[], ys: (number | null)[]) {

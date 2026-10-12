@@ -278,8 +278,13 @@ async function main() {
   check(as.includes('−92,861') && as.includes('1,72'), 'задача 1.2: реакция и запас прочности');
   check((await p.locator('#adg .dg-line').count()) === 12, 'эпюры N, σ, ε, Δ по трём участкам');
   await p.click('input[name="a-areaMode"] >> nth=0');
-  check((await p.innerText('.dg-empty')).includes('площадь A нужно задать'), 'нагрев с двумя заделками — A нужно задать');
+  as = await p.innerText('#asolution');
+  check(as.includes('Площадь из условия прочности (с нагревом)') && as.includes('A ≥ 857,14/139,286 = 6,154 см²'), 'нагрев с двумя заделками: площадь из условия прочности 6,154 см²', as.slice(0, 400));
   await p.click('.hist button[title^="Отменить"]');
+  await p.click('input[name="a-heat"] >> nth=0');
+  check((await p.locator('#a-t0').count()) === 0 && (await p.locator('#a-alpha').count()) === 0 && (await p.innerText('#asolution')).includes('−85,714'), 'нагрев выключен: ΔT и α скрыты и не учитываются');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.locator('#a-t0').count()) === 1 && (await p.innerText('#asolution')).includes('−92,861'), 'нагрев снова включён — значения ΔT сохранились');
   await p.click('#aadd');
   check((await p.locator('.arow').count()) === 4, 'ступень добавляется');
   check((await p.locator('#a-f4').count()) === 0, 'в точке у заделки поля силы нет');
@@ -724,6 +729,21 @@ async function main() {
   await p.click('#maddm-point');
   const pmS = await p.innerText('#msolution');
   check(!pmS.includes('проверьте') && pmS.includes('Кинетическая энергия механизма') && pmS.includes('Параметр положения'), 'φ в поле угла и точечная масса — решение с кинетической энергией', pmS.slice(0, 300));
+  // 27б. Законы движения по времени.
+  await p.selectOption('#mpreset', 'm163');
+  const lwS = await p.innerText('#msolution');
+  check(lwS.includes('Законы движения в момент t') && lwS.includes('φ = 0,5236 рад = 30°') && lwS.includes('12,204'), 'Мещерский 16.3, 18.2: законы x_C(t), φ(t), a_A = 12,20', lwS.slice(0, 300));
+  check((await p.isChecked('#mtime')) && !(await p.isChecked('#mparam')) && (await p.locator('#mlaws .mc-law').count()) === 2, 'режим законов движения: два закона, параметр φ выключен');
+  await p.fill('#m-time-t', '0');
+  await p.locator('#m-time-t').blur();
+  check((await p.innerText('#msolution')).includes('9,8696'), 't = 0: v_A = π² = 9,87 см/с (16.2)');
+  await p.selectOption('#mplot', 'v:A');
+  check(((await p.textContent('#mplotsvg')) ?? '').includes('t, с'), 'график по времени');
+  await p.fill('#m-time-t', '0,5');
+  await p.locator('#m-time-t').blur();
+  await p.fill('#m-drives-1-w', "2φ'");
+  await p.locator('#m-drives-1-w').blur();
+  check((await p.innerText('#msolution')).includes('не согласуется с законами движения'), 'ведущее не согласовано с законом — предупреждение');
   await tab('frames');
 
   // 28. Вкладка «Сложное движение».

@@ -16,6 +16,10 @@ export function pick(r: MechSolution, key: string): number {
   const P = (n: string) => r.points.find((p) => p.name === n)!;
   const B = (n: string) => r.bodies.find((p) => p.name === n)!;
   if (k === 'v') return hyp(P(a).v);
+  if (k === 'vx') return P(a).v[0];
+  if (k === 'vy') return P(a).v[1];
+  if (k === 'ax') return P(a).a[0];
+  if (k === 'ay') return P(a).a[1];
   if (k === 'a') return hyp(P(a).a);
   if (k === 'w') return Math.abs(B(a).omega);
   if (k === 'e') return Math.abs(B(a).eps);

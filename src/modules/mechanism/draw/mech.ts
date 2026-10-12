@@ -230,7 +230,7 @@ export function renderPlot(pl: PlotResult): { svg: string; viewBox: string } {
   const out: string[] = [`<rect width="${Wp}" height="${Hp}" fill="var(--sheet)"/>`];
   const ys = pl.ys.filter((y): y is number => y != null);
   if (!ys.length) {
-    out.push(`<text class="tb-note" x="16" y="${Hp / 2}">Во всём диапазоне механизм не собирается — проверьте построение и диапазон φ.</text>`);
+    out.push(`<text class="tb-note" x="16" y="${Hp / 2}">Во всём диапазоне механизм не собирается — проверьте построение и диапазон ${pl.axis === 't' ? 't' : 'φ'}.</text>`);
     return { svg: out.join(''), viewBox: `0 0 ${Wp} ${Hp}` };
   }
   let lo = Math.min(...ys),
@@ -249,7 +249,7 @@ export function renderPlot(pl: PlotResult): { svg: string; viewBox: string } {
   for (const t of tx) if (t >= xa - 1e-9 && t <= xb + 1e-9) out.push(`<line class="rt-grid" x1="${r1(X(t))}" y1="${y0}" x2="${r1(X(t))}" y2="${y0 + h}"/><text class="rt-tick" x="${r1(X(t))}" y="${y0 + h + 18}" text-anchor="middle">${fmt(t, 1)}</text>`);
   if (lo < 0 && hi > 0) out.push(`<line class="rt-axis" x1="${x0}" y1="${r1(Y(0))}" x2="${x0 + w}" y2="${r1(Y(0))}"/>`);
   out.push(`<line class="rt-axis" x1="${x0}" y1="${y0}" x2="${x0}" y2="${y0 + h}"/><line class="rt-axis" x1="${x0}" y1="${y0 + h}" x2="${x0 + w}" y2="${y0 + h}"/>`);
-  out.push(`<text class="rt-title" x="${x0}" y="${y0 - 16}">${esc(pl.label)}</text><text class="rt-tick" x="${x0 + w}" y="${y0 + h + 38}" text-anchor="end">φ, °</text>`);
+  out.push(`<text class="rt-title" x="${x0}" y="${y0 - 16}">${esc(pl.label)}</text><text class="rt-tick" x="${x0 + w}" y="${y0 + h + 38}" text-anchor="end">${pl.axis === 't' ? 't, с' : 'φ, °'}</text>`);
   // Кривая с разрывами там, где механизм не собирается.
   let seg: string[] = [];
   const segs: string[][] = [];

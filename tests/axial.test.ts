@@ -131,8 +131,97 @@ describe('случайные брусья: совпадение с методо�
     );
   });
 
-  it('искать A при нагреве в брусе с двумя заделками нельзя: A нужно задать', () =>
-    expect(solveBar(base({ supports: 'both', steps: [{ l: 0.1, c: 1, dT: 10 }] }))).toEqual({ ok: false, why: 'findWithHeat' }));
+});
+
+describe('подбор площади при нагреве (две заделки)', () => {
+  const heatedBar = (over: Partial<Bar>) => base({ supports: 'both', areaMode: 'find', heat: true, ...over });
+  it('задача 1.2 Антонова с подбором: A = 6,154 см², опасен сжатый участок III (σ = −150)', () => {
+    const r = ok(heatedBar({ steps: [{ l: 0.1, c: 3, dT: 10 }, { l: 0.2, c: 2, dT: 0 }, { l: 0.1, c: 1, dT: 0 }] }));
+    // a = 10·P/c, P = N0 − Σ N0·l/(E·c)/Σ l/(E·c) = [214,29; 14,29; −85,71]; b = 10·H/c, H = −α·ΔT·l/(10·Σ l/(E·c)) = −1,0714.
+    expect(r.heatArea?.a.map((x) => +x.toFixed(2))).toEqual([714.29, 71.43, -857.14]);
+    expect(r.heatArea?.b.map((x) => +x.toFixed(3))).toEqual([-3.571, -5.357, -10.714]);
+    expect(r.A).toBeCloseTo(857.142857 / (150 - 10.714286), 6);
+    expect(r.heatArea).toMatchObject({ iMin: 2, max: null });
+    expect(r.steps[2].sigma).toBeCloseTo(-150, 9);
+    r.steps.forEach((s) => expect(Math.abs(s.sigma)).toBeLessThanOrEqual(150 + 1e-9));
+    // При той же площади, заданной явно, — то же решение.
+    const g = ok(heatedBar({ areaMode: 'given', A: r.A, steps: [{ l: 0.1, c: 3, dT: 10 }, { l: 0.2, c: 2, dT: 0 }, { l: 0.1, c: 1, dT: 0 }] }));
+    g.steps.forEach((s, i) => expect(s.N).toBeCloseTo(r.steps[i].N, 9));
+  });
+  it('верхняя граница: сжатие от нагрева больше [σ] снимается растяжением от сил — 3,125 ≤ A ≤ 4,167 см²', () => {
+    const b = heatedBar({ steps: [{ l: 0.1, c: 1, dT: 56 }, { l: 0.1, c: 3, dT: 56 }], forces: [0, 100, 0] });
+    const r = ok(b);
+    expect(r.A).toBeCloseTo(3.125, 9);
+    expect(r.heatArea?.max).toBeCloseTo(25 / 6, 9);
+    expect(r.heatArea).toMatchObject({ iMin: 1, iMax: 0 });
+    const atMax = ok({ ...b, areaMode: 'given', A: 25 / 6 });
+    expect(atMax.steps[0].sigma).toBeCloseTo(-150, 9);
+    expect(ok({ ...b, areaMode: 'given', A: 4.3 }).steps[0].sigma).toBeLessThan(-150);
+  });
+  it('площади нет: нагрев перегружает сжатый участок при любой A; сил нет — площадь не находится', () => {
+    const none = solveBar(heatedBar({ steps: [{ l: 0.1, c: 1, dT: 80 }, { l: 0.1, c: 1, dT: 80 }], forces: [0, 100, 0] }));
+    expect(none).toMatchObject({ ok: false, why: 'heatNoArea' });
+    if (!none.ok) expect(none.thermal?.map((x) => +x.toFixed(6))).toEqual([-200, -200]);
+    expect(solveBar(heatedBar({ steps: [{ l: 0.1, c: 1, dT: 10 }], forces: [0, 0] }))).toMatchObject({ ok: false, why: 'heatOnly' });
+  });
+  it('случайные брусья: найденная площадь — наименьшая допустимая (и наибольшая, если есть); «нет площади» — правда', () => {
+    const arb = fc.record({
+      steps: fc.array(fc.record({ l: fc.constantFrom(0.05, 0.1, 0.2), c: fc.constantFrom(1, 1.5, 2, 3), dT: fc.constantFrom(0, 10, -15, 40, 80) }), { minLength: 1, maxLength: 4 }),
+      forcesRaw: fc.array(fc.constantFrom(0, 10, -25, 40, 100, -200), { minLength: 5, maxLength: 5 }),
+    });
+    const sigmas = (b: Bar, A: number) => ok({ ...b, areaMode: 'given', A }).steps.map((s) => s.sigma);
+    const fits = (b: Bar, A: number) => sigmas(b, A).every((x) => Math.abs(x) <= 150 * (1 + 1e-9));
+    fc.assert(
+      fc.property(arb, ({ steps, forcesRaw }) => {
+        const b = heatedBar({ steps, forces: forcesRaw.slice(0, steps.length + 1) });
+        const r = solveBar(b);
+        if (!steps.some((s) => s.dT)) return;
+        if (!r.ok) {
+          // Перебор площадей от 0,01 до 10⁴ см² — ни одна не годится.
+          if (r.why === 'heatNoArea') for (let k = -2; k <= 4; k += 0.01) expect(fits(b, 10 ** k)).toBe(false);
+          return;
+        }
+        expect(fits(b, r.A)).toBe(true);
+        expect(fits(b, r.A * (1 - 1e-6))).toBe(false);
+        if (r.heatArea?.max != null) {
+          expect(fits(b, r.heatArea.max)).toBe(true);
+          expect(fits(b, r.heatArea.max * (1 + 1e-6))).toBe(false);
+        } else expect(fits(b, r.A * 50)).toBe(true);
+        // Независимо: метод перемещений при найденной площади.
+        const f = fem(b, r.A);
+        r.steps.forEach((s, i) => expect(Math.abs(s.N - f.N[i])).toBeLessThan(1e-7 * Math.max(1, Math.abs(s.N))));
+      }),
+      { numRuns: 1500, seed: 20261010 },
+    );
+  });
+});
+
+describe('нагрев есть / нет', () => {
+  const b12 = AXIAL_PRESETS.antonov12.bar;
+  it('выключенный нагрев: ΔT участков сохраняются, но не учитываются', () => {
+    const off = ok({ ...b12, heat: false });
+    const zero = ok({ ...b12, heat: undefined, steps: b12.steps.map((s) => ({ ...s, dT: 0 })) });
+    off.steps.forEach((s, i) => {
+      expect(s.N).toBeCloseTo(zero.steps[i].N, 12);
+      expect(s.epsT).toBe(0);
+    });
+    expect(off.RB).toBeCloseTo(-85.714, 3);
+  });
+  it('файл без флага: нагрев есть, если задан ΔT; флаг сохраняется; переключение с отменой', () => {
+    const { heat: _h, ...old } = b12;
+    expect(parseBar(old)).toMatchObject({ ok: true, bar: { heat: true } });
+    expect(parseBar({ ...old, steps: old.steps.map((s) => ({ ...s, dT: 0 })) })).toMatchObject({ ok: true, bar: { heat: false } });
+    expect(parseBar({ ...b12, heat: 'да' }).ok).toBe(false);
+    const st = new AxialStore({ preset: 'antonov12' });
+    st.setHeat(false);
+    expect(st.get().bar.heat).toBe(false);
+    expect(st.get().bar.steps[0].dT).toBe(10);
+    const st2 = new AxialStore();
+    expect(st2.importProject(st.exportProject().text)).toBe(true);
+    expect(st2.get().bar.heat).toBe(false);
+    st.undo();
+    expect(st.get().bar.heat).toBe(true);
+  });
 });
 
 describe('вкладка: хранилище, файл, текст', () => {
@@ -188,5 +277,20 @@ describe('вкладка: хранилище, файл, текст', () => {
     expect(t).toContain('NIII = RD = −92,861 кН (сжатие)');
     expect(t).toContain('n = σт/|σ|max = 240/139,22 = 1,72');
     expect(t).toContain('ΔD = ΔC + ΔlIII = 0 мм — сечение в заделке не смещается');
+  });
+  it('текст подбора при нагреве: σ = a/A + b, опасный участок, A_max', () => {
+    const txt = (bar: Bar) =>
+      axialDoc(bar, ok(bar))
+        .steps.map((st) => st.title + '\n' + st.blocks.map((bl) => (bl.k === 'p' ? inlineText(bl.c) : bl.k === 'eq' ? bl.lines.map((l) => inlineText(l.c)).join('\n') : bl.k === 'answer' ? bl.rows.map((x) => inlineText(x.val) + ' ' + x.note).join('\n') : '')).join('\n'))
+        .join('\n');
+    const t = txt({ ...AXIAL_PRESETS.antonov12.bar, areaMode: 'find' });
+    expect(t).toContain('Площадь из условия прочности (с нагревом)');
+    expect(t).toContain('σIII = −857,14/A − 10,714');
+    expect(t).toContain('участок III: −857,14/A − 10,714 ≥ −150  ⇒  A ≥ 857,14/139,286 = 6,154 см²');
+    expect(t).toContain('A = 6,154 см² наименьшая из условия прочности');
+    const t2 = txt(base({ supports: 'both', areaMode: 'find', heat: true, steps: [{ l: 0.1, c: 1, dT: 56 }, { l: 0.1, c: 3, dT: 56 }], forces: [0, 100, 0] }));
+    expect(t2).toContain('участок I: 250/A − 210 ≥ −150  ⇒  A ≤ 250/60 = 4,167 см²');
+    expect(t2).toContain('Площадь должна лежать в пределах 3,125 ≤ A ≤ 4,167 см²');
+    expect(t2).toContain('Amax = 4,167 см² наибольшая допустимая площадь');
   });
 });

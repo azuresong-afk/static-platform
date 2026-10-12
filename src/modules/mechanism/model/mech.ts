@@ -91,6 +91,17 @@ export interface MechProblem {
   energy?: { phi0: string; w0: string } | null;
   /** Величина на графике по φ (ключ из plotKeys). */
   plot?: string;
+  /**
+   * Законы движения по времени (вместо параметра φ): момент t, диапазон графика и законы. В числовых полях пишут имя
+   * закона (значение; угол — в градусах), имя' и имя'' (первая и вторая производные: угол — в рад/с и рад/с²) и t.
+   */
+  time?: { t: string; from: string; to: string; laws: MLaw[] } | null;
+}
+/** Закон движения: имя, формула от t, вид (угол — формула в радианах; длина — в единицах задачи). */
+export interface MLaw {
+  name: string;
+  f: string;
+  kind: 'angle' | 'length';
 }
 
 export type V2 = [number, number];

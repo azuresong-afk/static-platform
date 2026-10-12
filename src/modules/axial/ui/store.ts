@@ -48,6 +48,7 @@ export function parseBar(raw: unknown): { ok: true; bar: Bar } | { ok: false; er
   pos('A', 'A');
   pos('sigmaAllow', '[σ]');
   pos('sigmaT', 'σт', true);
+  if (raw.heat != null && typeof raw.heat !== 'boolean') errors.push('Нагрев: ожидается true или false.');
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -61,6 +62,8 @@ export function parseBar(raw: unknown): { ok: true; bar: Bar } | { ok: false; er
       A: raw.A as number,
       sigmaAllow: raw.sigmaAllow as number,
       sigmaT: raw.sigmaT as number,
+      // В файлах без флага нагрев есть, если задан хотя бы один ΔT.
+      heat: typeof raw.heat === 'boolean' ? raw.heat : steps.some((s) => s.dT !== 0),
     },
   };
 }
@@ -119,6 +122,13 @@ export class AxialStore {
     if (this.st.bar[key] === v) return;
     this.commit();
     this.setBar({ ...this.st.bar, [key]: v });
+  };
+  /** Нагрев есть или нет: при выключенном ΔT участков сохраняются, но не учитываются. */
+  setHeat = (on: boolean) => {
+    const b = this.st.bar;
+    if ((b.heat ?? b.steps.some((s) => s.dT !== 0)) === on) return;
+    this.commit();
+    this.setBar({ ...b, heat: on });
   };
   /** Новая ступень справа (копия последней), с точкой без силы. */
   addStep = () => {
