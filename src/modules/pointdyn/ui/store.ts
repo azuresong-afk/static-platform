@@ -1,14 +1,16 @@
 /**
- * Состояние вкладки «Динамика точки»: три режима — прямолинейное движение (вторая задача),
- * силы по заданному движению (первая задача) и криволинейное движение в плоскости; история отмены, файл проекта.
+ * Состояние вкладки «Динамика точки»: четыре режима — прямолинейное движение (вторая задача),
+ * силы по заданному движению (первая задача), криволинейное движение в плоскости и движение по окружности
+ * (реакция связи, отрыв); история отмены, файл проекта.
  */
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
+import type { CircleProblem } from '../model/circle';
 import type { FirstProblem } from '../model/first';
 import type { PlaneProblem } from '../model/plane';
 import type { PointProblem } from '../model/point';
-import { FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS, type FirstPresetKey, type PlanePresetKey, type PointPresetKey } from '../presets';
+import { CIRCLE_PRESETS, FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS, type CirclePresetKey, type FirstPresetKey, type PlanePresetKey, type PointPresetKey } from '../presets';
 
 export const POINT_MODULE = 'pointdyn';
 export const NUM_KEYS = ['m', 'alpha', 'f', 'F0', 'at', 'F1', 'p', 'c', 'kv', 'kq', 'x0', 'v0', 't', 'v1', 'x1'] as const;
@@ -17,15 +19,19 @@ export const FIRST_NUM = ['m', 'g', 't', 't1', 't2'] as const;
 export type FirstNumKey = (typeof FIRST_NUM)[number];
 export const PLANE_NUM = ['m', 'g', 'Fx', 'Fy', 'kv', 'kq', 'c', 'cx', 'cy', 'q', 'x0', 'y0', 'v0', 'ang', 't', 'y1', 'x1'] as const;
 export type PlaneNumKey = (typeof PLANE_NUM)[number];
+export const CIRCLE_NUM = ['m', 'g', 'R', 'phi0', 'v0', 'ax', 'ay', 'c', 'L0', 'phi1'] as const;
+export type CircleNumKey = (typeof CIRCLE_NUM)[number];
+const LINKS: CircleProblem['link'][] = ['thread', 'inner', 'outer', 'rod'];
 
-export type PointMode = 'line' | 'first' | 'plane';
+export type PointMode = 'line' | 'first' | 'plane' | 'circle';
 export interface PointTask {
   mode: PointMode;
   line: PointProblem;
   first: FirstProblem;
   plane: PlaneProblem;
+  circle: CircleProblem;
 }
-export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey;
+export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey | CirclePresetKey;
 
 export interface PointState {
   problem: PointTask;
@@ -46,12 +52,14 @@ const copy = <T>(p: T): T => structuredClone(p);
 const DEF_LINE = POINT_PRESETS.m277.problem as PointProblem;
 const DEF_FIRST = FIRST_PRESETS.f2615.problem as FirstProblem;
 const DEF_PLANE = PLANE_PRESETS.p2744.problem as PlaneProblem;
+const DEF_CIRCLE = CIRCLE_PRESETS.c311.problem as CircleProblem;
 
 /** Задача по ключу готовой задачи: режим и данные этого режима. */
 export function presetTask(k: AnyPresetKey, base?: PointTask): { task: PointTask; title: string } {
-  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE) };
+  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE) };
   if (k in POINT_PRESETS) return { task: { ...b, mode: 'line', line: copy(POINT_PRESETS[k as PointPresetKey].problem as PointProblem) }, title: POINT_PRESETS[k as PointPresetKey].title };
   if (k in FIRST_PRESETS) return { task: { ...b, mode: 'first', first: copy(FIRST_PRESETS[k as FirstPresetKey].problem as FirstProblem) }, title: FIRST_PRESETS[k as FirstPresetKey].title };
+  if (k in CIRCLE_PRESETS) return { task: { ...b, mode: 'circle', circle: copy(CIRCLE_PRESETS[k as CirclePresetKey].problem as CircleProblem) }, title: CIRCLE_PRESETS[k as CirclePresetKey].title };
   return { task: { ...b, mode: 'plane', plane: copy(PLANE_PRESETS[k as PlanePresetKey].problem as PlaneProblem) }, title: PLANE_PRESETS[k as PlanePresetKey].title };
 }
 
@@ -80,17 +88,25 @@ function parsePlane(raw: unknown): PlaneProblem | null {
   };
 }
 
+function parseCircle(raw: unknown): CircleProblem | null {
+  if (!isObj(raw) || !CIRCLE_NUM.every((k) => isNum(raw[k])) || !LINKS.includes(raw.link as CircleProblem['link']) || !['at', 'detach', 'full'].includes(raw.ask as string)) return null;
+  const nums = Object.fromEntries(CIRCLE_NUM.map((k) => [k, raw[k]])) as Record<CircleNumKey, number>;
+  return { ...nums, byWeight: raw.byWeight === true, spring: raw.spring === true, link: raw.link as CircleProblem['link'], ask: raw.ask as CircleProblem['ask'] };
+}
+
 export function parsePoint(raw: unknown): { ok: true; problem: PointTask } | { ok: false; errors: string[] } {
   // Файл первой версии раздела — только прямолинейное движение.
   const old = parseLine(raw);
-  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE) } };
-  if (!isObj(raw) || !['line', 'first', 'plane'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
+  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE) } };
+  if (!isObj(raw) || !['line', 'first', 'plane', 'circle'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
   const line = parseLine(raw.line),
     first = parseFirst(raw.first),
-    plane = parsePlane(raw.plane);
-  const need = { line, first, plane }[raw.mode as PointMode];
+    plane = parsePlane(raw.plane),
+    circle = parseCircle(raw.circle);
+  const need = { line, first, plane, circle }[raw.mode as PointMode];
   if (!need) return { ok: false, errors: ['Данные задачи неполные.'] };
-  return { ok: true, problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE) } };
+  // Файлы до режима «движение по окружности» — без поля circle.
+  return { ok: true, problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE), circle: circle ?? copy(DEF_CIRCLE) } };
 }
 
 export class PointStore {
@@ -193,6 +209,23 @@ export class PointStore {
   setPlaneAsk = (ask: PlaneProblem['ask']) => {
     this.commit();
     this.edit((p) => (p.plane.ask = ask));
+  };
+  /* движение по окружности */
+  typeCircle = (key: CircleNumKey, v: number) => {
+    this.touch(`o:${key}`);
+    this.edit((p) => (p.circle[key] = v));
+  };
+  setCircleLink = (link: CircleProblem['link']) => {
+    this.commit();
+    this.edit((p) => (p.circle.link = link));
+  };
+  setCircleSpring = (on: boolean) => {
+    this.commit();
+    this.edit((p) => (p.circle.spring = on));
+  };
+  setCircleAsk = (ask: CircleProblem['ask']) => {
+    this.commit();
+    this.edit((p) => (p.circle.ask = ask));
   };
   undo = () => {
     const s = this.hist.undo(this.snap());

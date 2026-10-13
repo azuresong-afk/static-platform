@@ -10,7 +10,7 @@ const W = 1000,
   H = 480;
 
 /** «Красивые» деления оси. */
-function ticks(lo: number, hi: number, n = 5): number[] {
+export function ticks(lo: number, hi: number, n = 5): number[] {
   if (hi - lo < 1e-12) {
     const d = Math.abs(lo) > 1e-12 ? Math.abs(lo) * 0.5 : 1;
     lo -= d;
