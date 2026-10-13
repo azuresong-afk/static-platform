@@ -1,7 +1,7 @@
 /**
- * Состояние вкладки «Динамика точки»: четыре режима — прямолинейное движение (вторая задача),
- * силы по заданному движению (первая задача), криволинейное движение в плоскости и движение по окружности
- * (реакция связи, отрыв); история отмены, файл проекта.
+ * Состояние вкладки «Динамика точки»: пять режимов — прямолинейное движение (вторая задача),
+ * силы по заданному движению (первая задача), криволинейное движение в плоскости, движение по окружности
+ * (реакция связи, отрыв) и относительное движение в трубке подвижного тела; история отмены, файл проекта.
  */
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
@@ -10,7 +10,19 @@ import type { CircleProblem } from '../model/circle';
 import type { FirstProblem } from '../model/first';
 import type { PlaneProblem } from '../model/plane';
 import type { PointProblem } from '../model/point';
-import { CIRCLE_PRESETS, FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS, type CirclePresetKey, type FirstPresetKey, type PlanePresetKey, type PointPresetKey } from '../presets';
+import type { RelProblem } from '../model/rel';
+import {
+  CIRCLE_PRESETS,
+  FIRST_PRESETS,
+  PLANE_PRESETS,
+  POINT_PRESETS,
+  REL_PRESETS,
+  type CirclePresetKey,
+  type FirstPresetKey,
+  type PlanePresetKey,
+  type PointPresetKey,
+  type RelPresetKey,
+} from '../presets';
 
 export const POINT_MODULE = 'pointdyn';
 export const NUM_KEYS = ['m', 'alpha', 'f', 'F0', 'at', 'F1', 'p', 'c', 'kv', 'kq', 'x0', 'v0', 't', 'v1', 'x1'] as const;
@@ -22,16 +34,20 @@ export type PlaneNumKey = (typeof PLANE_NUM)[number];
 export const CIRCLE_NUM = ['m', 'g', 'R', 'phi0', 'v0', 'ax', 'ay', 'c', 'L0', 'phi1'] as const;
 export type CircleNumKey = (typeof CIRCLE_NUM)[number];
 const LINKS: CircleProblem['link'][] = ['thread', 'inner', 'outer', 'rod'];
+export const REL_NUM = ['m', 'g', 'omega', 'r', 'd', 'h', 'theta', 'c', 'l0', 'f', 'x0', 'v0', 't1', 'x1'] as const;
+export type RelNumKey = (typeof REL_NUM)[number];
+const FRAMES: RelProblem['frame'][] = ['vert', 'horz', 'trans'];
 
-export type PointMode = 'line' | 'first' | 'plane' | 'circle';
+export type PointMode = 'line' | 'first' | 'plane' | 'circle' | 'rel';
 export interface PointTask {
   mode: PointMode;
   line: PointProblem;
   first: FirstProblem;
   plane: PlaneProblem;
   circle: CircleProblem;
+  rel: RelProblem;
 }
-export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey | CirclePresetKey;
+export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey | CirclePresetKey | RelPresetKey;
 
 export interface PointState {
   problem: PointTask;
@@ -53,13 +69,15 @@ const DEF_LINE = POINT_PRESETS.m277.problem as PointProblem;
 const DEF_FIRST = FIRST_PRESETS.f2615.problem as FirstProblem;
 const DEF_PLANE = PLANE_PRESETS.p2744.problem as PlaneProblem;
 const DEF_CIRCLE = CIRCLE_PRESETS.c311.problem as CircleProblem;
+const DEF_REL = REL_PRESETS.yd4.problem as RelProblem;
 
 /** Задача по ключу готовой задачи: режим и данные этого режима. */
 export function presetTask(k: AnyPresetKey, base?: PointTask): { task: PointTask; title: string } {
-  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE) };
+  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL) };
   if (k in POINT_PRESETS) return { task: { ...b, mode: 'line', line: copy(POINT_PRESETS[k as PointPresetKey].problem as PointProblem) }, title: POINT_PRESETS[k as PointPresetKey].title };
   if (k in FIRST_PRESETS) return { task: { ...b, mode: 'first', first: copy(FIRST_PRESETS[k as FirstPresetKey].problem as FirstProblem) }, title: FIRST_PRESETS[k as FirstPresetKey].title };
   if (k in CIRCLE_PRESETS) return { task: { ...b, mode: 'circle', circle: copy(CIRCLE_PRESETS[k as CirclePresetKey].problem as CircleProblem) }, title: CIRCLE_PRESETS[k as CirclePresetKey].title };
+  if (k in REL_PRESETS) return { task: { ...b, mode: 'rel', rel: copy(REL_PRESETS[k as RelPresetKey].problem as RelProblem) }, title: REL_PRESETS[k as RelPresetKey].title };
   return { task: { ...b, mode: 'plane', plane: copy(PLANE_PRESETS[k as PlanePresetKey].problem as PlaneProblem) }, title: PLANE_PRESETS[k as PlanePresetKey].title };
 }
 
@@ -94,19 +112,38 @@ function parseCircle(raw: unknown): CircleProblem | null {
   return { ...nums, byWeight: raw.byWeight === true, spring: raw.spring === true, link: raw.link as CircleProblem['link'], ask: raw.ask as CircleProblem['ask'] };
 }
 
+function parseRel(raw: unknown): RelProblem | null {
+  if (!isObj(raw) || !REL_NUM.every((k) => isNum(raw[k])) || !FRAMES.includes(raw.frame as RelProblem['frame']) || !['t', 'x'].includes(raw.ask as string)) return null;
+  if (typeof raw.y1 !== 'string' || typeof raw.z1 !== 'string' || (raw.form != null && typeof raw.form !== 'string')) return null;
+  const nums = Object.fromEntries(REL_NUM.map((k) => [k, raw[k]])) as Record<RelNumKey, number>;
+  return {
+    ...nums,
+    byWeight: raw.byWeight === true,
+    frame: raw.frame as RelProblem['frame'],
+    y1: raw.y1.slice(0, 200),
+    z1: raw.z1.slice(0, 200),
+    ask: raw.ask as RelProblem['ask'],
+    ...(typeof raw.form === 'string' && raw.form.trim() ? { form: raw.form.slice(0, 200) } : {}),
+  };
+}
+
 export function parsePoint(raw: unknown): { ok: true; problem: PointTask } | { ok: false; errors: string[] } {
   // Файл первой версии раздела — только прямолинейное движение.
   const old = parseLine(raw);
-  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE) } };
-  if (!isObj(raw) || !['line', 'first', 'plane', 'circle'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
+  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL) } };
+  if (!isObj(raw) || !['line', 'first', 'plane', 'circle', 'rel'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
   const line = parseLine(raw.line),
     first = parseFirst(raw.first),
     plane = parsePlane(raw.plane),
-    circle = parseCircle(raw.circle);
-  const need = { line, first, plane, circle }[raw.mode as PointMode];
+    circle = parseCircle(raw.circle),
+    rel = parseRel(raw.rel);
+  const need = { line, first, plane, circle, rel }[raw.mode as PointMode];
   if (!need) return { ok: false, errors: ['Данные задачи неполные.'] };
-  // Файлы до режима «движение по окружности» — без поля circle.
-  return { ok: true, problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE), circle: circle ?? copy(DEF_CIRCLE) } };
+  // Файлы до режимов «движение по окружности» и «относительное движение» — без полей circle, rel.
+  return {
+    ok: true,
+    problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE), circle: circle ?? copy(DEF_CIRCLE), rel: rel ?? copy(DEF_REL) },
+  };
 }
 
 export class PointStore {
@@ -226,6 +263,28 @@ export class PointStore {
   setCircleAsk = (ask: CircleProblem['ask']) => {
     this.commit();
     this.edit((p) => (p.circle.ask = ask));
+  };
+  /* относительное движение в трубке */
+  typeRel = (key: RelNumKey, v: number) => {
+    this.touch(`r:${key}`);
+    this.edit((p) => (p.rel[key] = v));
+  };
+  /** Законы поступательного движения тела и сила-формула (пустая строка у формы — убрать). */
+  typeRelLaw = (key: 'y1' | 'z1' | 'form', s: string) => {
+    this.touch(`r:${key}`);
+    this.edit((p) => {
+      if (key !== 'form') p.rel[key] = s.slice(0, 200);
+      else if (s.trim()) p.rel.form = s.slice(0, 200);
+      else delete p.rel.form;
+    });
+  };
+  setRelFrame = (frame: RelProblem['frame']) => {
+    this.commit();
+    this.edit((p) => (p.rel.frame = frame));
+  };
+  setRelAsk = (ask: RelProblem['ask']) => {
+    this.commit();
+    this.edit((p) => (p.rel.ask = ask));
   };
   undo = () => {
     const s = this.hist.undo(this.snap());

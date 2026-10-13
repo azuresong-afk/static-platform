@@ -1,7 +1,7 @@
 /**
  * Экран «Динамика точки»: прямолинейное движение (вторая задача), силы по заданному движению (первая задача),
- * криволинейное движение в плоскости, движение по окружности (реакция связи, отрыв); графики, траектория или схема,
- * решение по шагам.
+ * криволинейное движение в плоскости, движение по окружности (реакция связи, отрыв), относительное движение в трубке
+ * подвижного тела (давление на стенку); графики, траектория или схема, решение по шагам.
  */
 import { useMemo, useSyncExternalStore } from 'react';
 import type { Chrome } from '../../../app/module';
@@ -13,15 +13,18 @@ import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { renderEq } from '../../rotation/draw/rotation';
 import { renderCircle } from '../draw/circle';
 import { renderFirst, renderPlane } from '../draw/extra';
+import { renderRel } from '../draw/rel';
 import { solveCircle, type CircleProblem } from '../model/circle';
 import { solveFirst, type FirstProblem } from '../model/first';
 import { solvePlane, type PlaneProblem } from '../model/plane';
 import { solvePoint, type PointProblem } from '../model/point';
-import { CIRCLE_PRESETS, FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS } from '../presets';
+import { solveRel, type RelProblem } from '../model/rel';
+import { CIRCLE_PRESETS, FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS, REL_PRESETS } from '../presets';
 import { circleDoc } from '../text/circle';
 import { firstDoc, planeDoc } from '../text/extra';
+import { relDoc } from '../text/rel';
 import { pointDoc } from '../text/solution';
-import type { AnyPresetKey, CircleNumKey, FirstNumKey, PlaneNumKey, PointMode, PointNumKey, PointStore } from './store';
+import type { AnyPresetKey, CircleNumKey, FirstNumKey, PlaneNumKey, PointMode, PointNumKey, PointStore, RelNumKey } from './store';
 import { taskInfo } from '../../../shared/tasks';
 
 const LABELS = { w: ['v', 'м/с'] as [string, string], phi: ['x', 'м'] as [string, string], note: 'Скорость и координата точки по времени; точка — искомое состояние (наведите, чтобы увидеть значения).' };
@@ -39,6 +42,7 @@ const MODES: [PointMode, string][] = [
   ['first', 'сила по закону движения'],
   ['plane', 'движение в плоскости'],
   ['circle', 'движение по окружности'],
+  ['rel', 'относительное движение в трубке'],
 ];
 
 export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore }) {
@@ -48,6 +52,10 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
     if (task.mode === 'first') {
       const r = solveFirst(task.first);
       return { fig: renderFirst(task.first, r), doc: firstDoc(task.first, r, { explain: st.explain }) };
+    }
+    if (task.mode === 'rel') {
+      const r = solveRel(task.rel);
+      return { fig: renderRel(task.rel, r), doc: relDoc(task.rel, r, { explain: st.explain }) };
     }
     if (task.mode === 'circle') {
       const r = solveCircle(task.circle);
@@ -63,11 +71,13 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
   const pr: PointProblem = task.line,
     fp: FirstProblem = task.first,
     pp: PlaneProblem = task.plane,
-    cp: CircleProblem = task.circle;
+    cp: CircleProblem = task.circle,
+    rp: RelProblem = task.rel;
   const N = (k: PointNumKey, label: string, neg = true) => <Num key={k} id={`p-${k}`} label={label} value={pr[k]} neg={neg} zero onType={(v) => store.typeNum(k, v)} onEnd={() => store.endSession(`n:${k}`)} />;
   const NF = (k: FirstNumKey, label: string, neg = true) => <Num key={k} id={`pf-${k}`} label={label} value={fp[k]} neg={neg} zero onType={(v) => store.typeFirst(k, v)} onEnd={() => store.endSession(`f:${k}`)} />;
   const NP = (k: PlaneNumKey, label: string, neg = true) => <Num key={k} id={`pp-${k}`} label={label} value={pp[k]} neg={neg} zero onType={(v) => store.typePlane(k, v)} onEnd={() => store.endSession(`q:${k}`)} />;
   const NC = (k: CircleNumKey, label: string, neg = true) => <Num key={k} id={`pc-${k}`} label={label} value={cp[k]} neg={neg} zero onType={(v) => store.typeCircle(k, v)} onEnd={() => store.endSession(`o:${k}`)} />;
+  const NR = (k: RelNumKey, label: string, neg = true) => <Num key={k} id={`pr-${k}`} label={label} value={rp[k]} neg={neg} zero onType={(v) => store.typeRel(k, v)} onEnd={() => store.endSession(`r:${k}`)} />;
   const byWeight = task[task.mode].byWeight;
 
   return (
@@ -77,7 +87,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
         <header className="top">
           <div>
             <h1>Динамика точки</h1>
-            <p className="lede">Обе основные задачи динамики точки: по силам — движение (по прямой и в плоскости, с сопротивлением среды и трением), по закону движения — сила; движение по окружности — натяжение нити, давление на связь, отрыв.</p>
+            <p className="lede">Обе основные задачи динамики точки: по силам — движение (по прямой и в плоскости, с сопротивлением среды и трением), по закону движения — сила; движение по окружности — натяжение нити, давление на связь, отрыв; относительное движение в трубке вращающегося или движущегося тела — закон движения и давление на стенку.</p>
           </div>
           <div className="topright">
             <label className="preset">
@@ -89,6 +99,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                     ['Мещерский, § 27 а) Прямолинейное движение', POINT_PRESETS],
                     ['Мещерский, § 27 б) Криволинейное движение', PLANE_PRESETS],
                     ['Движение по окружности: Мещерский § 26, 31; Яблонский Д.6', CIRCLE_PRESETS],
+                    ['Относительное движение: Мещерский § 33; Яблонский Д.4', REL_PRESETS],
                   ] as [string, Record<string, { title: string }>][]
                 ).map(([label, rec]) => (
                   <optgroup key={label} label={label}>
@@ -113,7 +124,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
         <Notice notice={st.notice} onClose={store.closeNotice} />
         <section className="sheet" aria-label="Графики">
           <div className="bar">
-            <span className="hint">{task.mode === 'line' ? 'Силы «+» — в сторону оси x. Сила трения и сопротивление направлены против скорости.' : task.mode === 'first' ? 'Закон движения — формулы от t: sin, cos, tg, exp, ln, sqrt, sh, ch, π; десятичная запятая.' : task.mode === 'circle' ? 'φ — от нижней точки окружности против часовой стрелки; v₀ «+» — в сторону роста φ.' : 'Ось y — вверх; угол начальной скорости — от оси x против часовой стрелки.'}</span>
+            <span className="hint">{task.mode === 'line' ? 'Силы «+» — в сторону оси x. Сила трения и сопротивление направлены против скорости.' : task.mode === 'first' ? 'Закон движения — формулы от t: sin, cos, tg, exp, ln, sqrt, sh, ch, π; десятичная запятая.' : task.mode === 'circle' ? 'φ — от нижней точки окружности против часовой стрелки; v₀ «+» — в сторону роста φ.' : task.mode === 'rel' ? 'Ось x — вдоль трубки от точки O; θ — угол трубки с горизонталью; ω > 0 — против часовой стрелки.' : 'Ось y — вверх; угол начальной скорости — от оси x против часовой стрелки.'}</span>
             <div className="hist">
               <button type="button" title="Отменить (Ctrl+Z)" disabled={!st.canUndo} onClick={store.undo}>
                 <UndoIcon />
@@ -299,6 +310,50 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                 <p className="empty">φ = 0 — нижняя точка, 90° — справа на уровне центра, 180° — верхняя. N — проекция реакции на направление к центру: у нити это натяжение, у внутренней поверхности — давление; у внешней поверхности давление равно −N. При v₀ = 0 в положении неустойчивого равновесия (вершина купола, стержень вверху) движение начинается от ничтожно малого толчка.</p>
               </>
             )}
+            {task.mode === 'rel' && (
+              <>
+                <label className="field">
+                  <span>Переносное движение тела (равномерное вращение или поступательное)</span>
+                  <select id="prframe" value={rp.frame} onChange={(e) => store.setRelFrame(e.target.value as RelProblem['frame'])}>
+                    <option value="vert">вращение вокруг вертикальной оси</option>
+                    <option value="horz">вращение вокруг горизонтальной оси</option>
+                    <option value="trans">поступательное движение по закону</option>
+                  </select>
+                </label>
+                <div className="cgpar cg0">
+                  {NR('m', rp.byWeight ? 'вес P' : 'масса m', false)}
+                  {NR('g', 'g, м/с²', false)}
+                  {NR('theta', rp.frame === 'horz' ? 'θ₀, °' : 'θ, °')}
+                  {rp.frame !== 'trans' && NR('omega', 'ω, рад/с')}
+                  {rp.frame === 'vert' && NR('r', 'r, м')}
+                  {rp.frame === 'vert' && NR('d', 'd, м')}
+                  {rp.frame === 'horz' && NR('h', 'h, м')}
+                  {rp.frame === 'trans' && <LawField id="pr-y1" label="y₁(t), м — вправо" value={rp.y1} onType={(s) => store.typeRelLaw('y1', s)} onEnd={() => store.endSession('r:y1')} />}
+                  {rp.frame === 'trans' && <LawField id="pr-z1" label="z₁(t), м — вверх" value={rp.z1} onType={(s) => store.typeRelLaw('z1', s)} onEnd={() => store.endSession('r:z1')} />}
+                </div>
+                <h2>Пружина, трение, сила</h2>
+                <div className="cgpar cg0">
+                  {NR('c', `c, ${rp.byWeight ? 'кГ' : 'Н'}/м`, false)}
+                  {NR('l0', 'l₀, м')}
+                  {NR('f', 'трение f', false)}
+                  <LawField id="pr-form" label={`ещё сила F(t, x, v), ${rp.byWeight ? 'кГ' : 'Н'}`} vars={['x', 'v']} value={rp.form ?? ''} onType={(s) => store.typeRelLaw('form', s)} onEnd={() => store.endSession('r:form')} />
+                </div>
+                <h2>Начальные условия и вопрос</h2>
+                <label className="field">
+                  <span>Найти</span>
+                  <select id="prask" value={rp.ask} onChange={(e) => store.setRelAsk(e.target.value as RelProblem['ask'])}>
+                    <option value="t">положение и давление в момент t₁</option>
+                    <option value="x">когда x = x₁ (вылет из трубки)</option>
+                  </select>
+                </label>
+                <div className="cgpar cg0">
+                  {NR('x0', 'x₀, м')}
+                  {NR('v0', 'ẋ₀, м/с')}
+                  {rp.ask === 't' ? NR('t1', 't₁, с', false) : NR('x1', 'x₁, м')}
+                </div>
+                <p className="empty">θ — угол оси x с горизонталью (вправо), против часовой стрелки: 0 — горизонтальная трубка, 90° — вертикальная, вверх. Вертикальная ось: O — на расстоянии r от оси (вправо «+»), d — смещение плоскости трубки от оси (за чертёж «+»), ω &gt; 0 — против часовой стрелки при взгляде сверху. Горизонтальная ось перпендикулярна чертежу: h — расстояние от оси до трубки, x — от основания перпендикуляра. Пружина −c(x − l₀) закреплена в точке O; трение f — о стенку трубки.</p>
+              </>
+            )}
           </section>
           <section className="panel" aria-label="Решение">
             <div className="sol-head">
@@ -322,7 +377,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
         <section className="pr-sec pr-figs">
           <figure>
             <svg viewBox={out.fig.viewBox} dangerouslySetInnerHTML={{ __html: out.fig.svg }} />
-            <figcaption>{task.mode === 'plane' ? 'Траектория' : task.mode === 'circle' ? 'Схема и реакция связи N(φ)' : 'Графики'}</figcaption>
+            <figcaption>{task.mode === 'plane' ? 'Траектория' : task.mode === 'circle' ? 'Схема и реакция связи N(φ)' : task.mode === 'rel' ? 'Схема и графики x(t), N(t)' : 'Графики'}</figcaption>
           </figure>
         </section>
         <section className="pr-sec">

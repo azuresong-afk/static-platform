@@ -55,8 +55,13 @@ export interface RotEq {
   omega1: number;
   /** Целевой угол (координата) — для ask = 'phi'. */
   phi1?: number;
-  /** Дополнительный момент (сила) — произвольная функция состояния; флаги — от чего она зависит. */
-  extra?: { f: (t: number, phi: number, w: number) => number; t: boolean; phi: boolean; w: boolean };
+  /** Предел времени поиска для ask = 'omega' | 'phi' (по умолчанию 10⁷). */
+  tMax?: number;
+  /**
+   * Дополнительный момент (сила) — произвольная функция состояния; флаги — от чего она зависит. fric — сухое трение,
+   * зависящее от состояния (например, f·|N| при переменном давлении): величина ≥ 0, добавляется к M_тр.
+   */
+  extra?: { f: (t: number, phi: number, w: number) => number; t: boolean; phi: boolean; w: boolean; fric?: (t: number, phi: number, w: number) => number };
 }
 export interface KItem {
   name: string;
@@ -166,16 +171,21 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
                 ? 'time'
                 : 'general';
   const empty: EqResult = { ok: false, errors, J, Jbody, Mconst, M, t: 0, phi: 0, w: 0, eps: 0, note: 'ok', tStop: null, period, curve: [], kind };
+  // Сухое трение: постоянное M_тр и, если задано, зависящее от состояния.
+  const fric = ex?.fric;
+  const dry = e.Mf > 0 || !!fric;
+  const Mf = (t: number, phi: number, w: number) => (fric ? e.Mf + fric(t, phi, w) : e.Mf);
   if (errors.length) return empty;
   if (!(J > 0)) return { ...empty, errors: ['Момент инерции системы равен нулю.'] };
   // Правая часть с сухим трением: при ω = 0 тело стоит, если |M| ≤ M_тр.
   // dir — направление трения на весь шаг (знак ω в начале шага): внутри шага правая часть гладкая.
   const acc = (t: number, phi: number, w: number, dir?: number) => {
     const m = M(t, phi, w);
-    if (e.Mf === 0) return m / J;
+    if (!dry) return m / J;
+    const mf = Mf(t, phi, w);
     const d = dir ?? (Math.abs(w) > 1e-12 ? Math.sign(w) : 0);
-    if (d !== 0) return (m - e.Mf * d) / J;
-    return Math.abs(m) <= e.Mf ? 0 : (m - e.Mf * Math.sign(m)) / J;
+    if (d !== 0) return (m - mf * d) / J;
+    return Math.abs(m) <= mf ? 0 : (m - mf * Math.sign(m)) / J;
   };
   // Масштаб времени для шага.
   const scales = [e.kv > 0 ? J / e.kv : Infinity, restoring > 0 ? Math.sqrt(J / restoring) : Infinity, e.p ? 1 / Math.abs(e.p) : Infinity];
@@ -194,8 +204,8 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
   const step = (t0: number, p0: number, w0: number, dt: number): [number, number] => {
     // Направление трения: по ω в начале шага; если тело стоит — по моменту, который его сдвигает.
     const m0 = M(t0, p0, w0);
-    const dir = Math.abs(w0) > 1e-12 ? Math.sign(w0) : Math.abs(m0) <= e.Mf ? 0 : Math.sign(m0);
-    const a = (tt: number, pp: number, ww: number) => (dir === 0 && Math.abs(w0) <= 1e-12 && e.Mf > 0 ? acc(tt, pp, ww) : acc(tt, pp, ww, dir));
+    const dir = Math.abs(w0) > 1e-12 ? Math.sign(w0) : Math.abs(m0) <= Mf(t0, p0, w0) ? 0 : Math.sign(m0);
+    const a = (tt: number, pp: number, ww: number) => (dir === 0 && Math.abs(w0) <= 1e-12 && dry ? acc(tt, pp, ww) : acc(tt, pp, ww, dir));
     const k1p = w0,
       k1w = a(t0, p0, w0);
     const k2p = w0 + (dt / 2) * k1w,
@@ -231,7 +241,7 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
       }
       const err = Math.max(Math.abs(p2 - p1) / (1 + Math.abs(p2)), Math.abs(w2 - w1) / (1 + Math.abs(w2)));
       // Сухое трение: смена знака ω — останавливаемся точно в нуле (до контроля шага: на изломе он не сходится).
-      if (e.Mf > 0 && w !== 0 && ((Math.sign(w2) !== Math.sign(w) && w2 !== 0) || (Math.sign(w1) !== Math.sign(w) && w1 !== 0))) {
+      if (dry && w !== 0 && ((Math.sign(w2) !== Math.sign(w) && w2 !== 0) || (Math.sign(w1) !== Math.sign(w) && w1 !== 0))) {
         let lo = 0,
           hi = dt;
         for (let it = 0; it < 80; it++) {
@@ -267,7 +277,7 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
         t += lo;
         phi = pm;
         w = 0;
-        if (Math.abs(M(t, phi, 0)) <= e.Mf && !timeDep) tStop = t;
+        if (Math.abs(M(t, phi, 0)) <= Mf(t, phi, 0) && !timeDep) tStop = t;
         break;
       }
       if (err > 1e-11 && dt > 1e-9) {
@@ -305,7 +315,7 @@ export function solveEq(e: RotEq, byWeight: boolean): EqResult {
       }
       break;
     }
-    if (e.ask !== 't' && t > 1e7) break;
+    if (e.ask !== 't' && t > (e.tMax ?? 1e7)) break;
     // Установившийся режим (момент зависит только от ω): скорость больше не меняется — цель недостижима
     // (для поиска по углу — только если тело при этом стоит).
     if (e.ask !== 't' && !timeDep && !phiDep && Math.abs(acc(t, phi, w)) < 1e-10 * (1 + Math.abs(w)) && (!byPhi || Math.abs(w) < 1e-12)) break;

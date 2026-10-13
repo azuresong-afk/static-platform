@@ -1,6 +1,7 @@
-/** Готовые задачи: Мещерский §26–27, 31, Яблонский Д.2, Д.6. Ответы — по книге или по её формулам. */
+/** Готовые задачи: Мещерский §26–27, 31, 33, Яблонский Д.2, Д.4, Д.6. Ответы — по книге или по её формулам. */
 import { G } from '../rotation/model/rotation';
 import type { CircleProblem } from './model/circle';
+import type { RelProblem } from './model/rel';
 import type { FirstProblem } from './model/first';
 import type { PlaneProblem } from './model/plane';
 import type { PointProblem } from './model/point';
@@ -360,3 +361,75 @@ export const CIRCLE_PRESETS = {
   },
 } satisfies Record<string, CirclePreset>;
 export type CirclePresetKey = keyof typeof CIRCLE_PRESETS;
+
+/* ---------- относительное движение в трубке подвижного тела (§33; Д.4) ---------- */
+
+export interface RelPreset {
+  title: string;
+  problem: RelProblem;
+  /** Ответ: x, v (ẋ со знаком), vr (|ẋ|), t — в искомом состоянии; N1, N2, N — реакция стенки. */
+  book?: Record<string, number>;
+  relTol?: number;
+  note?: string;
+}
+const rel = (o: Partial<RelProblem>): RelProblem => ({ byWeight: false, m: 1, g: G, frame: 'vert', omega: 1, r: 0, d: 0, h: 0, theta: 0, y1: '', z1: '', c: 0, l0: 0, f: 0, x0: 0, v0: 0, ask: 't', t1: 1, x1: 1, ...o });
+// Мещерский 33.9: m = 0,1 кг, a = 0,5 м, ω = 4 рад/с; k = √(c/m) = 10 (k > ω) и 2 (k < ω); t = 0,3 с.
+const s9 = { a: 0.5, w: 4, t: 0.3 };
+// Мещерский 33.10–33.11: ω = 2 рад/с, x₀ = 0,2 м, L = 1 м.
+const s10 = { w: 2, x0: 0.2, L: 1 };
+// Мещерский 33.14: ω = 5 рад/с, a = 1 м, t = 0,5 с.
+const s14 = { w: 5, a: 1, t: 0.5 };
+
+export const REL_PRESETS = {
+  m339a: {
+    title: 'Мещерский 33.9: шарик на пружине во вращающейся трубке (k > ω)',
+    problem: rel({ m: 0.1, c: 10, l0: s9.a, x0: s9.a, omega: s9.w, t1: s9.t }),
+    book: { x: s9.a + ((2 * s9.w ** 2 * s9.a) / (100 - s9.w ** 2)) * Math.sin((Math.sqrt(100 - s9.w ** 2) * s9.t) / 2) ** 2 },
+    relTol: 1e-6,
+    note: 'm = 0,1 кг, c = 10 Н/м (k = √(c/m) = 10 с⁻¹), a = 0,5 м, ω = 4 рад/с, t = 0,3 с. Книга (от положения равновесия): x = 2ω²a/(k² − ω²)·sin²(√(k² − ω²)t/2).',
+  },
+  m339b: {
+    title: 'Мещерский 33.9: шарик на пружине во вращающейся трубке (k < ω)',
+    problem: rel({ m: 0.1, c: 0.4, l0: s9.a, x0: s9.a, omega: s9.w, t1: s9.t }),
+    book: { x: s9.a + ((s9.w ** 2 * s9.a) / (s9.w ** 2 - 4)) * (Math.cosh(Math.sqrt(s9.w ** 2 - 4) * s9.t) - 1) },
+    relTol: 1e-6,
+    note: 'm = 0,1 кг, c = 0,4 Н/м (k = 2 с⁻¹), a = 0,5 м, ω = 4 рад/с, t = 0,3 с. Книга: x = ω²a/(ω² − k²)·(ch √(ω² − k²)t − 1).',
+  },
+  m3310: {
+    title: 'Мещерский 33.10–33.11: скорость и время вылета тела из вращающейся трубки',
+    problem: rel({ omega: s10.w, x0: s10.x0, ask: 'x', x1: s10.L }),
+    book: {
+      vr: s10.w * Math.sqrt(s10.L ** 2 - s10.x0 ** 2),
+      t: Math.log((s10.L + Math.sqrt(s10.L ** 2 - s10.x0 ** 2)) / s10.x0) / s10.w,
+    },
+    relTol: 1e-6,
+    note: 'Горизонтальная трубка длиной L = 1 м вращается вокруг вертикальной оси через её конец, ω = 2 рад/с; x₀ = 0,2 м, v₀ = 0. Книга: v = ω√(L² − x₀²), T = (1/ω) ln[(L + √(L² − x₀²))/x₀].',
+  },
+  m3312: {
+    title: 'Мещерский 33.12: тело во вращающейся трубке с трением',
+    problem: rel({ omega: 2 * Math.PI, x0: s10.x0, f: 0.2, ask: 'x', x1: s10.L }),
+    note: 'Условия 33.10 при ω = 2π рад/с (1 об/с), x₀ = 0,2 м, L = 1 м, f = 0,2 (при ω = 2 рад/с трение удерживает тело: ω²x₀ < fg). Книга: ẍ = ω²x ∓ f√(g² + 4ω²ẋ²), верхний знак при ẋ < 0, — уравнение решается численно; давление на стенку — от веса и кориолисовой силы.',
+  },
+  m3313: {
+    title: 'Мещерский 33.13: когда кольцо сойдёт с вращающегося стержня',
+    problem: rel({ omega: 2 * Math.PI, x0: 0.6, ask: 'x', x1: 1 }),
+    book: { t: Math.log(3) / (2 * Math.PI) },
+    relTol: 1e-6,
+    note: 'Стержень длиной 1 м вращается в горизонтальной плоскости, 1 об/с (ω = 2π); x₀ = 0,6 м, v₀ = 0. Книга: t₁ = (1/2π) ln 3 = 0,175 с.',
+  },
+  m3314: {
+    title: 'Мещерский 33.14: тяжёлый шарик в трубке под углом 45° к оси вращения',
+    problem: rel({ omega: s14.w, theta: 45, x0: s14.a, t1: s14.t }),
+    book: { x: (s14.a - (G * Math.SQRT2) / s14.w ** 2) * Math.cosh((s14.w * s14.t) / Math.SQRT2) + (G * Math.SQRT2) / s14.w ** 2 },
+    relTol: 1e-6,
+    note: 'ω = 5 рад/с, OM₀ = a = 1 м, v₀ = 0, t = 0,5 с; трубка идёт от точки O на оси вверх под 45°. Книга: OM = ½(a − g√2/ω²)(e^{0,5ωt√2} + e^{−0,5ωt√2}) + g√2/ω².',
+  },
+  yd4: {
+    title: 'Яблонский, Д.4: шарик на пружине во вращающемся канале (пример)',
+    problem: rel({ m: 0.01, omega: Math.PI, r: 0.2, theta: 60, c: 1, l0: 0.2, x0: 0.3, v0: 2, t1: 0.2 }),
+    book: { x: 0.246, v: -2.33, N1: 0.077 },
+    relTol: 0.01,
+    note: 'α = 30° — угол трубки с осью (с горизонталью θ = 60°), ω = π рад/с, m = 0,01 кг, c = 1 Н/м, l₀ = 0,2 м, r = 0,2 м, x₀ = 0,3 м, ẋ₀ = 2 м/с, t₁ = 0,2 с. Книга: x₁ = 0,246 м, ẋ₁ = −2,33 м/с, N₁ = 0,077 Н — совпадают. N₂ = 2mω|ẋ| sin α = 0,0738 Н и N = 0,1064 Н; в книге 0,080 и 0,111 — по её же формуле 2·0,01·π·2,33·0,5 = 0,073.',
+  },
+} satisfies Record<string, RelPreset>;
+export type RelPresetKey = keyof typeof REL_PRESETS;
