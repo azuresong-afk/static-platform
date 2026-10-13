@@ -1,24 +1,54 @@
-/** Кинематика точки: ответы Мещерского §11–12. */
+/** Кинематика точки: ответы Мещерского §10–12, Яблонского К.1, К.2. */
 import { describe, expect, it } from 'vitest';
 import { solveKin, type KinProblem } from '../src/modules/pointkin/model/kin';
 import { KIN_PRESETS, type KinPresetKey } from '../src/modules/pointkin/presets';
-import { renderKin } from '../src/modules/pointkin/draw/kin';
+import { renderKin, renderUni } from '../src/modules/pointkin/draw/kin';
+import { trajEquation } from '../src/modules/pointkin/model/traj';
+import { solveLin } from '../src/modules/pointkin/model/uniform';
 import { kinDoc } from '../src/modules/pointkin/text/solution';
+import { uniDoc } from '../src/modules/pointkin/text/uniform';
 import { KinStore, parseKin } from '../src/modules/pointkin/ui/store';
 
-const tol = (v: number) => {
+const tol = (v: number, rel?: number) => {
+  if (rel) return rel * Math.abs(v) + 1e-12;
   const s = String(Math.abs(v));
   const d = s.includes('.') ? s.split('.')[1].length : 0;
   return d > 6 ? 1e-9 * Math.max(1, Math.abs(v)) : 2 * Math.pow(10, -d);
 };
 
-describe('Мещерский §11–12', () => {
+describe('Мещерский §10–12', () => {
   for (const [key, p] of Object.entries(KIN_PRESETS))
     it(p.title, () => {
-      const r = solveKin(p.problem as KinProblem);
+      const pr = p.problem as KinProblem;
+      const rel = (p as { relTol?: number }).relTol;
+      if (pr.mode === 'uni') {
+        const u = solveLin(pr.uni!);
+        expect(u.ok, key + u.errors.join()).toBe(true);
+        const got: Record<string, number> = { v0: u.v0, v: u.v, a: u.a, t: u.t, s: u.s, aStart: u.start!.a, aEnd: u.end!.a, aMid: u.mid?.a ?? NaN, vMid: u.mid?.v ?? NaN, sMid: u.mid?.s ?? NaN };
+        for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) expect(Math.abs(got[k] - book), `${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(tol(book, rel));
+        return;
+      }
+      const r = solveKin(pr);
       expect(r.ok, key + r.errors.join()).toBe(true);
-      const got: Record<string, number> = { v: r.v, a: r.a, at: r.at, an: r.an, rho: r.rho ?? Infinity, alphaV: r.vAngles?.[0] ?? NaN, alphaA: r.aAngles?.[0] ?? NaN };
-      for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) expect(Math.abs(got[k] - book), `${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(tol(book));
+      const traj = (p as { traj?: string[] }).traj;
+      if (traj) expect(trajEquation(pr, r)!.rels.map((x) => x.text)).toEqual(traj);
+      const c = r.curv;
+      const got: Record<string, number> = {
+        v: r.v,
+        a: r.a,
+        at: r.at,
+        an: r.an,
+        rho: r.rho ?? Infinity,
+        alphaV: r.vAngles?.[0] ?? NaN,
+        alphaA: r.aAngles?.[0] ?? NaN,
+        vr: c?.v[0] ?? NaN,
+        vphi: c?.v[1] ?? NaN,
+        v3: c?.v[2] ?? NaN,
+        ar: c?.a[0] ?? NaN,
+        aphi: c?.a[1] ?? NaN,
+        a3: c?.a[2] ?? NaN,
+      };
+      for (const [k, book] of Object.entries((p as { book?: Record<string, number> }).book ?? {})) expect(Math.abs(got[k] - book), `${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(tol(book, rel));
     });
   it('12.29: ρ₀ = ∞', () => expect(solveKin(KIN_PRESETS.k1229.problem as KinProblem).rho).toBeNull());
   it('12.32: радиус кривизны кардиоиды при t = 0 равен 4a/3', () => {
@@ -41,9 +71,12 @@ describe('кинематика точки: файл проекта, чертёж
       const s2 = new KinStore();
       expect(s2.importProject(text)).toBe(true);
       expect(s2.get().problem).toEqual(s.get().problem);
-      const p = s.get().problem,
-        r = solveKin(p);
-      for (const x of [renderKin(p, r).svg, JSON.stringify(kinDoc(p, r, { explain: true }))]) expect(x).not.toMatch(/NaN|undefined|Infinity/);
+      const p = s.get().problem;
+      const out =
+        p.mode === 'uni'
+          ? [renderUni(solveLin(p.uni!)).svg, JSON.stringify(uniDoc(p.uni!, solveLin(p.uni!), { explain: true }))]
+          : [renderKin(p, solveKin(p)).svg, JSON.stringify(kinDoc(p, solveKin(p), { explain: true }))];
+      for (const x of out) expect(x).not.toMatch(/NaN|undefined|Infinity/);
     });
   it('ошибки и чужой файл', () => {
     expect(solveKin({ ...(KIN_PRESETS.k1228.problem as KinProblem), x: 'sin(' }).ok).toBe(false);

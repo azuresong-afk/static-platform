@@ -672,6 +672,18 @@ async function main() {
   check((await p.innerText('#ksolution')).includes('2,125'), 'Мещерский 12.26: ρ = 2⅛');
   await p.selectOption('#kmode', 'polar');
   check((await p.locator('#k-phi').count()) === 1, 'полярный способ — поля r и φ');
+  await p.selectOption('#kpreset', 'k106');
+  check((await p.innerText('#ksolution')).includes('4x² + 9y − 18 = 0'), 'Мещерский 10.6: уравнение траектории 4x² + 9y = 18');
+  await p.selectOption('#kpreset', 'k1117');
+  const k17 = await p.innerText('#ksolution');
+  check(k17.includes('1,3305') && k17.includes('rθ″ + 2ṙθ′'), 'Мещерский 11.17, 12.35: сферические координаты', k17.slice(-300));
+  await p.selectOption('#kpreset', 'u1210');
+  check((await p.innerText('#ksolution')).includes('0,3078') && (await p.innerText('#ksolution')).includes('t = 80 с'), 'Мещерский 12.10: равнопеременное движение на закруглении');
+  await p.click('#ku-k-t');
+  check((await p.innerText('#ksolution')).includes('ровно три'), 'отметок не три — понятное сообщение');
+  await p.click('#ku-k-t');
+  await p.selectOption('#kpreset', 'k1226');
+  await p.selectOption('#kmode', 'polar');
   const [dl20] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const knText = await (await dl20.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(knText).module === 'pointkin' && JSON.parse(knText).problem.mode === 'polar', 'файл кинематики точки');

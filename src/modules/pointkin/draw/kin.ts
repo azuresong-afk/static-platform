@@ -3,6 +3,7 @@ import { evalExpr } from '../../../shared/expr';
 import { fmt } from '../../../shared/format';
 import { plot } from '../../rotation/draw/rotation';
 import { trajectory, type KinProblem, type KinResult } from '../model/kin';
+import type { LinResult } from '../model/uniform';
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const W = 1000,
@@ -64,6 +65,26 @@ export function renderKin(pr: KinProblem, r: KinResult): { svg: string; viewBox:
   if (nv > 1e-12) out.push(arrow(M, [M[0] + (vv[0] / nv) * 90, M[1] - (vv[1] / nv) * 90], 'en-v'), `<text class="t cv-t en-vt" x="${r1(M[0] + (vv[0] / nv) * 104)}" y="${r1(M[1] - (vv[1] / nv) * 104 + 4)}">v = ${fmt(r.v, 4)}</text>`);
   if (na > 1e-12) out.push(arrow(M, [M[0] + (aa[0] / na) * 70, M[1] - (aa[1] / na) * 70], 'cv-r'), `<text class="t cv-t t-cvr" x="${r1(M[0] + (aa[0] / na) * 84)}" y="${r1(M[1] - (aa[1] / na) * 84 + 4)}">a = ${fmt(r.a, 4)}</text>`);
   out.push(`<circle class="cg-c" cx="${r1(M[0])}" cy="${r1(M[1])}" r="5"/>`);
-  out.push(`<text class="tb-note" x="16" y="${H - 14}">Траектория${pr.mode === 'coord' && pr.z.trim() ? ' (проекция на xy)' : ''} в одном масштабе; в момент t = ${fmt(pr.t, 4)} — скорость (синяя) и ускорение (красная).</text>`);
+  const space = (pr.mode === 'coord' && pr.z.trim()) || pr.mode === 'sph' || (pr.mode === 'cyl' && pr.z.trim());
+  out.push(`<text class="tb-note" x="16" y="${H - 14}">Траектория${space ? ' (проекция на xy)' : ''} в одном масштабе; в момент t = ${fmt(pr.t, 4)} — скорость (синяя) и ускорение (красная).</text>`);
+  return { svg: out.join(''), viewBox: `0 0 ${W} ${H}` };
+}
+
+/** Равнопеременное движение: графики пути s(t) и скорости v(t) на отрезке [0; t]. */
+export function renderUni(r: LinResult): { svg: string; viewBox: string } {
+  const out: string[] = [`<rect width="${W}" height="${H}" fill="var(--sheet)"/>`];
+  if (!r.ok) {
+    out.push(`<text class="tb-note" x="16" y="${H / 2}">Отметьте три известные величины и задайте их значения.</text>`);
+    return { svg: out.join(''), viewBox: `0 0 ${W} ${H}` };
+  }
+  const S: P2[] = [],
+    V: P2[] = [];
+  for (let i = 0; i <= 200; i++) {
+    const t = (r.t * i) / 200;
+    S.push([t, r.v0 * t + (r.a * t * t) / 2]);
+    V.push([t, r.v0 + r.a * t]);
+  }
+  out.push(plot(80, 60, 380, 330, S, 's', 'м', 'с'), plot(570, 60, 380, 330, V, 'v', 'м/с', 'с'));
+  out.push(`<text class="tb-note" x="16" y="${H - 14}">Путь и скорость по времени: s — парабола, v — прямая (a = ${fmt(r.a, 4)} м/с²).</text>`);
   return { svg: out.join(''), viewBox: `0 0 ${W} ${H}` };
 }

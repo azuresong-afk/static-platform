@@ -1,13 +1,49 @@
-/** Решение: закон движения, производные, скорость, ускорение (касательное и нормальное), радиус кривизны. */
+/** Решение: закон движения, траектория, производные, скорость, ускорение (касательное и нормальное), радиус кривизны. */
 import { b, sub, v, type AnswerRow, type Block, type Doc, type Inline, type Step } from '../../../shared/doc';
 import { printExpr } from '../../../shared/expr';
 import { fmt } from '../../../shared/format';
 import type { KinProblem, KinResult } from '../model/kin';
+import { trajEquation, type TrajEq } from '../model/traj';
 
 const f = (x: number) => fmt(x, 4);
 const fp = (x: number) => (x < 0 ? `(${f(x)})` : f(x));
-const D1: Record<string, string> = { x: 'ẋ', y: 'ẏ', z: 'ż', s: 'ṡ', r: 'ṙ', φ: 'φ′' };
-const D2: Record<string, string> = { x: 'ẍ', y: 'ÿ', z: 'z̈', s: 's̈', r: 'r̈', φ: 'φ″' };
+const D1: Record<string, string> = { x: 'ẋ', y: 'ẏ', z: 'ż', s: 'ṡ', r: 'ṙ', φ: 'φ′', θ: 'θ′' };
+const D2: Record<string, string> = { x: 'ẍ', y: 'ÿ', z: 'z̈', s: 's̈', r: 'r̈', φ: 'φ″', θ: 'θ″' };
+const HOW: Record<KinProblem['mode'], string> = {
+  coord: 'координатный',
+  natural: 'естественный (закон движения по траектории)',
+  polar: 'в полярных координатах',
+  cyl: 'в цилиндрических координатах r, φ, z',
+  sph: 'в сферических координатах: r, долгота φ, широта θ (угол с плоскостью xy)',
+  uni: 'равнопеременное движение',
+};
+
+/** Шаг «Траектория»: уравнение (исключение t), вид кривой, начальная точка и пределы координат. */
+function trajStep(pr: KinProblem, e: TrajEq, opts: { explain?: boolean }): Step {
+  const bl: Block[] = [];
+  const [ta, tb] = pr.t2 > pr.t1 ? [pr.t1, pr.t2] : [Math.min(0, pr.t), Math.max(pr.t, 1)];
+  if (e.dims === 3 && e.rels.length) bl.push({ k: 'p', c: ['Траектория пространственная; уравнения её проекций на координатные плоскости — цилиндрические поверхности, на пересечении которых она лежит:'] });
+  const lines: { c: Inline[] }[] = [];
+  for (const r of e.rels) {
+    lines.push({ c: [e.dims === 3 ? `на плоскость ${r.a}${r.b}: ` : '', b(r.text), r.explicit && r.explicit !== r.text ? `,  т. е. ${r.explicit}` : '', ` — ${r.kind}`] });
+    if (r.detail) lines.push({ c: [`  ${r.detail}`] });
+  }
+  if (lines.length) bl.push({ k: 'eq', lines });
+  for (const [a, c] of e.none) bl.push({ k: 'p', c: [`Между ${a} и ${c} алгебраической связи (многочлена степени до четвёртой) нет — уравнение траектории в этой проекции не алгебраическое (циклоида, спираль, винтовая линия…).`] });
+  const ax = e.dims === 3 ? [0, 1, 2] : [0, 1];
+  const nm = ['x', 'y', 'z'];
+  bl.push({
+    k: 'p',
+    c: [`При t = ${f(ta)} точка в (${ax.map((i) => f(e.start[i])).join('; ')}); на отрезке t от ${f(ta)} до ${f(tb)} `, ax.map((i) => `${nm[i]} — от ${f(e.range[i][0])} до ${f(e.range[i][1])}`).join(', '), ' (часть кривой, которую проходит точка).'],
+  });
+  if (opts.explain)
+    bl.push({
+      k: 'p',
+      cls: 'explain',
+      c: ['Чтобы получить уравнение траектории, из уравнений движения исключают время t. Здесь ищется многочлен наименьшей степени, обращающийся в нуль во всех точках траектории; коэффициенты приводятся к целым, если это возможно.'],
+    });
+  return { title: 'Траектория', blocks: bl };
+}
 
 export function kinDoc(pr: KinProblem, r: KinResult, opts: { explain?: boolean } = {}): Doc {
   const steps: Step[] = [];
@@ -15,13 +51,16 @@ export function kinDoc(pr: KinProblem, r: KinResult, opts: { explain?: boolean }
     if (opts.explain) bl.push({ k: 'p', cls: 'explain', c });
   };
   if (!r.ok) return { steps: [{ title: 'Данные', blocks: [{ k: 'badge', tone: 'bad', text: 'проверьте данные' }, { k: 'ul', items: r.errors.map((x) => [x]) }] }] };
-  const used = r.f.filter((q) => pr.mode !== 'coord' || pr[q.name as 'x' | 'y' | 'z'].trim() !== '');
-  const how = pr.mode === 'coord' ? 'координатный' : pr.mode === 'natural' ? 'естественный (закон движения по траектории)' : 'в полярных координатах';
+  // Пустые координаты (z у плоского движения) не показываем.
+  const used = r.f.filter((q) => !((pr.mode === 'coord' || pr.mode === 'cyl') && ['x', 'y', 'z'].includes(q.name) && !pr[q.name as 'x' | 'y' | 'z'].trim()));
+  const how = HOW[pr.mode];
+  const traj = trajEquation(pr, r);
   {
     const lines = used.map((q) => ({ c: [v(q.name), `(t) = ${printExpr(q.e)}`] as Inline[] }));
     const bl: Block[] = [{ k: 'p', c: [`Способ задания движения — ${how}.${pr.mode === 'natural' ? ` Радиус кривизны траектории ρ = ${pr.rho > 0 ? f(pr.rho) : '∞ (прямая)'}.` : ''}`] }, { k: 'eq', lines }];
     steps.push({ title: 'Закон движения', blocks: bl });
   }
+  if (traj) steps.push(trajStep(pr, traj, opts));
   {
     const lines: { num?: boolean; c: Inline[] }[] = [];
     for (const q of used) lines.push({ c: [v(D1[q.name]), ` = ${printExpr(q.d1)}`] });
@@ -44,6 +83,20 @@ export function kinDoc(pr: KinProblem, r: KinResult, opts: { explain?: boolean }
       lines.push({ c: [`при t = ${t}: s = ${f(r.pos[0])};  `, v('v'), ' = |ṡ| = ', b(f(r.v))] });
       lines.push({ c: [v('a'), sub('τ'), ' = s̈ = ', b(f(r.at)), ';  ', v('a'), sub('n'), ` = v²/ρ = ${pr.rho > 0 ? `${f(r.v)}²/${f(pr.rho)} = ` : ''}`, b(f(r.an))] });
       lines.push({ c: [v('a'), ' = √(a', sub('τ'), '² + a', sub('n'), `²) = `, b(f(r.a))] });
+    } else if (pr.mode === 'cyl' || pr.mode === 'sph') {
+      const c = r.curv!;
+      const sph = pr.mode === 'sph';
+      const deg = (x: number) => f((x * 180) / Math.PI);
+      lines.push({ c: [`при t = ${t}: r = ${f(c.q[0])}, φ = ${f(c.q[1])} рад (${deg(c.q[1])}°), `, sph ? `θ = ${f(c.q[2])} рад (${deg(c.q[2])}°)` : `z = ${f(c.q[2])}`] });
+      lines.push({
+        c: [v('v'), sub('r'), ' = ṙ = ', b(f(c.v[0])), ';  ', v('v'), sub('φ'), sph ? ' = rφ′ cos θ = ' : ' = rφ′ = ', b(f(c.v[1])), ';  ', v('v'), sub(sph ? 'θ' : 'z'), sph ? ' = rθ′ = ' : ' = ż = ', b(f(c.v[2])), ';  ', v('v'), ' = ', b(f(r.v))],
+      });
+      if (sph) {
+        lines.push({ c: [v('a'), sub('r'), ' = r̈ − rθ′² − rφ′² cos²θ = ', b(f(c.a[0]))] });
+        lines.push({ c: [v('a'), sub('φ'), ' = (rφ″ + 2ṙφ′) cos θ − 2rφ′θ′ sin θ = ', b(f(c.a[1]))] });
+        lines.push({ c: [v('a'), sub('θ'), ' = rθ″ + 2ṙθ′ + rφ′² sin θ cos θ = ', b(f(c.a[2]))] });
+      } else lines.push({ c: [v('a'), sub('r'), ' = r̈ − rφ′² = ', b(f(c.a[0])), ';  ', v('a'), sub('φ'), ' = rφ″ + 2ṙφ′ = ', b(f(c.a[1])), ';  ', v('a'), sub('z'), ' = z̈ = ', b(f(c.a[2]))] });
+      lines.push({ c: [v('a'), ' = ', b(f(r.a)), ';  ', v('a'), sub('τ'), ` = ${f(r.at)};  `, v('a'), sub('n'), ` = ${f(r.an)}`] });
     } else {
       const p = r.polar!;
       lines.push({ c: [`при t = ${t}: r = ${f(p.r)}, φ = ${f(p.phi)} рад (${f((p.phi * 180) / Math.PI)}°)`] });
@@ -53,7 +106,11 @@ export function kinDoc(pr: KinProblem, r: KinResult, opts: { explain?: boolean }
     }
     lines.push({ c: ['радиус кривизны ρ = v²/a', sub('n'), ' = ', r.rho != null ? b(f(r.rho)) : '∞', r.rho == null ? (pr.mode === 'natural' ? ' (прямая)' : ' (a_n = 0: точка перегиба или прямолинейный участок)') : ''] });
     const bl: Block[] = [{ k: 'eq', lines }];
-    ex(bl, 'Касательное ускорение a_τ = dv/dt меняет величину скорости, нормальное a_n = v²/ρ — её направление; полное ускорение a = √(a_τ² + a_n²). В полярных координатах v_r и v_φ — радиальная и поперечная составляющие скорости.');
+    ex(
+      bl,
+      'Касательное ускорение a_τ = dv/dt меняет величину скорости, нормальное a_n = v²/ρ — её направление; полное ускорение a = √(a_τ² + a_n²). В полярных координатах v_r и v_φ — радиальная и поперечная составляющие скорости.',
+      pr.mode === 'sph' ? ' В сферических координатах орт e_θ направлен в сторону роста широты (к северу), e_φ — в сторону роста долготы.' : '',
+    );
     steps.push({ title: 'Скорость, ускорение, радиус кривизны', blocks: bl });
   }
   const rows: AnswerRow[] = [
@@ -62,6 +119,7 @@ export function kinDoc(pr: KinProblem, r: KinResult, opts: { explain?: boolean }
     { kind: 'main', val: [v('a'), sub('τ'), ` = ${f(r.at)}, `, v('a'), sub('n'), ` = ${f(r.an)}`], note: 'касательное и нормальное' },
     { kind: 'aux', val: [`ρ = ${r.rho != null ? f(r.rho) : '∞'}`], note: 'радиус кривизны' },
   ];
+  if (traj?.rels.length) rows.unshift({ kind: 'main', val: [traj.rels.map((x) => x.text).join(';  ')], note: `траектория — ${traj.rels.map((x) => x.kind).join(', ')}` });
   steps.push({ title: 'Ответ', blocks: [{ k: 'answer', rows }] });
   return { steps };
 }

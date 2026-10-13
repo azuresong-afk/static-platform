@@ -1,13 +1,19 @@
-/** Состояние вкладки «Кинематика точки»: способ задания, формулы, момент t; история отмены, файл проекта. */
+/**
+ * Состояние вкладки «Кинематика точки»: способ задания, формулы, момент t; равнопеременное движение
+ * (три величины из пяти); история отмены, файл проекта.
+ */
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
 import type { KinMode, KinProblem } from '../model/kin';
+import { DEF_UNI, LIN_KEYS, type LinKey, type LinUni } from '../model/uniform';
 import { KIN_PRESETS, type KinPresetKey } from '../presets';
 
 export const KIN_MODULE = 'pointkin';
 const STR = ['x', 'y', 'z', 's', 'r', 'phi'] as const;
-export type KinStrKey = (typeof STR)[number];
+export type KinStrKey = (typeof STR)[number] | 'th';
+const MODES: KinMode[] = ['coord', 'natural', 'polar', 'cyl', 'sph', 'uni'];
+export type LinNumKey = LinKey | 'rho' | 'tq';
 const NUM = ['rho', 't', 't1', 't2'] as const;
 export type KinNumKey = (typeof NUM)[number];
 
@@ -27,11 +33,21 @@ interface Snap {
 }
 const copy = (p: KinProblem): KinProblem => structuredClone(p);
 
+function parseUni(raw: unknown): LinUni | null {
+  if (!isObj(raw) || ![...LIN_KEYS, 'rho', 'tq'].every((k) => isNum(raw[k])) || !Array.isArray(raw.known)) return null;
+  const known = (raw.known as unknown[]).filter((k): k is LinKey => LIN_KEYS.includes(k as LinKey));
+  const n = Object.fromEntries([...LIN_KEYS, 'rho', 'tq'].map((k) => [k, raw[k]])) as Record<LinNumKey, number>;
+  return { ...n, known: [...new Set(known)], kmh: raw.kmh === true };
+}
+
 export function parseKin(raw: unknown): { ok: true; problem: KinProblem } | { ok: false; errors: string[] } {
-  if (!isObj(raw) || !['coord', 'natural', 'polar'].includes(raw.mode as string) || !STR.every((k) => typeof raw[k] === 'string') || !NUM.every((k) => isNum(raw[k]))) return { ok: false, errors: ['В файле нет задачи (problem с полями mode, x, y, z, s, r, phi, rho, t).'] };
-  const s = Object.fromEntries(STR.map((k) => [k, (raw[k] as string).slice(0, 200)])) as Record<KinStrKey, string>;
+  if (!isObj(raw) || !MODES.includes(raw.mode as KinMode) || !STR.every((k) => typeof raw[k] === 'string') || !NUM.every((k) => isNum(raw[k]))) return { ok: false, errors: ['В файле нет задачи (problem с полями mode, x, y, z, s, r, phi, rho, t).'] };
+  const s = Object.fromEntries(STR.map((k) => [k, (raw[k] as string).slice(0, 200)])) as Record<(typeof STR)[number], string>;
   const n = Object.fromEntries(NUM.map((k) => [k, raw[k]])) as Record<KinNumKey, number>;
-  return { ok: true, problem: { mode: raw.mode as KinMode, ...s, ...n } };
+  // Файлы до сферических координат и равнопеременного движения — без полей th и uni.
+  const uni = raw.uni == null ? structuredClone(DEF_UNI) : parseUni(raw.uni);
+  if (!uni) return { ok: false, errors: ['Данные равнопеременного движения неполные.'] };
+  return { ok: true, problem: { mode: raw.mode as KinMode, ...s, ...n, th: typeof raw.th === 'string' ? raw.th.slice(0, 200) : '', uni } };
 }
 
 export class KinStore {
@@ -81,6 +97,25 @@ export class KinStore {
   typeNum = (k: KinNumKey, v: number) => {
     this.touch(`n:${k}`);
     this.edit((p) => (p[k] = v));
+  };
+  /* равнопеременное движение */
+  private uniEdit(fn: (u: LinUni) => void) {
+    this.edit((p) => {
+      p.uni ??= structuredClone(DEF_UNI);
+      fn(p.uni);
+    });
+  }
+  typeUni = (k: LinNumKey, v: number) => {
+    this.touch(`u:${k}`);
+    this.uniEdit((u) => (u[k] = v));
+  };
+  toggleKnown = (k: LinKey) => {
+    this.commit();
+    this.uniEdit((u) => (u.known = u.known.includes(k) ? u.known.filter((x) => x !== k) : [...u.known, k]));
+  };
+  setKmh = (on: boolean) => {
+    this.commit();
+    this.uniEdit((u) => (u.kmh = on));
   };
   undo = () => {
     const s = this.hist.undo(this.snap());
