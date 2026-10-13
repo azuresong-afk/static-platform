@@ -109,6 +109,7 @@ const ANT_CHAPTERS: Record<number, string> = {
   8: 'Изгиб',
   9: 'Динамика систем и материальных тел',
   10: 'Динамическое действие нагрузок',
+  11: 'Усталостная прочность',
 };
 
 /** Задания сборника для курсовых работ под ред. А. А. Яблонского — по оглавлению. */
@@ -193,15 +194,16 @@ export function taskInfo(title: string): TaskInfo {
         order: [12, t, task[2] ? +task[2] : 0],
       };
     }
-    const fig = /^рис\.\s*(\d+)\.(\d+)/iu.exec(rest);
-    const ch = fig ? +fig[1] : 0;
+    // Рисунок или пункт главы: «рис. 7.2», «п. 11.7».
+    const fig = /^(рис|п)\.\s*(\d+)\.(\d+)/iu.exec(rest);
+    const ch = fig ? +fig[2] : 0;
     return {
       book: 'ant',
       group: 'ant:ch' + ch,
       groupTitle: ch ? `Гл. ${ch}. ${ANT_CHAPTERS[ch] ?? ''}`.trim() : 'Другие задачи пособия',
-      num: fig ? `рис. ${fig[1]}.${fig[2]}` : '',
+      num: fig ? `${fig[1]}. ${fig[2]}.${fig[3]}` : '',
       label: cap(rest),
-      order: [ch, fig ? +fig[2] : 0],
+      order: [ch, fig ? +fig[3] : 0],
     };
   }
   const yab = /^Яблонский,\s*([СКД])\.(\d+)([^:]*):\s*(.*)$/u.exec(title);

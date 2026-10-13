@@ -664,6 +664,25 @@ async function main() {
   check((await p.getAttribute('[data-tab="masscenter"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === mcSol, 'файл центра масс открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // Вкладка «Усталостная прочность».
+  await tab('fatigue');
+  const faS = await p.innerText('#fasolution');
+  check(faS.includes('1,676') && faS.includes('Гафа и Полларда'), 'Антонов, п. 11.7: изгиб с кручением — n = 1,676', faS.slice(-300));
+  await p.selectOption('#fapreset', 'f114');
+  check((await p.innerText('#fasolution')).includes('запас недостаточен'), 'пульсационный цикл: запас меньше [n]');
+  await p.selectOption('#fa-sigma-mode', 'ma');
+  check((await p.inputValue('#fa-sigma-a')) === '60', 'переход к σ_m, σ_a пересчитывает цикл');
+  await p.selectOption('#fa-kmode', 'surf');
+  check((await p.innerText('#fasolution')).includes('K_v'), 'формула K с поверхностным упрочнением');
+  const [dlf] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const faText = await (await dlf.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(faText).module === 'fatigue' && JSON.parse(faText).problem.kMode === 'surf', 'файл усталостной прочности');
+  const faSol = await p.innerText('#fasolution');
+  await tab('frames');
+  await openText('fa.json', faText, 'ok');
+  check((await p.getAttribute('[data-tab="fatigue"]', 'aria-selected')) === 'true' && (await p.innerText('#fasolution')) === faSol, 'файл усталостной прочности открывается в своей вкладке без потерь');
+  await tab('frames');
+
   // 25. Вкладка «Кинематика точки».
   await tab('pointkin');
   const knS = await p.innerText('#ksolution');
