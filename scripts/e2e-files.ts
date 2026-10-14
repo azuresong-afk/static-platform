@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 30 && seen.length === 30, 'тридцать разделов, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 31 && seen.length === 31, 'тридцать один раздел, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 32, 'готово тридцать два пункта');
+  check((await p.locator('.rm-done').count()) === 33, 'готово тридцать три пункта');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -687,6 +687,28 @@ async function main() {
   check((await p.getAttribute('[data-tab="impact"]', 'aria-selected')) === 'true' && (await p.innerText('#impsolution')) === imSol, 'файл удара открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // Вкладка «Переменная масса».
+  await tab('varmass');
+  const vmS = await p.innerText('#vmsolution');
+  check(vmS.includes('5651,0078') && vmS.includes('Циолковского'), 'Мещерский 45.3: высота ракеты через 30 с — 5,65 км', vmS.slice(-300));
+  await p.selectOption('#vmpreset', 'm455');
+  check((await p.innerText('#vmsolution')).includes('1744862,3853'), 'Мещерский 45.5: наибольшая высота после сгорания топлива');
+  await p.selectOption('#vmpreset', 'm4521');
+  check((await p.innerText('#vmsolution')).includes('118,796'), 'Мещерский 45.21: время пробега обледеневающего самолёта');
+  await p.selectOption('#vmpreset', 'm4539');
+  const vm39 = await p.innerText('#vmsolution');
+  check(vm39.includes('3,1219') && vm39.includes('15166,2283'), 'Мещерский 45.39: наименьший стартовый вес двухступенчатой ракеты', vm39.slice(-300));
+  await p.click('#vmaddst');
+  check((await p.locator('#vmstages .cvrow').count()) === 3, 'добавлена ступень');
+  const [dlvm] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const vmText = await (await dlvm.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(vmText).module === 'varmass' && JSON.parse(vmText).problem.stages.stages.length === 3, 'файл задачи о переменной массе');
+  const vmSol = await p.innerText('#vmsolution');
+  await tab('frames');
+  await openText('vm.json', vmText, 'ok');
+  check((await p.getAttribute('[data-tab="varmass"]', 'aria-selected')) === 'true' && (await p.innerText('#vmsolution')) === vmSol, 'файл переменной массы открывается в своей вкладке без потерь');
+  await tab('frames');
+
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');
   const pbS = await p.innerText('#pbsolution');
@@ -1124,7 +1146,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 32, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 33, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });
