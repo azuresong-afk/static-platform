@@ -20,6 +20,7 @@ import { createRotationModule } from '../modules/rotation';
 import { createDalembertModule } from '../modules/dalembert';
 import { createPointModule } from '../modules/pointdyn';
 import { createMcModule } from '../modules/masscenter';
+import { createPlaneBodyModule } from '../modules/planebody';
 import { createKinModule } from '../modules/pointkin';
 import { createGearModule } from '../modules/gears';
 import { createMechModule } from '../modules/mechanism';
@@ -34,7 +35,7 @@ import { ROADMAP } from './roadmap';
 export function createModules(): StatikaModule[] {
   const frames = createFramesModule();
   const conventions = new ConventionsStore();
-  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createMcModule(), createOscModule(), createKinModule(), createGearModule(), createMechModule(), createRelModule(), createVirtualModule(frames.store), createLagrangeModule(), createBendingModule(frames.store, conventions), createFrameDiagModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createRodsModule(), createSpaceModule(conventions), createCompositeModule(), createVesselModule(), createTorsionModule(), createFatigueModule()];
+  return [frames, createTrussModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createDalembertModule(), createPointModule(), createMcModule(), createPlaneBodyModule(), createOscModule(), createKinModule(), createGearModule(), createMechModule(), createRelModule(), createVirtualModule(frames.store), createLagrangeModule(), createBendingModule(frames.store, conventions), createFrameDiagModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createRodsModule(), createSpaceModule(conventions), createCompositeModule(), createVesselModule(), createTorsionModule(), createFatigueModule()];
 }
 
 export const PLANNED: PlannedModule[] = ROADMAP.flatMap((b) => b.items)

@@ -488,6 +488,7 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .en-load{fill:color-mix(in srgb,var(--load) 12%,var(--sheet));stroke:var(--ink);stroke-width:1.8;stroke-linejoin:round}
 .en-sup{fill:var(--sheet);stroke:var(--ink);stroke-width:1.4}
 .en-mom{fill:none;stroke:var(--load);stroke-width:1.6}
+.en-mom-f{fill:var(--load)}
 .en-v{stroke:var(--react);stroke-width:2;fill:none}
 .en-v-f{fill:var(--react)}
 .en-vt{fill:var(--react);font-size:14px}
