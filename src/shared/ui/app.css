@@ -769,3 +769,4 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .tk-books button+button{border-left:1px solid var(--rule)}
 /* Шапка раздела: заголовок сжимается, список задач остаётся справа. */
 .top>div:first-child{flex:1 1 340px;min-width:0}
+.imp-wide{grid-column:span 2}

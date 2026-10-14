@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 29 && seen.length === 29, 'двадцать девять разделов, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 30 && seen.length === 30, 'тридцать разделов, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 31, 'готов тридцать один пункт');
+  check((await p.locator('.rm-done').count()) === 32, 'готово тридцать два пункта');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -664,6 +664,29 @@ async function main() {
   check((await p.getAttribute('[data-tab="masscenter"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === mcSol, 'файл центра масс открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // Вкладка «Удар».
+  await tab('impact');
+  const imS = await p.innerText('#impsolution');
+  check(imS.includes('2,0298') && imS.includes('2,0785'), 'Мещерский 44.10: косой удар шаров', imS.slice(-300));
+  await p.selectOption('#imppreset', 'm4422');
+  check((await p.innerText('#impsolution')).includes('865,9175') && (await p.innerText('#impsolution')).includes('выполняется'), 'Мещерский 44.22: скорость снаряда по углу отклонения, теорема Карно');
+  await p.selectOption('#imppreset', 'm4424');
+  check((await p.innerText('#impsolution')).includes('7,6007'), 'Мещерский 44.24: наименьшая скорость шара (1/3)√(53ga)');
+  await p.selectOption('#imppreset', 'yd13');
+  check((await p.innerText('#impsolution')).includes('1208,1266'), 'Яблонский, Д.13: ударный импульс ступеньки 1208 Н·с');
+  await p.selectOption('#impcontact', 'smooth');
+  check((await p.innerText('#impsolution')).includes('контакт гладкий'), 'гладкий контакт');
+  await p.selectOption('#imp2-kind', 'axis');
+  check((await p.locator('#imp2-ox').count()) === 1 && (await p.locator('#imp2-inertia').count()) === 1, 'тело 2 на оси — поля оси и момента инерции');
+  const [dlim] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const imText = await (await dlim.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(imText).module === 'impact' && JSON.parse(imText).problem.b2.kind === 'axis', 'файл задачи об ударе');
+  const imSol = await p.innerText('#impsolution');
+  await tab('frames');
+  await openText('im.json', imText, 'ok');
+  check((await p.getAttribute('[data-tab="impact"]', 'aria-selected')) === 'true' && (await p.innerText('#impsolution')) === imSol, 'файл удара открывается в своей вкладке без потерь');
+  await tab('frames');
+
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');
   const pbS = await p.innerText('#pbsolution');
@@ -1101,7 +1124,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 31, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 32, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });
