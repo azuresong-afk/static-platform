@@ -16,6 +16,7 @@ npm run build      # сборка в dist/
 npm run golden     # переснять эталоны с прототипа (нужен Chromium, см. ниже)
 npm run build && npm run compare:ui   # сравнить интерфейс с прототипом в браузере
 npm run build && npm run e2e:files    # сохранение, открытие и отчёт в PDF в браузере
+npm run build && npm run bundle       # один файл dist/statika.html (всё встроено) и его проверка в браузере
 ```
 
 ## Устройство
