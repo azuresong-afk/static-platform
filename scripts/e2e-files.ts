@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 31 && seen.length === 31, 'тридцать один раздел, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 32 && seen.length === 32, 'тридцать два раздела, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 33, 'готово тридцать три пункта');
+  check((await p.locator('.rm-done').count()) === 34, 'готово тридцать четыре пункта');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -709,6 +709,28 @@ async function main() {
   check((await p.getAttribute('[data-tab="varmass"]', 'aria-selected')) === 'true' && (await p.innerText('#vmsolution')) === vmSol, 'файл переменной массы открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // Вкладка «Тяготение и орбиты».
+  await tab('orbit');
+  const obS = await p.innerText('#orbsolution');
+  check(obS.includes('52789') && obS.includes('e = 0,064474') && obS.includes('97,86 мин'), 'Мещерский 50.22–50.23: интеграл площадей, эксцентриситет и период', obS.slice(-300));
+  await p.selectOption('#orbpreset', 'm5038');
+  check((await p.innerText('#orbsolution')).includes('u = 2,9502'), 'Мещерский 50.38: касательный импульс для перелёта к орбите Марса');
+  await p.selectOption('#orbpreset', 'm3027');
+  check((await p.innerText('#orbsolution')).includes('v₀ = 10,733'), 'Мещерский 30.27: скорость снаряда до точки равного притяжения');
+  await p.selectOption('#orbpreset', 'm5107');
+  check((await p.innerText('#orbsolution')).includes('высота 308,23'), 'Мещерский 51.7: высота включения тормозного двигателя');
+  await p.selectOption('#orbmode', 'planet');
+  await p.selectOption('#orbbody', 'mars');
+  check((await p.innerText('#orbsolution')).includes('v₁ = 3,535') && (await p.locator('#orbsvg circle').count()) > 0, 'небесное тело: космические скорости Марса');
+  const [dlob] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const obText = await (await dlob.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(obText).module === 'orbit' && JSON.parse(obText).problem.planet.body === 'mars', 'файл задачи о тяготении');
+  const obSol = await p.innerText('#orbsolution');
+  await tab('frames');
+  await openText('ob.json', obText, 'ok');
+  check((await p.getAttribute('[data-tab="orbit"]', 'aria-selected')) === 'true' && (await p.innerText('#orbsolution')) === obSol, 'файл тяготения открывается в своей вкладке без потерь');
+  await tab('frames');
+
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');
   const pbS = await p.innerText('#pbsolution');
@@ -1146,7 +1168,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 33, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 34, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });

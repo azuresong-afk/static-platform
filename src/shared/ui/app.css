@@ -771,3 +771,11 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .top>div:first-child{flex:1 1 340px;min-width:0}
 .imp-wide{grid-column:span 2}
 .vm-wide{grid-column:span 2}
+.ob-wide{grid-column:1/-1}
+.ob-body{fill:color-mix(in srgb,var(--react) 14%,var(--sheet));stroke:var(--ink);stroke-width:1.6}
+.ob-orb{fill:none;stroke:var(--ink);stroke-width:2;stroke-linejoin:round}
+.ob-orb2{fill:none;stroke:var(--load);stroke-width:2;stroke-dasharray:8 5;stroke-linejoin:round}
+.ob-guide{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:5 4;fill:none}
+.ob-pt{fill:var(--ink)}
+.ob-pt2{fill:var(--load)}
+.ob-t2{fill:var(--load)}
