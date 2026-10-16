@@ -779,3 +779,46 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .ob-pt{fill:var(--ink)}
 .ob-pt2{fill:var(--load)}
 .ob-t2{fill:var(--load)}
+/* Колебания систем */
+.vb-item{border-left:2px solid var(--rule);padding:2px 0 2px 8px;margin:6px 0}
+.vb-row{display:grid;grid-template-columns:64px minmax(0,1fr) 28px;gap:6px;align-items:center}
+.vb-row.vb-sup{grid-template-columns:110px minmax(0,1fr) 28px;margin:4px 0}
+.vb-row .vb-tag{grid-column:span 2}
+.vb-link{margin:4px 0 4px 18px}
+.vb-tag{font-size:12.5px;color:var(--ink-2)}
+.vb-tag.vb-body{font-weight:600;color:var(--ink)}
+.vb-c{align-self:end;font-size:12px;color:var(--ink-3);padding-bottom:6px;font-variant-numeric:tabular-nums}
+.vb-spring{fill:none;stroke:var(--react);stroke-width:2;stroke-linejoin:round}
+.vb-shaft{stroke:var(--ink-2);stroke-width:5;stroke-linecap:round}
+.vb-string{stroke:var(--ink-2);stroke-width:1.6}
+.vb-beam{stroke:var(--react);stroke-width:4;stroke-linecap:round}
+.vb-ground{stroke:var(--ink);stroke-width:1.8}
+.vb-hatch{stroke:var(--ink-3);stroke-width:1}
+.vb-hatch.vb-moving{stroke:var(--load)}
+.vb-supp{fill:var(--sheet);stroke:var(--ink);stroke-width:1.3}
+.vb-rod{stroke:var(--ink-2);stroke-width:1.6}
+.vb-damper{fill:none;stroke:var(--ink-2);stroke-width:1.4}
+.vb-mass{fill:color-mix(in srgb,var(--load) 12%,var(--sheet));stroke:var(--ink);stroke-width:1.6}
+.vb-mlab{font-weight:700;font-size:14px;fill:var(--ink)}
+.vb-lab,.vb-val,.vb-coord,.vb-mk,.vb-leg,.vb-tick{font-family:"Golos Text",system-ui,sans-serif}
+.vb-lab{font-size:13px;fill:var(--ink-2)}
+.vb-flab{font-size:13px;fill:var(--load)}
+.vb-tick{font-size:12px;fill:var(--ink-3)}
+.vb-f{stroke:var(--load);stroke-width:2}
+.vb-f-f{fill:var(--load)}
+.vb-head{font-family:"Golos Text",system-ui,sans-serif;font-size:14px;font-weight:600;fill:var(--ink-2)}
+.vb-mode{font-family:"Golos Text",system-ui,sans-serif;font-size:13px;fill:var(--ink)}
+.vb-coord{font-size:13px;font-style:italic;fill:var(--ink)}
+.vb-base{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:4 3}
+.vb-tick-l{stroke:var(--ink-3);stroke-width:1}
+.vb-pt{fill:var(--ink)}
+.vb-val{font-size:11.5px;fill:var(--ink-3);font-variant-numeric:tabular-nums}
+.vb-node{fill:var(--sheet);stroke:var(--ink);stroke-width:1.4}
+.vb-mode-l{fill:none;stroke-width:2.2;stroke-linejoin:round}
+.vb-kmark{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:4 3}
+.vb-pmark{stroke:var(--load);stroke-width:1.4}
+.vb-mk{font-size:12px;fill:var(--ink-2)}
+.vb-leg{font-size:12.5px;fill:var(--ink-2)}
+.vb-s0{stroke:var(--react)} .vb-s1{stroke:var(--load)} .vb-s2{stroke:var(--ok)} .vb-s3{stroke:var(--warn)} .vb-s4{stroke:var(--ink-2)} .vb-s5{stroke:var(--grid)}
+.vb-bar{stroke:none;opacity:.85}
+.vb-bar.vb-s0{fill:var(--react)} .vb-bar.vb-s1{fill:var(--load)} .vb-bar.vb-s2{fill:var(--ok)} .vb-bar.vb-s3{fill:var(--warn)} .vb-bar.vb-s4{fill:var(--ink-2)} .vb-bar.vb-s5{fill:var(--grid)}

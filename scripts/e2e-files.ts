@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 32 && seen.length === 32, 'тридцать два раздела, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 33 && seen.length === 33, 'тридцать три раздела, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 34, 'готово тридцать четыре пункта');
+  check((await p.locator('.rm-done').count()) === 35, 'готово тридцать пять пунктов');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -731,6 +731,40 @@ async function main() {
   check((await p.getAttribute('[data-tab="orbit"]', 'aria-selected')) === 'true' && (await p.innerText('#orbsolution')) === obSol, 'файл тяготения открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // Вкладка «Колебания систем».
+  await tab('vibration');
+  let vb = await p.innerText('#vbsolution');
+  check(vb.includes('k₂ = 14,007 рад/с') && vb.includes('x₂ = 0,016667 − 0,016667·cos 24,261t'), 'Мещерский 54.44–54.45: частоты и движение вагонов', vb.slice(-400));
+  check((await p.locator('#vbsvg .vb-mode-l').count()) === 3 && (await p.locator('#vbsvg .rt-line').count()) >= 3, 'формы главных колебаний и графики движения');
+  await p.selectOption('#vbpreset', 'm5429');
+  vb = await p.innerText('#vbsolution');
+  check(vb.includes('δ₁₁ = 4/243·L³/(EJ)') && vb.includes('k₂ = 22,045 рад/с'), 'Мещерский 54.29: коэффициенты влияния и частоты балки', vb.slice(0, 400));
+  await p.click('#vbaddm');
+  check((await p.locator('#vbmasses .vb-item').count()) === 3 && (await p.innerText('#vbsolution')).includes('k₃'), 'добавлен груз — третья частота');
+  await p.selectOption('#vbpreset', 'm5437');
+  vb = await p.innerText('#vbsolution');
+  check(vb.includes('c₂ = H/A = 10/0,002 = 5000') && vb.includes('гашение колебаний'), 'Мещерский 54.37: гаситель — масса и жёсткость, амплитуда фундамента нулевая', vb.slice(0, 400));
+  await p.selectOption('#vbpreset', 'm5438');
+  check((await p.innerText('#vbsolution')).includes('φ₁ = −0,014737·sin 15t'), 'Мещерский 54.38: вынужденные колебания дисков');
+  await p.selectOption('#vbpreset', 'm549');
+  check((await p.innerText('#vbsolution')).includes('A₂ = 1,18'), 'Мещерский 54.9: формы главных колебаний по T и Π');
+  await p.fill('#vb-ceq0', '0,3');
+  await p.locator('#vb-ceq0').blur();
+  check((await p.innerText('#vbsolution')).includes('не положение равновесия'), 'q* — не равновесие: сообщение');
+  await p.click('#vbaddq');
+  check((await p.locator('#vbcoords .vb-item').count()) === 3, 'добавлена координата');
+  await p.selectOption('#vbpreset', 'm542');
+  await p.click('#vbaddb');
+  check((await p.locator('#vbbodies .vb-item').count()) === 3 && (await p.innerText('#vbsolution')).includes('k₃'), 'в цепочку добавлен диск');
+  const [dlvb] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const vbText = await (await dlvb.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(vbText).module === 'vibration' && JSON.parse(vbText).problem.chain.bodies.length === 3, 'файл задачи о колебаниях');
+  const vbSol = await p.innerText('#vbsolution');
+  await tab('frames');
+  await openText('vb.json', vbText, 'ok');
+  check((await p.getAttribute('[data-tab="vibration"]', 'aria-selected')) === 'true' && (await p.innerText('#vbsolution')) === vbSol, 'файл колебаний открывается в своей вкладке без потерь');
+  await tab('frames');
+
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');
   const pbS = await p.innerText('#pbsolution');
@@ -1168,7 +1202,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 34, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 35, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });

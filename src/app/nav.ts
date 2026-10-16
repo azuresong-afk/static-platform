@@ -38,7 +38,7 @@ export const NAV: NavCourse[] = [
         refs: 'Мещерский, §26–45, 50–51, 53',
         tabs: ['pointdyn', 'oscillation', 'inertia', 'masscenter', 'planebody', 'rotation', 'energy', 'dalembert', 'impact', 'varmass', 'orbit'],
       },
-      { id: 'analytic', title: 'Аналитическая механика', short: 'Аналит. механика', refs: 'Мещерский, §46–48', tabs: ['virtual', 'lagrange'] },
+      { id: 'analytic', title: 'Аналитическая механика', short: 'Аналит. механика', refs: 'Мещерский, §46–48, 54', tabs: ['virtual', 'lagrange', 'vibration'] },
     ],
   },
   {
