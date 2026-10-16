@@ -30,13 +30,19 @@ export const NAV: NavCourse[] = [
     book: 'Мещерский',
     blocks: [
       { id: 'statics', title: 'Статика', short: 'Статика', refs: 'Мещерский, §1–9', tabs: ['converging', 'frames', 'truss', 'spacebody', 'centroid'] },
-      { id: 'kinematics', title: 'Кинематика', short: 'Кинематика', refs: 'Мещерский, §10–23', tabs: ['pointkin', 'gears', 'mechanism', 'relative'] },
+      {
+        id: 'kinematics',
+        title: 'Кинематика',
+        short: 'Кинематика',
+        refs: 'Мещерский, §10–25',
+        tabs: ['pointkin', 'gears', 'mechanism', 'fixedpoint', 'relative'],
+      },
       {
         id: 'dynamics',
         title: 'Динамика',
         short: 'Динамика',
         refs: 'Мещерский, §26–45, 50–51, 53',
-        tabs: ['pointdyn', 'oscillation', 'inertia', 'masscenter', 'planebody', 'rotation', 'energy', 'dalembert', 'impact', 'varmass', 'orbit'],
+        tabs: ['pointdyn', 'oscillation', 'inertia', 'masscenter', 'planebody', 'rotation', 'energy', 'gyro', 'dalembert', 'impact', 'varmass', 'orbit'],
       },
       { id: 'analytic', title: 'Аналитическая механика', short: 'Аналит. механика', refs: 'Мещерский, §46–48, 54', tabs: ['virtual', 'lagrange', 'vibration'] },
     ],

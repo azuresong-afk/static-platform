@@ -831,3 +831,60 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .vb-s0{stroke:var(--react)} .vb-s1{stroke:var(--load)} .vb-s2{stroke:var(--ok)} .vb-s3{stroke:var(--warn)} .vb-s4{stroke:var(--ink-2)} .vb-s5{stroke:var(--grid)}
 .vb-bar{stroke:none;opacity:.85}
 .vb-bar.vb-s0{fill:var(--react)} .vb-bar.vb-s1{fill:var(--load)} .vb-bar.vb-s2{fill:var(--ok)} .vb-bar.vb-s3{fill:var(--warn)} .vb-bar.vb-s4{fill:var(--ink-2)} .vb-bar.vb-s5{fill:var(--grid)}
+/* Тело с неподвижной точкой */
+.fp-axis{stroke:var(--ink-2);stroke-width:1.3;stroke-dasharray:14 4 3 4}
+.fp-ax{stroke:var(--ink-2);stroke-width:1.4;fill:none}
+.fp-ax-f{fill:var(--ink-2)}
+.fp-name{font-family:"Golos Text",system-ui,sans-serif;font-size:13px;fill:var(--ink-2)}
+.fp-rim{stroke:var(--ink);stroke-width:4;stroke-linecap:round}
+.fp-cone{fill:color-mix(in srgb,var(--react) 9%,transparent);stroke:var(--ink-3);stroke-width:1.1;stroke-linejoin:round}
+.fp-ground{stroke:var(--ink);stroke-width:2}
+.fp-hatch{stroke:var(--ink-3);stroke-width:1}
+.fp-inst{stroke:var(--bad);stroke-width:1.6;stroke-dasharray:7 5}
+.fp-inst-t{font-size:13px;fill:var(--bad)}
+.fp-pt{fill:var(--ink)}
+.fp-o{fill:var(--sheet);stroke:var(--ink);stroke-width:2}
+.fp-ptn{font-size:15px;font-weight:700}
+.fp-vel{fill:none;stroke:var(--react);stroke-width:1.6}
+.fp-vel-f{fill:var(--react)}
+.fp-vt{font-family:"Golos Text",system-ui,sans-serif;font-size:12px;fill:var(--react)}
+.fp-fix{stroke:var(--ink-3);stroke-width:1.4;fill:none}
+.fp-fix-f{fill:var(--ink-3)}
+.fp-fix-t{fill:var(--ink-3)}
+.fp-body{stroke:var(--react);stroke-width:2;fill:none}
+.fp-body-f{fill:var(--react)}
+.fp-body-t{fill:var(--react)}
+.fp-w{stroke:var(--bad);stroke-width:2.4;fill:none}
+.fp-w-f{fill:var(--bad)}
+.fp-w-t{fill:var(--bad);font-weight:700}
+.fp-e{stroke:var(--load);stroke-width:2;stroke-dasharray:6 4;fill:none}
+.fp-e-f{fill:var(--load)}
+.fp-e-t{fill:var(--load)}
+.fp-guide{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:4 4}
+.fp-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) 26px;gap:6px;align-items:end;margin-top:6px}
+.fp-row .sfield span:first-child{font-size:11.5px}
+.fp-list{display:flex;flex-direction:column;gap:2px}
+.fp-list .cgpar{margin:4px 0 6px 0}
+.fp-sub{font-size:12.5px;color:var(--ink-3);margin:12px 0 2px}
+.fp-ct{grid-template-columns:repeat(3,minmax(0,1fr)) 26px;align-items:end}
+.fp-ct.fp-ct4{grid-template-columns:minmax(0,1.2fr) repeat(3,minmax(0,1fr)) 26px}
+/* Гироскоп */
+.gy-shaft{stroke:var(--ink);stroke-width:3;stroke-linecap:round}
+.gy-rotor{fill:color-mix(in srgb,var(--react) 14%,var(--sheet));stroke:var(--ink);stroke-width:1.8}
+.gy-prec{stroke:var(--ink-3);stroke-width:1.3;stroke-dasharray:14 4 3 4}
+.gy-spin{fill:none;stroke:var(--react);stroke-width:1.8}
+.gy-spin-f{fill:var(--react)}
+.gy-spin2{fill:none;stroke:var(--load);stroke-width:1.8}
+.gy-spin2-f{fill:var(--load)}
+.gy-t{fill:var(--react)}
+.gy-t2{fill:var(--load)}
+.gy-t3{font-weight:700}
+.gy-sup{fill:var(--sheet);stroke:var(--ink);stroke-width:1.6}
+.gy-n{stroke:var(--bad);stroke-width:2.4;fill:none}
+.gy-n-f{fill:var(--bad)}
+.gy-nt{fill:var(--bad);font-size:15px}
+.gy-base{stroke:var(--ink);stroke-width:2}
+.gy-hinge{fill:var(--sheet);stroke:var(--ink);stroke-width:2}
+.gy-cone{fill:none;stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:6 4}
+.gy-frame{fill:none;stroke:var(--ink-2);stroke-width:2.4}
+.gy-spring{fill:none;stroke:var(--ink-2);stroke-width:1.6}
