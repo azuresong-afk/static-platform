@@ -866,6 +866,28 @@ async function main() {
   check((await p.getAttribute('[data-tab="gyro"]', 'aria-selected')) === 'true' && (await p.innerText('#gysolution')) === gySol, 'файл гироскопа открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // Вкладка «Центр масс»: сохранение количества движения, давление струи, работа и мощность (§29, 36).
+  await tab('masscenter');
+  await p.selectOption('#mpreset', 'm368');
+  const moS = await p.innerText('#msolution');
+  check(moS.includes('−4,4182') && (await p.locator('#msvg .cv-r').count()) === 1, 'Мещерский 36.8: откат ствола 4,42 м/с', moS.slice(-300));
+  await p.selectOption('#mpreset', 'm3616');
+  check((await p.innerText('#msolution')).includes('51,24'), 'Мещерский 36.16: давление на колено трубы 51,2 кГ');
+  await p.selectOption('#mpreset', 'm3618');
+  check((await p.innerText('#msolution')).includes('давление на опоры 0'), 'Мещерский 36.18: давление котла на опоры равно нулю');
+  await p.selectOption('#mpreset', 'm293');
+  check((await p.innerText('#msolution')).includes('34 ч 43 мин 20 с'), 'Мещерский 29.3: время работы насоса');
+  await p.click('#maddload');
+  check((await p.locator('#mwloads .cvrow').count()) === 2 && (await p.locator('#mmode').inputValue()) === 'power', 'работа и мощность: добавлена нагрузка');
+  const [dlpw] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const pwText = await (await dlpw.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(pwText).module === 'masscenter' && JSON.parse(pwText).problem.power.loads.length === 2, 'файл задачи о работе и мощности');
+  const pwSol = await p.innerText('#msolution');
+  await tab('frames');
+  await openText('pw.json', pwText, 'ok');
+  check((await p.getAttribute('[data-tab="masscenter"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === pwSol, 'файл работы и мощности открывается без потерь');
+  await tab('frames');
+
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');
   const pbS = await p.innerText('#pbsolution');

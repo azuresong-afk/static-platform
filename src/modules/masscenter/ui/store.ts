@@ -1,18 +1,23 @@
-/** Состояние вкладки «Центр масс и плоское движение»: три режима, история отмены, файл проекта. */
+/** Состояние вкладки «Центр масс и плоское движение»: шесть режимов, история отмены, файл проекта. */
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
+import type { JetProblem, JetStream, LoadSpeed, MomBody, MomentumProblem, PowerProblem, PowerUnit, WorkLoad } from '../model/dynamics';
 import type { MPoint, PointsProblem, ShiftPart, ShiftProblem } from '../model/system';
 import type { WheelProblem } from '../model/wheel';
 import { MC_PRESETS, type McPresetKey } from '../presets';
 
 export const MC_MODULE = 'masscenter';
-export type McMode = 'points' | 'shift' | 'wheel';
+export type McMode = 'points' | 'shift' | 'wheel' | 'momentum' | 'jet' | 'power';
+const MODES: McMode[] = ['points', 'shift', 'wheel', 'momentum', 'jet', 'power'];
 export interface McState3 {
   mode: McMode;
   points: PointsProblem;
   shift: ShiftProblem;
   wheel: WheelProblem;
+  momentum: MomentumProblem;
+  jet: JetProblem;
+  power: PowerProblem;
 }
 export const WHEEL_NUM = ['m', 'g', 'r', 'rho', 'alpha', 'M', 'F', 'T', 'beta', 'e', 'f', 'fk', 't'] as const;
 export type WheelNumKey = (typeof WHEEL_NUM)[number];
@@ -33,11 +38,19 @@ interface Snap {
   preset: McState['preset'];
 }
 const copy = <T>(p: T): T => structuredClone(p);
-const pick = <K extends 'points' | 'shift' | 'wheel'>(key: McPresetKey, mode: K) => {
+const pick = <K extends McMode>(key: McPresetKey, mode: K) => {
   const t = MC_PRESETS[key].problem;
   return (t.mode === mode ? (t as unknown as Record<K, McState3[K]>)[mode] : null) as McState3[K] | null;
 };
-const DEF: McState3 = { mode: 'wheel', points: pick('m357', 'points')!, shift: pick('m3519', 'shift')!, wheel: pick('m3511', 'wheel')! };
+const DEF: McState3 = {
+  mode: 'wheel',
+  points: pick('m357', 'points')!,
+  shift: pick('m3519', 'shift')!,
+  wheel: pick('m3511', 'wheel')!,
+  momentum: pick('m368', 'momentum')!,
+  jet: pick('m3614', 'jet')!,
+  power: pick('m294', 'power')!,
+};
 
 export function presetState(k: McPresetKey, base: McState3 = DEF): McState3 {
   const t = MC_PRESETS[k].problem;
@@ -46,6 +59,9 @@ export function presetState(k: McPresetKey, base: McState3 = DEF): McState3 {
   if (t.mode === 'points') s.points = copy(t.points);
   if (t.mode === 'shift') s.shift = copy(t.shift);
   if (t.mode === 'wheel') s.wheel = copy(t.wheel);
+  if (t.mode === 'momentum') s.momentum = copy(t.momentum);
+  if (t.mode === 'jet') s.jet = copy(t.jet);
+  if (t.mode === 'power') s.power = copy(t.power);
   return s;
 }
 
@@ -73,13 +89,62 @@ function parseWheelP(raw: unknown): WheelProblem | null {
   return { ...nums, byWeight: raw.byWeight === true, inertia: raw.inertia as WheelProblem['inertia'] };
 }
 
+const nm = (x: unknown) => (typeof x === 'string' ? x.slice(0, 30) : '');
+function parseMomentumP(raw: unknown): MomentumProblem | null {
+  if (!isObj(raw) || !isNum(raw.g) || !isNum(raw.F) || !Array.isArray(raw.bodies) || !isObj(raw.unknown) || !isNum(raw.unknown.i) || ![0, 1].includes(raw.unknown.when as number)) return null;
+  const bodies: MomBody[] = [];
+  for (const b of raw.bodies) {
+    if (!isObj(b) || ![b.m, b.v0, b.ref0, b.v1, b.ref1].every(isNum)) return null;
+    bodies.push({ name: nm(b.name), m: b.m as number, v0: b.v0 as number, ref0: b.ref0 as number, v1: b.v1 as number, ref1: b.ref1 as number });
+  }
+  return { byWeight: raw.byWeight === true, g: raw.g, F: raw.F, bodies, unknown: { i: raw.unknown.i, when: raw.unknown.when as 0 | 1 } };
+}
+function parseJetP(raw: unknown): JetProblem | null {
+  if (!isObj(raw) || ![raw.g, raw.rho, raw.W].every(isNum) || !Array.isArray(raw.streams)) return null;
+  const streams: JetStream[] = [];
+  for (const x of raw.streams) {
+    if (!isObj(x) || ![x.A, x.v, x.ang].every(isNum)) return null;
+    streams.push({ name: nm(x.name), out: x.out === true, A: x.A as number, v: x.v as number, ang: x.ang as number });
+  }
+  return { byWeight: raw.byWeight === true, g: raw.g as number, rho: raw.rho as number, W: raw.W as number, streams };
+}
+export const LOAD_NUM = ['F', 'alpha', 'f', 'v', 's', 'k', 'd', 'n'] as const;
+export type LoadNumKey = (typeof LOAD_NUM)[number];
+const SPEEDS: LoadSpeed[] = ['v', 'path', 'rot'];
+const PUNITS: PowerUnit[] = ['base', 'kW', 'hp'];
+function parsePowerP(raw: unknown): PowerProblem | null {
+  if (!isObj(raw) || ![raw.g, raw.eta, raw.t, raw.N].every(isNum) || !Array.isArray(raw.loads) || !['si', 'tech'].includes(raw.units as string) || !PUNITS.includes(raw.Nunit as PowerUnit)) return null;
+  if (!(raw.unknown === 'N' || raw.unknown === 't' || isNum(raw.unknown))) return null;
+  const loads: WorkLoad[] = [];
+  for (const l of raw.loads) {
+    if (!isObj(l) || !LOAD_NUM.every((k) => isNum(l[k])) || !['force', 'weight'].includes(l.kind as string) || !SPEEDS.includes(l.speed as LoadSpeed)) return null;
+    const nums = Object.fromEntries(LOAD_NUM.map((k) => [k, l[k]])) as Record<LoadNumKey, number>;
+    loads.push({ ...nums, name: nm(l.name), kind: l.kind as WorkLoad['kind'], speed: l.speed as LoadSpeed });
+  }
+  return { units: raw.units as PowerProblem['units'], g: raw.g as number, eta: raw.eta as number, driving: raw.driving === true, t: raw.t as number, N: raw.N as number, Nunit: raw.Nunit as PowerUnit, unknown: raw.unknown as PowerProblem['unknown'], loads };
+}
+
 export function parseMc(raw: unknown): { ok: true; problem: McState3 } | { ok: false; errors: string[] } {
-  if (!isObj(raw) || !['points', 'shift', 'wheel'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
+  if (!isObj(raw) || !MODES.includes(raw.mode as McMode)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
   const points = parsePointsP(raw.points),
     shift = parseShiftP(raw.shift),
-    wheel = parseWheelP(raw.wheel);
-  if (!{ points, shift, wheel }[raw.mode as McMode]) return { ok: false, errors: ['Данные задачи неполные.'] };
-  return { ok: true, problem: { mode: raw.mode as McMode, points: points ?? copy(DEF.points), shift: shift ?? copy(DEF.shift), wheel: wheel ?? copy(DEF.wheel) } };
+    wheel = parseWheelP(raw.wheel),
+    momentum = parseMomentumP(raw.momentum),
+    jet = parseJetP(raw.jet),
+    power = parsePowerP(raw.power);
+  if (!{ points, shift, wheel, momentum, jet, power }[raw.mode as McMode]) return { ok: false, errors: ['Данные задачи неполные.'] };
+  return {
+    ok: true,
+    problem: {
+      mode: raw.mode as McMode,
+      points: points ?? copy(DEF.points),
+      shift: shift ?? copy(DEF.shift),
+      wheel: wheel ?? copy(DEF.wheel),
+      momentum: momentum ?? copy(DEF.momentum),
+      jet: jet ?? copy(DEF.jet),
+      power: power ?? copy(DEF.power),
+    },
+  };
 }
 
 export class McStore {
@@ -192,6 +257,114 @@ export class McStore {
   setWheelByWeight = (on: boolean) => {
     this.commit();
     this.edit((p) => (p.wheel.byWeight = on));
+  };
+  /* количество движения */
+  setMomFlag = (on: boolean) => {
+    this.commit();
+    this.edit((p) => (p.momentum.byWeight = on));
+  };
+  typeMomNum = (key: 'g' | 'F', v: number) => {
+    this.touch(`mo:${key}`);
+    this.edit((p) => (p.momentum[key] = v));
+  };
+  typeBody = (i: number, key: 'm' | 'v0' | 'v1', v: number) => {
+    this.touch(`mb:${i}:${key}`);
+    this.edit((p) => (p.momentum.bodies[i][key] = v));
+  };
+  typeBodyName = (i: number, s: string) => {
+    this.touch(`mb:${i}:name`);
+    this.edit((p) => (p.momentum.bodies[i].name = s.slice(0, 30)));
+  };
+  setBodyRef = (i: number, key: 'ref0' | 'ref1', ref: number) => {
+    this.commit();
+    this.edit((p) => (p.momentum.bodies[i][key] = ref));
+  };
+  setMomUnknown = (i: number, when: 0 | 1) => {
+    this.commit();
+    this.edit((p) => (p.momentum.unknown = { i, when }));
+  };
+  addBody = () => {
+    if (this.st.problem.momentum.bodies.length >= MAX) return;
+    this.commit();
+    this.edit((p) => p.momentum.bodies.push({ name: '', m: 1, v0: 0, ref0: -1, v1: 0, ref1: -1 }));
+  };
+  removeBody = (i: number) => {
+    if (this.st.problem.momentum.bodies.length <= 1) return;
+    this.commit();
+    this.edit((p) => {
+      const m = p.momentum;
+      m.bodies.splice(i, 1);
+      const fix = (r: number) => (r === i ? -1 : r > i ? r - 1 : r);
+      m.bodies.forEach((b) => ((b.ref0 = fix(b.ref0)), (b.ref1 = fix(b.ref1))));
+      if (m.unknown.i === i) m.unknown = { i: 0, when: 1 };
+      else if (m.unknown.i > i) m.unknown.i--;
+    });
+  };
+  /* струя */
+  setJetFlag = (on: boolean) => {
+    this.commit();
+    this.edit((p) => (p.jet.byWeight = on));
+  };
+  typeJetNum = (key: 'g' | 'rho' | 'W', v: number) => {
+    this.touch(`j:${key}`);
+    this.edit((p) => (p.jet[key] = v));
+  };
+  typeStream = (i: number, key: 'A' | 'v' | 'ang', v: number) => {
+    this.touch(`js:${i}:${key}`);
+    this.edit((p) => (p.jet.streams[i][key] = v));
+  };
+  typeStreamName = (i: number, s: string) => {
+    this.touch(`js:${i}:name`);
+    this.edit((p) => (p.jet.streams[i].name = s.slice(0, 30)));
+  };
+  setStreamOut = (i: number, out: boolean) => {
+    this.commit();
+    this.edit((p) => (p.jet.streams[i].out = out));
+  };
+  addStream = () => {
+    if (this.st.problem.jet.streams.length >= MAX) return;
+    this.commit();
+    this.edit((p) => p.jet.streams.push({ name: '', out: true, A: 0, v: 1, ang: 0 }));
+  };
+  removeStream = (i: number) => {
+    if (this.st.problem.jet.streams.length <= 1) return;
+    this.commit();
+    this.edit((p) => p.jet.streams.splice(i, 1));
+  };
+  /* работа и мощность */
+  typePowerNum = (key: 'g' | 'eta' | 't' | 'N', v: number) => {
+    this.touch(`w:${key}`);
+    this.edit((p) => (p.power[key] = v));
+  };
+  setPower = <K extends 'units' | 'driving' | 'Nunit' | 'unknown'>(key: K, v: PowerProblem[K]) => {
+    this.commit();
+    this.edit((p) => (p.power[key] = v));
+  };
+  typeLoad = (i: number, key: LoadNumKey, v: number) => {
+    this.touch(`wl:${i}:${key}`);
+    this.edit((p) => (p.power.loads[i][key] = v));
+  };
+  typeLoadName = (i: number, s: string) => {
+    this.touch(`wl:${i}:name`);
+    this.edit((p) => (p.power.loads[i].name = s.slice(0, 30)));
+  };
+  setLoad = <K extends 'kind' | 'speed'>(i: number, key: K, v: WorkLoad[K]) => {
+    this.commit();
+    this.edit((p) => (p.power.loads[i][key] = v));
+  };
+  addLoad = () => {
+    if (this.st.problem.power.loads.length >= MAX) return;
+    this.commit();
+    this.edit((p) => p.power.loads.push({ name: '', kind: 'force', F: 1, alpha: 0, f: 0, speed: 'v', v: 1, s: 1, k: 1, d: 1, n: 60 }));
+  };
+  removeLoad = (i: number) => {
+    if (this.st.problem.power.loads.length <= 1) return;
+    this.commit();
+    this.edit((p) => {
+      const w = p.power;
+      w.loads.splice(i, 1);
+      if (typeof w.unknown === 'number') w.unknown = w.unknown === i ? 'N' : w.unknown > i ? w.unknown - 1 : w.unknown;
+    });
   };
   undo = () => {
     const s = this.hist.undo(this.snap());
