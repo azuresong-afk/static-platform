@@ -7,7 +7,7 @@ import { b, type AnswerRow, type Block, type Doc, type Inline, type Step } from 
 import { prettyName, setCoordNames, symText, varName } from '../../../shared/sym';
 import { num } from '../../orbit/text/solution';
 import { det } from '../model/linalg';
-import { freeCoefs, type ChainSys, type VibOut, type VibProblem } from '../model/vibration';
+import { dynClean, freeCoefs, type ChainSys, type VibOut, type VibProblem, type VibResult } from '../model/vibration';
 
 const SUBD = '₀₁₂₃₄₅₆₇₈₉';
 const sb = (i: number) => String(i).replace(/\d/g, (x) => SUBD[+x]);
@@ -57,6 +57,126 @@ const CHAIN_T: Record<ChainSys['kind'], { body: string; m: string; link: string 
   shaft: { body: 'диск', m: 'J', link: 'участок вала' },
   string: { body: 'груз', m: 'm', link: 'участок нити' },
 };
+
+/** Гироскопическая система: уравнение частот, частоты, комплексные формы, движение — численно. */
+function gyroSteps(r: VibResult, steps: Step[], ans: AnswerRow[], q: (j: number, ord?: number) => string, ex: (bl: Block[], ...c: Inline[]) => void): void {
+  const gy = r.gyro!,
+    sys = r.sys,
+    n = r.n;
+  {
+    const bl: Block[] = [];
+    bl.push({
+      k: 'p',
+      c: [
+        'Главные колебания qⱼ = Aⱼe^(ikt) с комплексными амплитудами: Σ (cᵢⱼ − k²aᵢⱼ + ik·gᵢⱼ)Aⱼ = 0. Уравнение частот ',
+        b('det(C − k²A + ikG) = 0'),
+        ' — матрица эрмитова, определитель вещественный и содержит только чётные степени k:',
+      ],
+    });
+    const lines: { c: Inline[]; num?: boolean }[] = [];
+    if (n === 2) lines.push({ c: ['(a₁₁a₂₂ − a₁₂²)k⁴ − (a₁₁c₂₂ + a₂₂c₁₁ − 2a₁₂c₁₂ + g₁₂²)k² + (c₁₁c₂₂ − c₁₂²) = 0'] });
+    lines.push({
+      c: [
+        sumText(
+          gy.poly
+            .map((x, j): [number, string] => [x, j === 0 ? '' : j === 1 ? 'k²' : `k${sp(2 * j)}`])
+            .reverse()
+            .map(([x, t]): [number, string] => [Math.abs(x) < 1e-12 * Math.max(...gy.poly.map(Math.abs)) ? 0 : x, t]),
+        ),
+        ' = 0',
+      ],
+      num: true,
+    });
+    bl.push({ k: 'eq', lines });
+    ex(
+      bl,
+      'Корни по λ = k² найдены численно. Положительный корень — частота колебаний; отрицательный или комплексный — равновесие неустойчиво (амплитуды растут).',
+    );
+    steps.push({ title: 'Уравнение частот', blocks: bl });
+  }
+  {
+    const bl: Block[] = [];
+    bl.push({
+      k: 'ul',
+      items: gy.modes.map((m, s): Inline[] => {
+        const k = `k${sb(s + 1)}`;
+        if (m.kind === 'zero') return [`${k} = 0`];
+        if (m.kind === 'unstable')
+          return [
+            `${k}² = ${m.lam.im ? `${num(m.lam.re)} ${m.lam.im < 0 ? '−' : '+'} ${num(Math.abs(m.lam.im))}i` : num(m.lam.re)} — не положительное число: равновесие неустойчиво`,
+          ];
+        return [`${k}² = ${num(m.lam.re)};  `, b(`${k} = ${num(m.k)} рад/с`), `;  период T${sb(s + 1)} = ${num((2 * Math.PI) / m.k)} с`];
+      }),
+    });
+    if (gy.modes.some((m) => m.kind === 'unstable')) bl.push({ k: 'badge', tone: 'bad', text: 'равновесие неустойчиво' });
+    else if (gy.stabilized) {
+      bl.push(
+        { k: 'badge', tone: 'ok', text: 'гироскопическая стабилизация' },
+        {
+          k: 'p',
+          c: [
+            'Матрица C не положительно определена (без гироскопических сил равновесие было бы неустойчивым), но все частоты вещественны: гироскопические силы стабилизируют равновесие.',
+          ],
+        },
+      );
+    }
+    gy.modes.forEach((m, s) => {
+      if (m.kind === 'osc')
+        ans.push({
+          kind: 'main',
+          val: [`k${sb(s + 1)} = ${num(m.k)} рад/с`],
+          note: `частота ${s + 1}-го главного колебания, T = ${num((2 * Math.PI) / m.k)} с`,
+        });
+    });
+    if (gy.modes.some((m) => m.kind === 'unstable')) ans.push({ kind: 'main', val: ['равновесие неустойчиво'], note: 'есть корень k² ≤ 0 или комплексный' });
+    steps.push({ title: 'Частоты главных колебаний', blocks: bl });
+  }
+  if (n > 1 && gy.modes.some((m) => m.kind === 'osc')) {
+    const bl: Block[] = [];
+    bl.push({
+      k: 'p',
+      c: [
+        'Амплитуды комплексные: Aⱼ = |Aⱼ|e^(iεⱼ) — координаты колеблются со сдвигами фаз εⱼ (при сдвиге 90° точка описывает эллипс). Амплитуда опорной координаты равна 1:',
+      ],
+    });
+    bl.push({
+      k: 'eq',
+      lines: gy.modes
+        .map((m, s) => ({ m, s }))
+        .filter(({ m }) => m.kind === 'osc')
+        .map(({ m, s }) => ({
+          c: [
+            `k${sb(s + 1)}: `,
+            b(
+              sys.names
+                .map((_, j) => `|A${sb(j + 1)}| = ${num(m.amp[j], 4)}${j === m.ref ? '' : `, ε${sb(j + 1)} = ${num((m.phase[j] * 180) / Math.PI, 4)}°`}`)
+                .join(';  '),
+            ),
+          ] as Inline[],
+        })),
+    });
+    gy.modes.forEach((m, s) => {
+      if (m.kind === 'osc')
+        ans.push({
+          kind: 'aux',
+          val: [sys.names.map((_, j) => `|A${sb(j + 1)}| = ${num(m.amp[j], 4)}${j === m.ref ? '' : ` (${num((m.phase[j] * 180) / Math.PI, 3)}°)`}`).join('; ')],
+          note: `форма ${s + 1}-го главного колебания`,
+        });
+    });
+    ex(bl, 'Главных координат с вещественными формами у гироскопической системы нет: T и Π одновременно к суммам квадратов не приводятся.');
+    steps.push({ title: 'Формы главных колебаний', blocks: bl });
+  }
+  if (sys.q0.some((x) => x !== 0) || sys.v0.some((x) => x !== 0) || (sys.force.kind === 'const' && sys.Hs.some((x) => x !== 0))) {
+    const ic = sys.names.map((_, j) => `${q(j)}(0) = ${num(sys.q0[j])}, ${q(j, 1)}(0) = ${num(sys.v0[j])}`).join('; ');
+    steps.push({
+      title: sys.force.kind === 'const' ? 'Движение под постоянной силой' : 'Свободные колебания',
+      blocks: [
+        { k: 'p', c: ['Начальные условия: ', ic, '.'] },
+        { k: 'p', c: ['Движение найдено численно (метод Рунге — Кутта) — см. графики.'] },
+      ],
+    });
+  }
+}
 
 export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = {}): Doc {
   if (!r.ok)
@@ -132,13 +252,40 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
             }),
         );
       bl.push({ k: 'eq', lines: [...coef('a', info.a, sys.A), ...coef('c', info.c, sys.C), ...(info.b ? coef('b', info.b, sys.B!) : [])] });
+      if (info.g && sys.G) {
+        const g = info.g,
+          G = sys.G;
+        bl.push(
+          {
+            k: 'p',
+            c: ['T содержит члены, линейные по скоростям, — гироскопические силы ', b('−Σ gᵢⱼ q̇ⱼ'), ', gᵢⱼ = ∂²T/∂q̇ᵢ∂qⱼ − ∂²T/∂q̇ⱼ∂qᵢ при q = q* (gⱼᵢ = −gᵢⱼ):'],
+          },
+          {
+            k: 'eq',
+            lines: g.flatMap((row, i) =>
+              row
+                .map((x, j) => ({ x, j }))
+                .filter(({ x, j }) => j > i && x.length)
+                .map(({ x, j }) => {
+                  const t = symText(x),
+                    v = num(G[i][j]);
+                  return { c: [`g${sb(i + 1)}${sb(j + 1)} = `, t === v ? t : `${t} = ${v}`] as Inline[] };
+                }),
+            ),
+          },
+        );
+        ex(
+          bl,
+          'Гироскопические силы (например, кориолисовы во вращающейся системе) работы не совершают: энергия сохраняется, но координаты связаны через скорости.',
+        );
+      }
       const zeroOff = (M: number[][]) => M.every((row, i) => row.every((x, j) => i === j || x === 0));
       if (n > 1)
         bl.push({
           k: 'p',
           c: [
             'Остальные коэффициенты (не выписаны) равны нулю; aᵢⱼ = aⱼᵢ, cᵢⱼ = cⱼᵢ.',
-            zeroOff(sys.A) && zeroOff(sys.C) ? ' Координаты не связаны: каждая колеблется независимо.' : '',
+            zeroOff(sys.A) && zeroOff(sys.C) && !sys.G ? ' Координаты не связаны: каждая колеблется независимо.' : '',
           ],
         });
       ex(
@@ -214,7 +361,7 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
           bm.masses
             .map(
               (ms, i) =>
-                `${i + 1}) m = ${num(ms.m)} в x = ${num(ms.x)}${ms.J > 0 || ms.e ? `, J = ${num(ms.J)}${ms.e ? `, центр масс в ${num(ms.e)} от точки крепления` : ''}` : ''}`,
+                `${i + 1}) m = ${num(ms.m)} в x = ${num(ms.x)}${ms.J > 0 || ms.e ? `, J = ${num(ms.J)}${ms.e ? `, центр масс в ${num(ms.e)} от точки крепления` : ''}` : ''}${(ms.h ?? 0) > 0 ? ` на вершине стойки высотой h = ${num(ms.h!)}` : ''}`,
             )
             .join('; '),
           '.',
@@ -227,9 +374,16 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
           b(sys.names.map((_, j) => q(j)).join(', ')),
           ' — прогибы',
           m.dofs.some((d) => d.kind === 'th') ? ' и углы поворота сечений' : '',
-          ' в точках грузов.',
+          ' в точках грузов',
+          m.dofs.some((d) => d.kind === 'u') ? ' (y), горизонтальные смещения грузов на стойках (x)' : '',
+          '.',
         ],
       });
+      if (m.dofs.some((d) => d.kind === 'u'))
+        ex(
+          bl,
+          'Стойка жёстко связана с балкой и нерастяжима: вертикальное смещение груза равно прогибу балки в узле, а горизонтальное складывается из поворота узла (x = −h·θ) и изгиба стойки как консоли (h³/(3EJ) от единичной силы). Например, δₓₓ = h³/(3EJ) + h²·θ_M, δₓᵧ = h·θ_P, где θ_M, θ_P — повороты узла балки от единичного момента и единичной силы.',
+        );
       const scale = (i: number, j: number) => 3 - (m.dofs[i].kind === 'th' ? 1 : 0) - (m.dofs[j].kind === 'th' ? 1 : 0);
       const lines: { c: Inline[] }[] = [];
       for (let i = 0; i < n; i++)
@@ -300,15 +454,42 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
     const lines = sys.A.map((row, i) => {
       const terms: [number, string][] = [
         ...row.map((a, j) => [a, q(j, 2)] as [number, string]),
-        ...(sys.B ? sys.B[i].map((x, j) => [x, q(j, 1)] as [number, string]) : []),
+        ...(sys.B || sys.G ? row.map((_, j) => [(sys.B?.[i][j] ?? 0) + (sys.G?.[i][j] ?? 0), q(j, 1)] as [number, string]) : []),
         ...sys.C[i].map((c, j) => [c, q(j)] as [number, string]),
       ];
       return { c: [sumText(terms), ' = ', Ft(i)] as Inline[] };
     });
     bl.push(
-      { k: 'p', c: ['Уравнения Лагранжа для квадратичных T и Π: ', b('Σ aᵢⱼ q̈ⱼ' + (sys.B ? ' + Σ bᵢⱼ q̇ⱼ' : '') + ' + Σ cᵢⱼ qⱼ = Qᵢ(t)'), ':'] },
+      {
+        k: 'p',
+        c: [
+          'Уравнения Лагранжа для квадратичных T и Π: ',
+          b('Σ aᵢⱼ q̈ⱼ' + (sys.B ? ' + Σ bᵢⱼ q̇ⱼ' : '') + (sys.G ? ' + Σ gᵢⱼ q̇ⱼ' : '') + ' + Σ cᵢⱼ qⱼ = Qᵢ(t)'),
+          ':',
+        ],
+      },
       { k: 'eq', lines },
     );
+    if (sys.amp) {
+      const a = sys.amp;
+      bl.push({
+        k: 'p',
+        c: [
+          'Амплитуда силы задана статическим смещением: столбец H = F₀·h, h = (',
+          a.h.map((x) => num(x)).join('; '),
+          `) — сила единичной амплитуды. Постоянная сила F₀ смещает точку приложения по линии действия (поворачивает тело под моментом) на `,
+          b('δ = Σ hⱼqⱼ = F₀·hᵀC⁻¹h'),
+          `, hᵀC⁻¹h = ${num(a.flex)}; δ = ${num(pr.force.dst ?? 0)}, откуда `,
+          b(`F₀ = δ/(hᵀC⁻¹h) = ${num(a.F0)}`),
+          '.',
+        ],
+      });
+      ex(
+        bl,
+        'hⱼ — обобщённая сила от единичной силы: работа силы F₀ на перемещении δqⱼ равна F₀hⱼδqⱼ, поэтому смещение точки приложения вдоль силы δ = Σ hⱼqⱼ, а статические qⱼ = F₀·(C⁻¹h)ⱼ.',
+      );
+      ans.push({ kind: 'main', val: [`F₀ = ${num(a.F0)}`], note: 'амплитуда возмущающей силы (момента) по статическому смещению' });
+    }
     if (info.src === 'chain' && pr.chain.left === 'moving' && pr.chain.xi0 && force.kind !== 'none')
       bl.push({ k: 'p', c: ['Движение левого конца действует на первое тело как сила c₀ξ', sys.Hc[0] ? ' + b₀ξ̇' : '', ' (кинематическое возбуждение).'] });
     ex(
@@ -319,8 +500,8 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
     steps.push({ title: 'Уравнения малых колебаний', blocks: bl });
   }
 
-  /* 3. Уравнение частот. */
-  {
+  if (r.gyro) gyroSteps(r, steps, ans, q, ex);
+  /* 3. Уравнение частот. */ else {
     const bl: Block[] = [];
     bl.push({
       k: 'p',
@@ -371,7 +552,7 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
   }
 
   /* 4. Частоты. */
-  {
+  if (!r.gyro) {
     const bl: Block[] = [];
     const items: Inline[][] = r.modes.map((m, s) => {
       const k = `k${sb(s + 1)}`;
@@ -396,6 +577,42 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
         },
       );
     if (r.modes.some((m) => m.kind === 'unstable')) bl.push({ k: 'badge', tone: 'bad', text: 'равновесие неустойчиво' });
+    if (r.partial && r.partial.some((x) => x != null)) {
+      bl.push({
+        k: 'p',
+        c: [
+          'Парциальные частоты (колеблется одна координата, остальные закреплены): ',
+          b(
+            r.partial
+              .map((x, j) => (x == null ? `k̃${sb(j + 1)} — нет` : `k̃${sb(j + 1)} = √(c${sb(j + 1)}${sb(j + 1)}/a${sb(j + 1)}${sb(j + 1)}) = ${num(x)}`))
+              .join(', '),
+          ),
+          ' рад/с.',
+        ],
+      });
+      ex(
+        bl,
+        'Наименьшая частота главных колебаний не больше любой парциальной, наибольшая — не меньше (отношение Рэлея qᵀCq/qᵀAq при q, равном единичному столбцу).',
+      );
+      if (n === 2) r.partial.forEach((x, j) => x != null && ans.push({ kind: 'aux', val: [`k̃${sb(j + 1)} = ${num(x)} рад/с`], note: 'парциальная частота' }));
+    }
+    if (r.band) {
+      const B = r.band,
+        T = CHAIN_T[pr.chain.kind];
+      bl.push({
+        k: 'p',
+        c: [
+          `Цепочка однородна (${T.m} = ${num(B.m)}, звенья между телами c = ${num(B.c)}${B.c0 ? `, пружина к неподвижной точке у каждого тела c₀ = ${num(B.c0)}` : ''}). Как звено бесконечной цепочки (механический фильтр) она пропускает колебания с частотами `,
+          b(B.c0 ? `√(c₀/${T.m}) = ${num(B.lo)} ≤ p ≤ √((c₀ + 4c)/${T.m}) = ${num(B.hi)} рад/с` : `0 < p ≤ 2√(c/${T.m}) = ${num(B.hi)} рад/с`),
+          '.',
+        ],
+      });
+      ex(
+        bl,
+        `Для тела k внутри цепочки: −${T.m}p²Xₖ + c(2Xₖ − Xₖ₋₁ − Xₖ₊₁) + c₀Xₖ = 0, т. е. Xₖ₊₁ + Xₖ₋₁ = 2 cos μ·Xₖ, cos μ = 1 − (${T.m}p² − c₀)/(2c). При |cos μ| ≤ 1 решение Xₖ = a cos μk + b sin μk — волна проходит; иначе Xₖ ∝ e^(−κk), ch κ = |cos μ| — амплитуды убывают. Частоты главных колебаний конечной цепочки лежат в полосе.`,
+      );
+      ans.push({ kind: 'aux', val: [B.c0 ? `${num(B.lo)} ≤ p ≤ ${num(B.hi)} рад/с` : `0 < p ≤ ${num(B.hi)} рад/с`], note: 'полоса пропускания фильтра' });
+    }
     if (r.damping === 'coupled')
       bl.push({
         k: 'p',
@@ -418,7 +635,7 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
   }
 
   /* 5. Формы. */
-  if (n > 1) {
+  if (n > 1 && !r.gyro) {
     const bl: Block[] = [];
     bl.push({
       k: 'p',
@@ -546,7 +763,7 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
 
   /* 7. Свободное движение. */
   const moving0 = sys.q0.some((x) => x !== 0) || sys.v0.some((x) => x !== 0);
-  if (moving0 || (force.kind === 'const' && hasH)) {
+  if (!r.gyro && (moving0 || (force.kind === 'const' && hasH))) {
     const bl: Block[] = [];
     const ic = sys.names.map((_, j) => `${q(j)}(0) = ${num(sys.q0[j])}, ${q(j, 1)}(0) = ${num(sys.v0[j])}`).join('; ');
     bl.push({ k: 'p', c: ['Начальные условия: ', ic, '.'] });
@@ -633,41 +850,91 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
   if (force.kind === 'harm' && hasH) {
     const bl: Block[] = [];
     const p = force.p;
-    const damped = r.damping !== 'none';
+    const damped = r.damping !== 'none' || !!r.gyro;
+    if (r.stat && !damped)
+      bl.push({
+        k: 'p',
+        c: [`При p = 0 (постоянная сила, равная амплитуде): C·q = H, `, b(r.stat.map((x, j) => `${q(j)} = ${num(x)}`).join(', ')), '.'],
+      });
     if (r.resonance != null) {
+      const fn = sys.cos ? 'cos' : 'sin';
       bl.push(
         { k: 'badge', tone: 'bad', text: 'резонанс' },
         {
           k: 'p',
           c: [
-            `Частота силы p = ${num(p)} совпадает с k${sb(r.resonance + 1)}: без сопротивления амплитуда растёт неограниченно, частного решения вида X sin pt нет.`,
+            `Частота силы p = ${num(p)} совпадает с k${sb(r.resonance + 1)}: без сопротивления амплитуда растёт неограниченно — частного решения вида X ${fn} pt нет.`,
           ],
         },
       );
       ans.push({ kind: 'main', val: [`p = k${sb(r.resonance + 1)} = ${num(p)} рад/с`], note: 'резонанс' });
+      if (r.res) {
+        const R = r.res;
+        bl.push({
+          k: 'p',
+          c: [
+            'В главных координатах (qⱼ = Σ Aⱼ⁽ˢ⁾θₛ) уравнения независимы: ',
+            b(`Mₛθ̈ₛ + Cₛθₛ = Qₛ ${fn} pt`),
+            `, Qₛ = Σ Hⱼ Aⱼ⁽ˢ⁾. Резонансная координата: θₛ = `,
+            b(fn === 'sin' ? '−Qₛ/(2Mₛkₛ)·t cos pt' : 'Qₛ/(2Mₛkₛ)·t sin pt'),
+            ' (вековой член); остальные: θᵣ = ',
+            b(`Qᵣ/(Cᵣ − Mᵣp²)·${fn} pt`),
+            ':',
+          ],
+        });
+        const thLines = R.th.map((t, s) => {
+          const terms: [number, string][] = [
+            [t.tSin, `t sin ${nm(p)}t`],
+            [t.tCos, `t cos ${nm(p)}t`],
+            [t.sin, `sin ${nm(p)}t`],
+            [t.cos, `cos ${nm(p)}t`],
+          ];
+          return { c: [`${TH}${sb(s + 1)} = `, sumText(terms)] as Inline[] };
+        });
+        bl.push({ k: 'eq', lines: thLines });
+        const lines = sys.names.map((_, j) => {
+          const terms: [number, string][] = [
+            [R.tSin[j], `t sin ${nm(p)}t`],
+            [R.tCos[j], `t cos ${nm(p)}t`],
+            [R.sin[j], `sin ${nm(p)}t`],
+            [R.cos[j], `cos ${nm(p)}t`],
+          ];
+          const sc = Math.max(1e-300, ...terms.map(([x]) => Math.abs(x)));
+          return { c: [`${q(j)} = `, b(sumText(terms.map(([x, t]): [number, string] => [Math.abs(x) < 1e-10 * sc ? 0 : x, t])))] as Inline[] };
+        });
+        bl.push({ k: 'eq', lines });
+        lines.forEach((l, j) => ans.push({ kind: 'main', val: l.c, note: `вынужденные колебания при резонансе, ${unit(j)}` }));
+        ex(
+          bl,
+          'Это частное решение; полное движение — плюс свободные колебания по начальным условиям. Амплитуда растёт пропорционально t, пока сопротивление или нелинейность не ограничат её; резонансный режим допустим только кратковременно.',
+        );
+      }
     } else if (r.forced) {
       const f = r.forced;
-      if (!damped && sys.Hc.every((x) => x === 0)) {
-        bl.push({ k: 'p', c: ['Частное решение qⱼ = Xⱼ sin pt: ', b('(C − p²A)·X = H'), `, p = ${num(p)} рад/с:`] });
-        const R = sys.C.map((row, i) => row.map((c, j) => c - p * p * sys.A[i][j]));
+      if (f.X && f.fn) {
+        const X = f.X,
+          fn = f.fn,
+          H = fn === 'sin' ? sys.Hs : sys.Hc;
+        bl.push({ k: 'p', c: [`Частное решение qⱼ = Xⱼ ${fn} pt: `, b('(C − p²A)·X = H'), `, p = ${num(p)} рад/с:`] });
+        const R = dynClean(sys, p);
         bl.push({
           k: 'eq',
-          lines: R.map((row, i) => ({ c: [sumText(row.map((x, j) => [x, `X${sb(j + 1)}`] as [number, string])), ' = ', num(sys.Hs[i])] as Inline[] })),
+          lines: R.map((row, i) => ({ c: [sumText(row.map((x, j) => [x, `X${sb(j + 1)}`] as [number, string])), ' = ', num(H[i])] as Inline[] })),
         });
         if (f.dets && f.det != null)
           bl.push({
             k: 'eq',
             lines: [
               { c: [`Δ = det(C − p²A) = ${num(f.det)}`] },
-              ...f.dets.map((dj, j) => ({ c: [`X${sb(j + 1)} = Δ${sb(j + 1)}/Δ = ${num(dj)}/${nm(f.det!)} = `, b(num(f.re[j]))] as Inline[] })),
+              ...f.dets.map((dj, j) => ({ c: [`X${sb(j + 1)} = Δ${sb(j + 1)}/Δ = ${num(dj)}/${nm(f.det!)} = `, b(num(X[j]))] as Inline[] })),
             ],
           });
-        else bl.push({ k: 'eq', lines: f.re.map((x, j) => ({ c: [`X${sb(j + 1)} = `, b(num(x))] as Inline[] })) });
-        const big = Math.max(...f.re.map(Math.abs));
-        f.re.forEach((x, j) =>
+        else bl.push({ k: 'eq', lines: X.map((x, j) => ({ c: [`X${sb(j + 1)} = `, b(num(x))] as Inline[] })) });
+        const big = Math.max(...X.map(Math.abs));
+        X.forEach((x, j) =>
           ans.push({
             kind: 'main',
-            val: [Math.abs(x) <= 1e-12 * big ? `${q(j)} = 0` : `${q(j)} = ${num(x)}·sin ${nm(p)}t`],
+            val: [Math.abs(x) <= 1e-12 * big ? `${q(j)} = 0` : `${q(j)} = ${num(x)}·${fn} ${nm(p)}t`],
             note: Math.abs(x) <= 1e-12 * big ? 'координата неподвижна' : `вынужденные колебания, ${unit(j)}`,
           }),
         );
@@ -723,6 +990,26 @@ export function vibDoc(pr: VibProblem, r: VibOut, opts: { explain?: boolean } = 
         bl,
         'Xₖ = Δₖ/Δ, а Δₖ (определитель с k-м столбцом, заменённым на H) при силе только по qₖ — определитель системы без координаты qₖ: его нули — частоты этой «закреплённой» системы (антирезонанс).',
       );
+    }
+    if (r.band?.at) {
+      const a = r.band.at;
+      bl.push({
+        k: 'p',
+        c: [
+          `Фильтр: cos μ = 1 − (${CHAIN_T[pr.chain.kind].m}p² − c₀)/(2c) = ${num(a.cosMu)}; `,
+          b(
+            a.mu != null
+              ? `μ = ${num(a.mu)} рад — частота в полосе пропускания: амплитуды меняются от тела к телу по закону Xₖ = a cos μk + b sin μk`
+              : `частота вне полосы: амплитуды убывают в e^κ = ${num(Math.exp(a.kappa!))} раз от тела к телу${a.cosMu < 0 ? ' с чередованием знака' : ''}`,
+          ),
+          '.',
+        ],
+      });
+      ans.push({
+        kind: 'aux',
+        val: [a.mu != null ? `μ = ${num(a.mu)} рад` : `κ = ${num(a.kappa!)}`],
+        note: a.mu != null ? 'p в полосе пропускания' : 'p вне полосы пропускания',
+      });
     }
     if (r.sim)
       ex(

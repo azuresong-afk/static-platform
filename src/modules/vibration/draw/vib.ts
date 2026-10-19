@@ -100,7 +100,10 @@ function chainScheme(ch: ChainSys, forceOn: boolean, forceKind: string, labels?:
     }
   }
   if (leftEnd)
-    out.push(wall(x0, y, -1, ch.left === 'moving'), ch.left === 'moving' ? txt(x0, y + 40, forceKind === 'const' ? 'ξ₀' : 'ξ₀ sin pt', 'vb-flab') : '');
+    out.push(
+      wall(x0, y, -1, ch.left === 'moving'),
+      ch.left === 'moving' ? txt(x0, y + 40, forceKind === 'const' ? 'ξ₀' : forceKind === 'harmcos' ? 'ξ₀ cos pt' : 'ξ₀ sin pt', 'vb-flab') : '',
+    );
   if (rightEnd) out.push(wall(x1, y, 1));
   // Тела и пружины к неподвижным точкам.
   ch.bodies.forEach((bd, i) => {
@@ -138,7 +141,11 @@ function beamScheme(pr: VibProblem, forceOn: boolean): { svg: string; X: (x: num
   const lo = Math.min(0, ...bm.masses.map((m) => m.x + 2 * Math.min(0, m.e))),
     hi = Math.max(bm.L, ...bm.masses.map((m) => m.x + 2 * Math.max(0, m.e)));
   const X = (x: number) => x0 + ((x1 - x0) * (x - lo)) / (hi - lo || 1);
-  const y = 70;
+  // Стойки — вверх от балки, высота в масштабе длины (не выше 70 px).
+  const hMax = Math.max(0, ...bm.masses.map((m) => m.h ?? 0));
+  const hs = hMax > 0 ? Math.min((X(hMax) - X(0)) / hMax, 70 / hMax) : 0;
+  const top = 70 + (hMax > 0 ? Math.round(hMax * hs) + 10 : 0);
+  const y = top;
   const out: string[] = [line(X(0), y, X(bm.L), y, 'vb-beam')];
   for (const s of bm.supports) {
     const x = X(s.x);
@@ -154,6 +161,16 @@ function beamScheme(pr: VibProblem, forceOn: boolean): { svg: string; X: (x: num
   }
   bm.masses.forEach((ms, i) => {
     const x = X(ms.x);
+    const hc = (ms.h ?? 0) * hs;
+    if (hc > 0) {
+      out.push(
+        line(x, y, x, y - hc, 'vb-beam'),
+        `<circle class="vb-mass" cx="${r1(x)}" cy="${r1(y - hc)}" r="10"/>`,
+        txt(x + 16, y - hc + 4, `m${sb(i + 1)}`, 'vb-lab', 'start'),
+      );
+      if (forceOn && ms.H) out.push(arrowV(x + 18, y - hc - 40, y - hc - 4, 'vb-f'));
+      return;
+    }
     if (ms.J > 0 || ms.e) {
       const xe = X(ms.x + 2 * ms.e);
       out.push(`<rect class="vb-mass" x="${r1(Math.min(x, xe) - 6)}" y="${y - 14}" width="${r1(Math.abs(xe - x) + 12)}" height="28" rx="2"/>`);
@@ -162,7 +179,7 @@ function beamScheme(pr: VibProblem, forceOn: boolean): { svg: string; X: (x: num
     if (forceOn && ms.H) out.push(arrowV(x + 18, y - 52, y - 16, 'vb-f'));
   });
   out.push(txt(X(0), y + 40, '0', 'vb-tick'), txt(X(bm.L), y + 40, fmt(bm.L, 3), 'vb-tick'));
-  return { svg: out.join(''), X, h: 120 };
+  return { svg: out.join(''), X, h: y + 50 };
 }
 
 /** Формы главных колебаний. */
@@ -213,8 +230,14 @@ function modes(pr: VibProblem, r: VibResult, top: number, sch: Scheme | null, be
         ),
       );
       md.dofs.forEach((d, j) => {
-        if (d.kind !== 'y') return;
         const x = beamX(pr.beam.masses[d.mass].x);
+        // Горизонтальное смещение груза на стойке — подписью слева от узла.
+        if (d.kind === 'u') {
+          const v = u[2 * md.xs.findIndex((xx) => Math.abs(xx - pr.beam.masses[d.mass].x) <= 1e-9 * pr.beam.L)] / um;
+          out.push(txt(x - 10, yb - v * amp + (v >= 0 ? -6 : 14), `${prettyName(r.sys.names[j])} = ${fmt(m.shape[j], 3)} →`, 'vb-val', 'end'));
+          return;
+        }
+        if (d.kind !== 'y') return;
         const v = u[d.g] / um;
         out.push(
           `<circle class="vb-pt" cx="${r1(x)}" cy="${r1(yb - v * amp)}" r="3.5"/>`,
@@ -320,7 +343,7 @@ export function renderVib(pr: VibProblem, r: VibOut): { svg: string; viewBox: st
   let sch: Scheme | null = null;
   let beamX: ((x: number) => number) | null = null;
   if (pr.src === 'chain') {
-    sch = chainScheme(pr.chain, forceOn, r.sys.force.kind);
+    sch = chainScheme(pr.chain, forceOn, r.sys.cos ? 'harmcos' : r.sys.force.kind);
     out.push(sch.svg);
     y = sch.h;
   } else if (pr.src === 'absorber' && r.sys.info.src === 'absorber') {
@@ -351,7 +374,8 @@ export function renderVib(pr: VibProblem, r: VibOut): { svg: string; viewBox: st
     out.push(b.svg);
     y = b.h;
   } else y = 10;
-  const md = modes(pr, r, y + 10, sch, beamX);
+  // Формы гироскопической системы комплексные — в тексте решения, на чертеже не показываются.
+  const md = r.gyro ? { svg: '', h: 0 } : modes(pr, r, y + 10, sch, beamX);
   out.push(md.svg);
   y += 10 + md.h + 20;
   // Графики.
@@ -383,9 +407,12 @@ export function renderVib(pr: VibProblem, r: VibOut): { svg: string; viewBox: st
       .sort((a, b) => a - b);
     const at = r.forced ? Math.max(...r.forced.amp) : 0;
     const yMax = Math.max(3 * at, 3 * (vals[Math.floor(vals.length * 0.6)] ?? 1));
+    // При резонансе отметки p и kₛ совпадают — одна подпись «p = kₛ».
+    const p = r.sys.force.p;
+    const kRes = r.modes.findIndex((m) => m.kind === 'osc' && Math.abs(m.k - p) <= 1e-6 * p);
     const marks = [
-      ...r.modes.filter((m) => m.kind === 'osc').map((m) => ({ x: m.k, label: `k${sb(r.modes.indexOf(m) + 1)}`, cls: 'vb-kmark' })),
-      { x: r.sys.force.p, label: 'p', cls: 'vb-pmark' },
+      ...r.modes.filter((m, s) => m.kind === 'osc' && s !== kRes).map((m) => ({ x: m.k, label: `k${sb(r.modes.indexOf(m) + 1)}`, cls: 'vb-kmark' })),
+      { x: p, label: kRes >= 0 ? `p = k${sb(kRes + 1)}` : 'p', cls: 'vb-pmark' },
     ];
     plots.push(
       multiPlot(

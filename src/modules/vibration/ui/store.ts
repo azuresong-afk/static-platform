@@ -86,7 +86,7 @@ function parseBeam(raw: unknown): BeamSys | null {
   const masses: BeamMass[] = [];
   for (const m of raw.masses) {
     if (!isObj(m) || !nums(m, ['x', 'm', 'J', 'e', 'H'])) return null;
-    masses.push({ x: m.x as number, m: m.m as number, J: m.J as number, e: m.e as number, H: m.H as number });
+    masses.push({ x: m.x as number, m: m.m as number, J: m.J as number, e: m.e as number, H: m.H as number, ...(isNum(m.h) && m.h > 0 ? { h: m.h } : {}) });
   }
   return { L: raw.L as number, EJ: raw.EJ as number, supports, masses };
 }
@@ -124,7 +124,12 @@ export function parseVib(raw: unknown): { ok: true; problem: VibProblem } | { ok
       chain: c ?? def.chain,
       beam: b ?? def.beam,
       absorber: a ?? def.absorber,
-      force: { kind: f.kind as VibProblem['force']['kind'], p: f.p as number },
+      force: {
+        kind: f.kind as VibProblem['force']['kind'],
+        p: f.p as number,
+        ...(f.cos === true ? { cos: true } : {}),
+        ...(isNum(f.dst) && f.dst !== 0 ? { dst: f.dst } : {}),
+      },
       tEnd: raw.tEnd as number,
     },
   };

@@ -4,6 +4,7 @@ import { beamModel } from '../src/modules/vibration/model/beam';
 import { eigenSym } from '../src/modules/vibration/model/linalg';
 import { freeCoefs, modalMotion, solveVib, type VibResult } from '../src/modules/vibration/model/vibration';
 import { VIB_PRESETS, type VibPreset } from '../src/modules/vibration/presets';
+import { vibDoc } from '../src/modules/vibration/text/solution';
 import { taskInfo } from '../src/shared/tasks';
 
 function got(r: VibResult, links?: { len: number }[]): Record<string, number> {
@@ -23,8 +24,23 @@ function got(r: VibResult, links?: { len: number }[]): Record<string, number> {
       g[`E${j + 1}_${s + 1}`] = E[j][s];
     }),
   );
-  if (r.forced) r.forced.re.forEach((x, j) => (g['X' + (j + 1)] = x));
+  if (r.forced) (r.forced.X ?? r.forced.re).forEach((x, j) => (g['X' + (j + 1)] = x));
   if (r.zeroAt) r.zeroAt.p.forEach((p, i) => (g['z' + (i + 1)] = p));
+  if (r.stat) r.stat.forEach((x, j) => (g['S' + (j + 1)] = x));
+  if (r.partial) r.partial.forEach((x, j) => x != null && (g['pk' + (j + 1)] = x));
+  if (r.sys.amp) g.F0 = r.sys.amp.F0;
+  if (r.band) {
+    g.b1 = r.band.lo;
+    g.b2 = r.band.hi;
+    if (r.band.at?.mu != null) g.mu = r.band.at.mu;
+  }
+  if (r.res)
+    r.sys.names.forEach((_, j) => {
+      g['Rts' + (j + 1)] = r.res!.tSin[j];
+      g['Rtc' + (j + 1)] = r.res!.tCos[j];
+      g['Rs' + (j + 1)] = r.res!.sin[j];
+      g['Rc' + (j + 1)] = r.res!.cos[j];
+    });
   if (r.sys.info.src === 'absorber') {
     g.m2 = r.sys.info.m2;
     g.c2 = r.sys.info.c2;
@@ -47,7 +63,8 @@ describe('готовые задачи: ответы книги', () => {
           expect(Math.abs(g[k]), `${k}: ${g[k]} против 0`).toBeLessThan(1e-9 * Math.max(1, ...Object.values(g).map(Math.abs).filter(Number.isFinite)));
         else expect(Math.abs(g[k] - book), `${key} ${k}: ${g[k]} против ${book}`).toBeLessThanOrEqual(tol * Math.abs(book));
       }
-      expect(taskInfo(p.title)).toMatchObject({ book: 'mesh', group: 'mesh:54' });
+      if (p.title.startsWith('Яблонский')) expect(taskInfo(p.title).group).toMatch(/^yab:Д\.2[46]$/);
+      else expect(taskInfo(p.title)).toMatchObject({ book: 'mesh', group: 'mesh:54' });
     });
   }
 });
@@ -78,6 +95,18 @@ describe('расхождения с книгой (README)', () => {
     const r = solveVib(VIB_PRESETS.m5417.problem);
     if (!r.ok) throw new Error('нет решения');
     expect(freeCoefs(r).E[1][0]).toBeCloseTo(0.5075, 3);
+  });
+  it('Яблонский, Д.26: при втором резонансе φ = 0,128t sin 104t (книга — 1,30); A_φ на второй парциальной частоте −0,00417 (книга — −0,00414)', () => {
+    const r = solveVib(VIB_PRESETS.y26r2.problem);
+    if (!r.ok || !r.res) throw new Error('нет решения');
+    expect(r.res.tSin[1]).toBeCloseTo(0.12795, 4);
+    expect(r.res.tSin[1] / r.res.tSin[0]).toBeCloseTo(r.modes[1].shape[1], 9);
+    const pr = structuredClone(VIB_PRESETS.y26.problem);
+    pr.force.p = Math.sqrt(2040 / 0.28);
+    const r2 = solveVib(pr);
+    if (!r2.ok || !r2.forced?.X) throw new Error('нет решения');
+    expect(r2.forced.X[0]).toBeCloseTo(0.014, 9);
+    expect(r2.forced.X[1]).toBeCloseTo(-0.0041667, 6);
   });
 });
 
@@ -222,7 +251,7 @@ describe('модель', () => {
     e.energy.coords[0].eq = 0;
     e.energy.T = "m l^2 φ1'^2/2 + m φ1' φ2 + m φ2'^2/2";
     const gy = solveVib(e);
-    expect(!gy.ok && gy.error).toMatch(/гироскоп/);
+    expect(gy.ok && gy.gyro != null).toBe(true);
     e.energy.T = "m l^2 φ1'^2/2";
     const sing = solveVib(e);
     expect(!sing.ok && sing.error).toMatch(/инерционных/);
@@ -234,6 +263,121 @@ describe('модель', () => {
     const r = solveVib(VIB_PRESETS.m549.problem);
     if (!lg.ok || !lg.small || !r.ok) throw new Error('нет решения');
     lg.small.w2.forEach((w2, i) => expect(Math.sqrt(w2)).toBeCloseTo(r.modes[i].k, 9));
+  });
+});
+
+describe('фильтры, резонанс, амплитуда по смещению', () => {
+  it('54.48: амплитуды дисков ϑₖ = ϑ₀ cos μk + c₁ sin μk, sin(μ/2) = (ω/2)√(J/c)', () => {
+    const r = solveVib(VIB_PRESETS.m5448.problem);
+    if (!r.ok || !r.forced?.X || !r.band?.at?.mu) throw new Error('нет решения');
+    const X = [0.01, ...r.forced.X];
+    const mu = r.band.at.mu;
+    for (let k = 1; k + 1 < X.length; k++) expect(X[k + 1] + X[k - 1]).toBeCloseTo(2 * Math.cos(mu) * X[k], 10);
+    const c1 = (X[1] - X[0] * Math.cos(mu)) / Math.sin(mu);
+    X.forEach((x, k) => expect(x).toBeCloseTo(X[0] * Math.cos(mu * k) + c1 * Math.sin(mu * k), 10));
+  });
+  it('54.49, 54.50: частоты главных колебаний конечной цепочки — в полосе пропускания; вне полосы амплитуды убывают', () => {
+    for (const key of ['m5449', 'm5450', 'm5452'] as const) {
+      const r = solveVib(VIB_PRESETS[key].problem);
+      if (!r.ok || !r.band) throw new Error('нет полосы');
+      r.modes.forEach((m) => {
+        expect(m.k).toBeGreaterThanOrEqual(r.band!.lo - 1e-9);
+        expect(m.k).toBeLessThanOrEqual(r.band!.hi + 1e-9);
+      });
+    }
+    const pr = structuredClone(VIB_PRESETS.m5449.problem);
+    pr.force.p = 12;
+    const r = solveVib(pr);
+    if (!r.ok || !r.forced?.X || !r.band?.at?.kappa) throw new Error('нет решения');
+    expect(r.band.at.cosMu).toBeGreaterThan(1);
+    r.forced.X.slice(1).forEach((x, i) => expect(Math.abs(x)).toBeLessThan(Math.abs(r.forced!.X![i])));
+  });
+  it('54.20: гироскопические силы — устойчивость, неустойчивость при g/ρ₁ < ω² < g/ρ₂, стабилизация при больших ω', () => {
+    const at = (w: number) => {
+      const pr = structuredClone(VIB_PRESETS.m5420.problem);
+      pr.energy.params.find((x) => x.name === 'ω')!.value = w;
+      const r = solveVib(pr);
+      if (!r.ok || !r.gyro || !r.sim) throw new Error('нет решения');
+      const a = 9.81 / 2 - w * w,
+        b = 9.81 - w * w,
+        B = a + b + 4 * w * w;
+      expect(r.gyro.poly[0]).toBeCloseTo(a * b, 9);
+      expect(r.gyro.poly[1]).toBeCloseTo(-B, 9);
+      return { r, big: Math.max(...r.sim.q[0].map(Math.abs)) };
+    };
+    const ok = at(1);
+    expect(ok.r.gyro!.stabilized).toBe(false);
+    expect(ok.big).toBeLessThan(0.0101);
+    // Форма: x и y сдвинуты по фазе на 90° — точка описывает эллипс.
+    ok.r.gyro!.modes.forEach((m) => expect(Math.abs(Math.abs(m.phase[1 - m.ref]) - Math.PI / 2)).toBeLessThan(1e-9));
+    const un = at(2.5);
+    expect(un.r.gyro!.modes.some((m) => m.kind === 'unstable')).toBe(true);
+    expect(un.big).toBeGreaterThan(0.015);
+    const st = at(4);
+    expect(st.r.gyro!.stabilized).toBe(true);
+    expect(st.big).toBeLessThan(0.02);
+    const doc = vibDoc(VIB_PRESETS.m5420.problem, st.r);
+    expect(JSON.stringify(doc)).toContain('гироскопическая стабилизация');
+  });
+  it('54.36: коэффициенты влияния стойки — δₓₓ = h³/3 + h²θ_M, δᵧᵧ = a²b²/(3L), |δₓᵧ| = h·ab(b − a)/(3L) (EJ = 1)', () => {
+    const m = beamModel(VIB_PRESETS.m5436.problem.beam);
+    if (!m.ok) throw new Error(m.error);
+    expect(m.dofs.map((d) => d.kind)).toEqual(['u', 'y']);
+    const [a, b, L, h] = [1, 2, 3, 2];
+    expect(m.delta[0][0]).toBeCloseTo(h ** 3 / 3 + (h * h * (a * a - a * b + b * b)) / (3 * L), 12);
+    expect(m.delta[1][1]).toBeCloseTo((a * a * b * b) / (3 * L), 12);
+    expect(Math.abs(m.delta[0][1])).toBeCloseTo((h * a * b * (b - a)) / (3 * L), 12);
+    // Стойка на опоре — только горизонтальная координата: консоль высотой h, δ = h³/3.
+    const onSup = beamModel({ ...VIB_PRESETS.m5436.problem.beam, supports: [{ x: 1, kind: 'fixed' }], masses: [{ x: 1, m: 1, J: 0, e: 0, H: 0, h: 2 }] });
+    if (!onSup.ok) throw new Error(onSup.error);
+    expect(onSup.delta).toHaveLength(1);
+    expect(onSup.delta[0][0]).toBeCloseTo(8 / 3, 12);
+  });
+  it('неоднородная цепочка — полосы нет', () => {
+    const r = solveVib(VIB_PRESETS.m5444.problem);
+    expect(r.ok && r.band).toBe(null);
+  });
+  it('сила H cos pt: те же амплитуды, что у H sin pt; при резонансе — вековой член совпадает с интегрированием', () => {
+    const pr = structuredClone(VIB_PRESETS.y26.problem);
+    const rc = solveVib(pr);
+    pr.force.cos = false;
+    const rs = solveVib(pr);
+    if (!rc.ok || !rs.ok || !rc.forced?.X || !rs.forced?.X) throw new Error('нет решения');
+    expect(rc.forced.fn).toBe('cos');
+    expect(rs.forced.fn).toBe('sin');
+    rc.forced.X.forEach((x, j) => expect(x).toBeCloseTo(rs.forced!.X![j], 12));
+    // Резонанс: частное решение с начальными условиями q(0) = res.cos, q̇(0) = p·res.sin + res.tCos — интегрирование его повторяет.
+    const p1 = structuredClone(VIB_PRESETS.y26r1.problem);
+    const r0 = solveVib(p1);
+    if (!r0.ok || !r0.res) throw new Error('нет резонанса');
+    const R = r0.res,
+      p = p1.force.p;
+    p1.energy.coords.forEach((c, j) => {
+      c.q0 = R.cos[j];
+      c.v0 = p * R.sin[j] + R.tCos[j];
+    });
+    p1.tEnd = 0.5;
+    const r = solveVib(p1);
+    if (!r.ok || !r.sim) throw new Error('нет графика');
+    r.sim.t.forEach((t, i) => {
+      if (i % 50) return;
+      r.sys.names.forEach((_, j) => {
+        const q = t * (R.tSin[j] * Math.sin(p * t) + R.tCos[j] * Math.cos(p * t)) + R.sin[j] * Math.sin(p * t) + R.cos[j] * Math.cos(p * t);
+        expect(r.sim!.q[j][i]).toBeCloseTo(q, 7);
+      });
+    });
+  });
+  it('амплитуда по статическому смещению: статическое смещение по линии силы равно δ', () => {
+    const pr = structuredClone(VIB_PRESETS.m5438.problem);
+    pr.force.dst = 0.02;
+    const r = solveVib(pr);
+    if (!r.ok || !r.sys.amp || !r.stat) throw new Error('нет решения');
+    const h = r.sys.amp.h;
+    expect(h.reduce((a, x, j) => a + x * r.stat![j], 0)).toBeCloseTo(0.02, 12);
+    pr.chain.left = 'free';
+    pr.chain.links[0].c = 0;
+    const bad = solveVib(pr);
+    expect(bad.ok).toBe(false);
   });
 });
 

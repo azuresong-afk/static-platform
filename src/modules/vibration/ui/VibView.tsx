@@ -457,6 +457,7 @@ export function VibView({ chrome, store }: { chrome: Chrome; store: VibStore }) 
                         {N(`mJ${i}`, 'J (поворот)', ms.J, (p, v) => (p.beam.masses[i].J = v), 'nonneg')}
                         {N(`me${i}`, 'e (центр масс)', ms.e, (p, v) => (p.beam.masses[i].e = v))}
                         {N(`mH${i}`, 'сила H', ms.H, (p, v) => (p.beam.masses[i].H = v))}
+                        {N(`mh${i}`, 'стойка h', ms.h ?? 0, (p, v) => (p.beam.masses[i].h = v), 'nonneg')}
                       </div>
                     </div>
                   ))}
@@ -469,7 +470,7 @@ export function VibView({ chrome, store }: { chrome: Chrome; store: VibStore }) 
                 {err('beam') && <p className="lg-err">{err('beam')}</p>}
                 <p className="empty">
                   Балка невесома, EJ постоянна; опоры — шарниры и заделки (можно статически неопределимо). Груз с моментом инерции J или со смещённым на e
-                  центром масс даёт вторую координату — поворот.
+                  центром масс даёт вторую координату — поворот. Груз на вершине стойки высотой h (жёстко связана с балкой, та же EJ) — координаты x (вбок) и y.
                 </p>
               </>
             )}
@@ -506,15 +507,36 @@ export function VibView({ chrome, store }: { chrome: Chrome; store: VibStore }) 
               {pr.src !== 'absorber' && (
                 <label className="field">
                   <span>Сила H</span>
-                  <select id="vbforce" value={pr.force.kind} onChange={(e) => store.act((p) => (p.force.kind = e.target.value as ForceKind))}>
+                  <select
+                    id="vbforce"
+                    value={pr.force.kind === 'harm' && pr.force.cos ? 'harmcos' : pr.force.kind}
+                    onChange={(e) =>
+                      store.act((p) => {
+                        const v = e.target.value;
+                        p.force.kind = (v === 'harmcos' ? 'harm' : v) as ForceKind;
+                        p.force.cos = v === 'harmcos';
+                      })
+                    }
+                  >
                     <option value="none">нет (свободные колебания)</option>
                     <option value="harm">гармоническая H sin pt</option>
+                    <option value="harmcos">гармоническая H cos pt</option>
                     <option value="const">постоянная, с момента t = 0</option>
                   </select>
                 </label>
               )}
               {(pr.force.kind === 'harm' || pr.src === 'absorber') && (
                 <Num id="vb-p" label="частота p" unit="рад/с" value={pr.force.p} onType={(v) => store.type('p', (p) => (p.force.p = v))} onEnd={end('p')} />
+              )}
+              {forceOn && pr.src !== 'absorber' && (
+                <Num
+                  id="vb-dst"
+                  label="статическое смещение δ"
+                  value={pr.force.dst ?? 0}
+                  neg
+                  onType={(v) => store.type('dst', (p) => (p.force.dst = v))}
+                  onEnd={end('dst')}
+                />
               )}
               <Num
                 id="vb-tend"
@@ -527,6 +549,12 @@ export function VibView({ chrome, store }: { chrome: Chrome; store: VibStore }) 
               />
             </div>
             {err('force') && <p className="lg-err">{err('force')}</p>}
+            {forceOn && pr.src !== 'absorber' && (
+              <p className="empty">
+                δ ≠ 0 — амплитуда по статическому смещению (Яблонский, Д.26): H — сила единичной амплитуды, δ — смещение точки приложения по линии силы (поворот
+                тела под моментом) от постоянной силы той же величины; 0 — H задана как есть.
+              </p>
+            )}
             <p className="empty">Единицы — любые согласованные (СИ или кГ, см, с, как в задачнике). Время 0 — без графика движения.</p>
           </section>
           <section className="panel" aria-label="Решение">

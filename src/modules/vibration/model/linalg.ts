@@ -195,3 +195,79 @@ export function inverse(M: Mat): Mat | null {
   }
   return out;
 }
+
+/** Определитель комплексной матрицы R + iI. */
+export function cdet(R0: Mat, I0: Mat): { re: number; im: number } {
+  const n = R0.length,
+    R = R0.map((r) => r.slice()),
+    I = I0.map((r) => r.slice());
+  let dr = 1,
+    di = 0;
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.hypot(R[r][c], I[r][c]) > Math.hypot(R[p][c], I[p][c])) p = r;
+    const pr = R[p][c],
+      pi = I[p][c];
+    if (pr === 0 && pi === 0) return { re: 0, im: 0 };
+    if (p !== c) {
+      [R[c], R[p]] = [R[p], R[c]];
+      [I[c], I[p]] = [I[p], I[c]];
+      dr = -dr;
+      di = -di;
+    }
+    [dr, di] = [dr * pr - di * pi, dr * pi + di * pr];
+    const q = pr * pr + pi * pi;
+    for (let r = c + 1; r < n; r++) {
+      // f = M[r][c]/M[c][c]
+      const fr = (R[r][c] * pr + I[r][c] * pi) / q,
+        fi = (I[r][c] * pr - R[r][c] * pi) / q;
+      for (let k = c; k < n; k++) {
+        const ar = R[c][k],
+          ai = I[c][k];
+        R[r][k] -= fr * ar - fi * ai;
+        I[r][k] -= fr * ai + fi * ar;
+      }
+    }
+  }
+  return { re: dr, im: di };
+}
+
+/** Корни многочлена Σ aⱼ zʲ (коэффициенты по возрастанию степени) — метод Дюрана — Кернера. */
+export function polyRoots(a: number[]): { re: number; im: number }[] {
+  let n = a.length - 1;
+  while (n > 0 && a[n] === 0) n--;
+  if (n < 1) return [];
+  const c = a.slice(0, n + 1).map((x) => x / a[n]);
+  const zr = Array.from({ length: n }, (_, k) => Math.cos(0.4 + (2 * Math.PI * k) / n) * (1 + 0.1 * k)),
+    zi = Array.from({ length: n }, (_, k) => Math.sin(0.4 + (2 * Math.PI * k) / n) * (1 + 0.1 * k));
+  const R = 1 + Math.max(...c.slice(0, n).map(Math.abs));
+  for (let k = 0; k < n; k++) {
+    zr[k] *= R;
+    zi[k] *= R;
+  }
+  for (let it = 0; it < 2000; it++) {
+    let move = 0;
+    for (let k = 0; k < n; k++) {
+      // p(z) по схеме Горнера.
+      let pr = 1,
+        pi = 0;
+      for (let j = n - 1; j >= 0; j--) [pr, pi] = [pr * zr[k] - pi * zi[k] + c[j], pr * zi[k] + pi * zr[k]];
+      let qr = 1,
+        qi = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === k) continue;
+        const dr = zr[k] - zr[j],
+          di = zi[k] - zi[j];
+        [qr, qi] = [qr * dr - qi * di, qr * di + qi * dr];
+      }
+      const q = qr * qr + qi * qi || 1e-300;
+      const wr = (pr * qr + pi * qi) / q,
+        wi = (pi * qr - pr * qi) / q;
+      zr[k] -= wr;
+      zi[k] -= wi;
+      move = Math.max(move, Math.hypot(wr, wi) / Math.max(1, Math.hypot(zr[k], zi[k])));
+    }
+    if (move < 1e-15) break;
+  }
+  return zr.map((re, k) => ({ re, im: zi[k] }));
+}

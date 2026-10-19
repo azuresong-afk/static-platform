@@ -25,7 +25,7 @@
 import { d, evalSym, normName, num, parseSym, sub, subst, usesTime, varsOf, type Sym, type SymContext } from '../../../shared/sym';
 import type { LagParam } from '../../lagrange/model/lagrange';
 import { beamModel, type BeamModel, type BeamSys } from './beam';
-import { det, eigenSym, form, inverse, matVec, maxAbs, solve, solveComplex, zeros, type Mat } from './linalg';
+import { cdet, cholesky, det, eigenSym, form, inverse, matVec, maxAbs, polyRoots, solve, solveComplex, zeros, type Mat } from './linalg';
 
 export const MAX_DOF = 6;
 
@@ -104,7 +104,12 @@ export interface VibProblem {
   chain: ChainSys;
   beam: BeamSys;
   absorber: AbsorberSys;
-  force: { kind: ForceKind; p: number };
+  /**
+   * Возмущающая сила: cos — гармоническая H cos pt вместо H sin pt; dst — амплитуда задана статическим смещением
+   * (Яблонский Д.26): столбец H — сила единичной амплитуды, F₀ = dst/(hᵀC⁻¹h) — смещение точки приложения по линии
+   * действия (поворот тела под моментом) от постоянной силы F₀ равно dst; 0 — H задана прямо.
+   */
+  force: { kind: ForceKind; p: number; cos?: boolean; dst?: number };
   /** Время интегрирования для графиков, с (0 — без графиков движения). */
   tEnd: number;
 }
@@ -119,6 +124,8 @@ export interface EnergyInfo {
   a: Sym[][];
   c: Sym[][];
   b: Sym[][] | null;
+  /** Гироскопические коэффициенты gᵢⱼ = ∂²T/∂q̇ᵢ∂qⱼ − ∂²T/∂q̇ⱼ∂qᵢ (T линейна по скоростям), null — их нет. */
+  g: Sym[][] | null;
   H: Sym[];
   eq: number[];
   /** Члены T без скоростей (вращающаяся система): входят в C со знаком минус. */
@@ -148,9 +155,15 @@ export interface LinSys {
   A: Mat;
   B: Mat | null;
   C: Mat;
+  /** Гироскопические силы: A·q̈ + (B + G)·q̇ + C·q = Q, G кососимметрична. */
+  G?: Mat | null;
   /** Возмущающая сила: Hs·sin pt + Hc·cos pt (постоянная — Hs). */
   Hs: number[];
   Hc: number[];
+  /** Сила H cos pt: Hs и Hc повёрнуты на четверть периода (Hs — бывшая часть, пропорциональная p). */
+  cos?: boolean;
+  /** Амплитуда по статическому смещению: h — столбец единичной силы, hᵀC⁻¹h и F₀. */
+  amp?: { h: number[]; flex: number; F0: number } | null;
   q0: number[];
   v0: number[];
   force: { kind: ForceKind; p: number };
@@ -183,6 +196,21 @@ export interface Forced {
   /** Определитель det(C − p²A) и определители Крамера (без сопротивления, n ≤ 3). */
   det: number | null;
   dets: number[] | null;
+  /** Без сопротивления и сдвига фаз: qⱼ = Xⱼ sin pt (fn = 'sin') или Xⱼ cos pt. */
+  X: number[] | null;
+  fn: 'sin' | 'cos' | null;
+}
+/**
+ * Резонанс без сопротивления: qⱼ = t·(tSinⱼ sin pt + tCosⱼ cos pt) + sinⱼ sin pt + cosⱼ cos pt;
+ * th — те же коэффициенты для главных координат.
+ */
+export interface ResonanceMotion {
+  modes: number[];
+  tSin: number[];
+  tCos: number[];
+  sin: number[];
+  cos: number[];
+  th: { tSin: number; tCos: number; sin: number; cos: number }[];
 }
 export interface VibResult {
   ok: true;
@@ -195,15 +223,55 @@ export interface VibResult {
   ortho: number;
   /** Начальные условия и постоянная сила в главных координатах. */
   modal: { th0: number[]; dth0: number[]; F: number[] };
-  /** Статическое отклонение от постоянной силы. */
+  /** Статическое отклонение от постоянной силы (при гармонической — от её амплитуды, p = 0). */
   stat: number[] | null;
+  /** Парциальные частоты √(cⱼⱼ/aⱼⱼ): колеблется одна координата, остальные закреплены (n ≥ 2). */
+  partial: (number | null)[] | null;
   /** Резонанс: номер главного колебания с k = p (без сопротивления). */
   resonance: number | null;
+  /** Закон движения при резонансе (частное решение с вековым членом). */
+  res: ResonanceMotion | null;
   forced: Forced | null;
   /** Частоты, при которых амплитуда нагруженной координаты k равна нулю. */
   zeroAt: { k: number; p: number[] } | null;
+  /** Однородная цепочка как звено бесконечного фильтра (Мещерский 54.47–54.50). */
+  band: Band | null;
+  /** Гироскопическая система: корни det(C − k²A + ikG) = 0 и комплексные формы (Мещерский 54.20). */
+  gyro: GyroInfo | null;
   sim: { t: number[]; q: number[][] } | null;
   afc: { p: number[]; amp: number[][] } | null;
+}
+/**
+ * Полоса пропускания однородной цепочки (одинаковые тела m, пружины к неподвижным точкам c₀, звенья между телами c):
+ * Xₖ₊₁ + Xₖ₋₁ = 2 cos μ·Xₖ, cos μ = 1 − (mp² − c₀)/(2c); при |cos μ| ≤ 1 амплитуды меняются от тела к телу
+ * по гармоническому закону (c₀/m ≤ p² ≤ (c₀ + 4c)/m), иначе — убывают в e^κ раз (ch κ = |cos μ|), при cos μ < −1
+ * с чередованием знака.
+ */
+export interface Band {
+  m: number;
+  c: number;
+  c0: number;
+  lo: number;
+  hi: number;
+  /** Для заданной частоты силы: cos μ, μ (в полосе) или κ (вне её). */
+  at: { p: number; cosMu: number; mu: number | null; kappa: number | null } | null;
+}
+export interface GyroMode {
+  /** λ = k² — корень многочлена; комплексный или отрицательный — неустойчивость. */
+  lam: { re: number; im: number };
+  k: number;
+  kind: Mode['kind'];
+  /** Форма: Aⱼ = ampⱼ·e^(i·phaseⱼ), амплитуда координаты ref равна 1. */
+  amp: number[];
+  phase: number[];
+  ref: number;
+}
+export interface GyroInfo {
+  /** Коэффициенты уравнения частот по степеням λ = k²: Σ pⱼλʲ = 0. */
+  poly: number[];
+  modes: GyroMode[];
+  /** C не положительно определена, а все частоты вещественны — гироскопическая стабилизация. */
+  stabilized: boolean;
 }
 export type VibOut = VibResult | { ok: false; field: string; error: string };
 
@@ -282,11 +350,12 @@ function buildEnergy(s: EnergySys): LinSys | { ok: false; field: string; error: 
       'eq',
       `q* — не положение равновесия: ∂Π/∂${ctx.coords[bad]} = ${+g[bad].toPrecision(5)} ≠ 0. Задайте q* в таблице координат (Π можно записать относительно равновесия).`,
     );
-  // Гироскопические члены (T линейна по скоростям при q = q*): G = ∂²T/∂q̇ᵢ∂qⱼ − ∂²T/∂q̇ⱼ∂qᵢ.
-  const Gm = coords.map((_, i) => coords.map((__, j) => ev(at(d(d(T, vel(i)), pos(j))))));
-  const gyro = Math.max(0, ...Gm.flatMap((r, i) => r.map((x, j) => Math.abs(x - Gm[j][i]))));
-  if (gyro > 1e-9 * Math.sqrt(Math.max(1e-300, maxAbs(A) * maxAbs(C))))
-    return fail('T', 'В T есть члены, линейные по скоростям (гироскопические силы) — такие системы раздел не решает.');
+  // Гироскопические члены (T линейна по скоростям при q = q*): gᵢⱼ = ∂²T/∂q̇ᵢ∂qⱼ − ∂²T/∂q̇ⱼ∂qᵢ.
+  const Gd = coords.map((_, i) => coords.map((__, j) => at(d(d(T, vel(i)), pos(j)))));
+  const gyS = coords.map((_, i) => coords.map((__, j) => sub(Gd[i][j], Gd[j][i])));
+  const Gm = gyS.map((r) => r.map(ev));
+  const gyro = maxAbs(Gm) > 1e-9 * Math.sqrt(Math.max(1e-300, maxAbs(A) * maxAbs(C)));
+  if (gyro && !Gm.flat().every(Number.isFinite)) return fail('T', 'Гироскопические коэффициенты не вычисляются — проверьте T и q*.');
   return {
     names: ctx.coords,
     angle: ctx.coords.map(isAngleName),
@@ -297,8 +366,9 @@ function buildEnergy(s: EnergySys): LinSys | { ok: false; field: string; error: 
     Hc: H.map(() => 0),
     q0: coords.map((c) => c.q0),
     v0: coords.map((c) => c.v0),
+    G: gyro ? Gm : null,
     force: { kind: 'none', p: 0 },
-    info: { src: 'energy', ctx, T, P, D, a: aS, c: cS, b: bS, H: Hs, eq, hasT0: T0.length > 0 },
+    info: { src: 'energy', ctx, T, P, D, a: aS, c: cS, b: bS, g: gyro ? gyS : null, H: Hs, eq, hasT0: T0.length > 0 },
   };
 }
 
@@ -376,7 +446,7 @@ function buildBeam(s: BeamSys, force: VibProblem['force']): LinSys | { ok: false
   const C = inverse(m.delta);
   if (!C) return fail('beam', 'Матрица коэффициентов влияния вырождена.');
   for (let i = 0; i < C.length; i++) for (let j = 0; j < i; j++) C[i][j] = C[j][i] = (C[i][j] + C[j][i]) / 2;
-  const names = m.dofs.map((d) => (d.kind === 'y' ? 'y' : 'φ') + (d.mass + 1));
+  const names = m.dofs.map((d) => (d.kind === 'y' ? 'y' : d.kind === 'u' ? 'x' : 'φ') + (d.mass + 1));
   return {
     names,
     angle: m.dofs.map((d) => d.kind === 'th'),
@@ -438,21 +508,57 @@ function buildAbsorber(s: AbsorberSys, p: number): LinSys | { ok: false; field: 
 export function buildSystem(pr: VibProblem): LinSys | { ok: false; field: string; error: string } {
   if (pr.force.kind === 'harm' && !(pr.force.p > 0) && pr.src !== 'absorber') return fail('force', 'Частота возмущающей силы p — положительная.');
   if (!(pr.tEnd >= 0)) return fail('tEnd', 'Время интегрирования — неотрицательное.');
+  if (pr.force.dst != null && !Number.isFinite(pr.force.dst)) return fail('force', 'Статическое смещение — число.');
+  let s: LinSys | { ok: false; field: string; error: string };
   switch (pr.src) {
     case 'energy': {
-      const s = buildEnergy(pr.energy);
-      return 'ok' in s ? s : { ...s, force: pr.force };
+      const e = buildEnergy(pr.energy);
+      s = 'ok' in e ? e : { ...e, force: pr.force };
+      break;
     }
     case 'chain':
-      return buildChain(pr.chain, pr.force);
+      s = buildChain(pr.chain, pr.force);
+      break;
     case 'beam':
-      return buildBeam(pr.beam, pr.force);
+      s = buildBeam(pr.beam, pr.force);
+      break;
     case 'absorber':
       return buildAbsorber(pr.absorber, pr.force.p);
   }
+  return 'ok' in s ? s : withForce(s, pr.force);
+}
+
+/** Амплитуда силы по статическому смещению и сила H cos pt. */
+function withForce(s: LinSys, f: VibProblem['force']): LinSys | { ok: false; field: string; error: string } {
+  let Hs = s.Hs,
+    Hc = s.Hc,
+    amp: LinSys['amp'] = null;
+  if (f.kind !== 'none' && f.dst) {
+    if (Hc.some((x) => x !== 0)) return fail('force', 'Амплитуда по статическому смещению — для силы без сдвига фазы (без демпфера у движущегося конца).');
+    if (!Hs.some((x) => x !== 0)) return fail('force', 'Задайте столбец H для силы единичной амплитуды — по нему находится амплитуда F₀.');
+    const X = solve(s.C, Hs);
+    const flex = X ? Hs.reduce((a, h, j) => a + h * X[j], 0) : NaN;
+    if (!X || !(Math.abs(flex) > 1e-12 * maxAbs([X]) * maxAbs([Hs])))
+      return fail('force', 'Постоянная сила не даёт определённого смещения: система может смещаться без деформации (матрица C вырождена).');
+    const F0 = f.dst / flex;
+    amp = { h: Hs, flex, F0 };
+    Hs = Hs.map((x) => x * F0);
+  }
+  if (f.kind === 'harm' && f.cos) return { ...s, Hs: Hc.map((x) => (x ? -x : 0)), Hc: Hs, cos: true, amp };
+  return { ...s, Hs, Hc, amp };
 }
 
 /* ───────────── Анализ ───────────── */
+
+/** C − p²A без ошибок округления: элемент, малый по сравнению со слагаемыми, — нуль (p — парциальная частота). */
+export function dynClean(sys: LinSys, p: number): Mat {
+  return sys.C.map((r, i) =>
+    r.map((c, j) => {
+      const x = c - p * p * sys.A[i][j];
+      return Math.abs(x) <= 1e-12 * (Math.abs(c) + p * p * Math.abs(sys.A[i][j])) ? 0 : x;
+    }),
+  );
+}
 
 /** Нормировка формы: первая заметная амплитуда равна 1. */
 function normalize(v: number[]): { shape: number[]; ref: number } {
@@ -465,6 +571,7 @@ function normalize(v: number[]): { shape: number[]; ref: number } {
 const N_AFC = 600;
 
 export function analyze(sys: LinSys, tEnd: number): VibOut {
+  if (sys.G) return analyzeGyro(sys, tEnd);
   const n = sys.A.length;
   const eig = eigenSym(sys.C, sys.A);
   if (!eig)
@@ -522,17 +629,37 @@ export function analyze(sys: LinSys, tEnd: number): VibOut {
   const kind = sys.force.kind,
     p = sys.force.p;
   const hasH = sys.Hs.some((x) => x !== 0) || sys.Hc.some((x) => x !== 0);
-  const stat = kind === 'const' && hasH && modes.every((m) => m.kind === 'osc') ? solve(sys.C, sys.Hs) : null;
+  // Постоянная часть силы (при H cos pt — коэффициенты при cos pt, у Hs — часть, пропорциональная p).
+  const H0 = kind === 'harm' && sys.cos ? sys.Hc : sys.Hs;
+  const stat = kind !== 'none' && H0.some((x) => x !== 0) && modes.every((m) => m.kind === 'osc') ? solve(sys.C, H0) : null;
+  const partial = n >= 2 ? sys.C.map((r, j) => (r[j] > 0 ? Math.sqrt(r[j] / sys.A[j][j]) : null)) : null;
   const undamped = damping === 'none';
   let resonance: number | null = null;
+  let res: ResonanceMotion | null = null;
   let forced: Forced | null = null;
   let zeroAt: VibResult['zeroAt'] = null;
   const dynRe = (pp: number) => sys.C.map((r, i) => r.map((c, j) => c - pp * pp * sys.A[i][j]));
   const dynIm = (pp: number) => (sys.B ? sys.B.map((r) => r.map((b) => pp * b)) : zeros(n));
   if (kind === 'harm' && hasH) {
     if (undamped) {
-      const s = modes.findIndex((m) => Math.abs(m.lam - p * p) <= 1e-9 * Math.max(lamMax, p * p));
-      if (s >= 0 && Math.abs(modal.F[s]) > 1e-12 * Math.max(...sys.Hs.map(Math.abs), ...sys.Hc.map(Math.abs))) resonance = s;
+      const Fs = modes.map((m) => m.shape.reduce((a, x, j) => a + x * sys.Hs[j], 0)),
+        Fc = modes.map((m) => m.shape.reduce((a, x, j) => a + x * sys.Hc[j], 0));
+      const hMax = Math.max(...sys.Hs.map(Math.abs), ...sys.Hc.map(Math.abs));
+      const near = modes.map((m) => Math.abs(m.lam - p * p) <= 1e-9 * Math.max(lamMax, p * p));
+      const hit = modes.map((m, s) => near[s] && Math.abs(Fs[s]) + Math.abs(Fc[s]) > 1e-12 * hMax * Math.max(...m.shape.map(Math.abs)));
+      resonance = hit.indexOf(true);
+      if (resonance < 0) resonance = null;
+      else {
+        // θ̈ₛ + kₛ²θₛ = (Fsₛ sin pt + Fcₛ cos pt)/Mₛ: при kₛ = p — θₛ = t(Fcₛ sin pt − Fsₛ cos pt)/(2Mₛkₛ).
+        const th = modes.map((m, s) => {
+          if (hit[s]) return { tSin: Fc[s] / (2 * m.M * p), tCos: -Fs[s] / (2 * m.M * p), sin: 0, cos: 0 };
+          if (near[s]) return { tSin: 0, tCos: 0, sin: 0, cos: 0 };
+          const den = m.C - m.M * p * p;
+          return { tSin: 0, tCos: 0, sin: Fs[s] / den, cos: Fc[s] / den };
+        });
+        const comb = (key: 'tSin' | 'tCos' | 'sin' | 'cos') => sys.names.map((_, j) => modes.reduce((a, m, s) => a + m.shape[j] * th[s][key], 0));
+        res = { modes: hit.flatMap((h, s) => (h ? [s] : [])), tSin: comb('tSin'), tCos: comb('tCos'), sin: comb('sin'), cos: comb('cos'), th };
+      }
     }
     if (resonance == null) {
       const X = solveComplex(dynRe(p), dynIm(p), sys.Hs, sys.Hc);
@@ -540,13 +667,20 @@ export function analyze(sys: LinSys, tEnd: number): VibOut {
         const amp = X.re.map((x, j) => Math.hypot(x, X.im[j]));
         const phase = X.re.map((x, j) => Math.atan2(X.im[j], x));
         let dt: number | null = null,
-          dts: number[] | null = null;
-        if (undamped && sys.Hc.every((x) => x === 0)) {
-          const R = dynRe(p);
+          dts: number[] | null = null,
+          Xs: number[] | null = null,
+          fn: Forced['fn'] = null;
+        const zs = sys.Hs.every((x) => x === 0),
+          zc = sys.Hc.every((x) => x === 0);
+        if (undamped && (zs || zc)) {
+          fn = zc ? 'sin' : 'cos';
+          const H = zc ? sys.Hs : sys.Hc;
+          const R = dynClean(sys, p);
           dt = det(R);
-          if (n <= 3) dts = R.map((_, j) => det(R.map((row, i) => row.map((x, k) => (k === j ? sys.Hs[i] : x)))));
+          if (n <= 3) dts = R.map((_, j) => det(R.map((row, i) => row.map((x, k) => (k === j ? H[i] : x)))));
+          Xs = dts && dt ? dts.map((x) => x / dt!) : zc ? X.re : X.im;
         }
-        forced = { p, re: X.re, im: X.im, amp, phase, det: dt, dets: dts };
+        forced = { p, re: X.re, im: X.im, amp, phase, det: dt, dets: dts, X: Xs, fn };
       }
     }
     // Амплитуда нагруженной координаты равна нулю на собственных частотах системы с закреплённой ею.
@@ -558,73 +692,265 @@ export function analyze(sys: LinSys, tEnd: number): VibOut {
       if (e) zeroAt = { k, p: e.lam.filter((l) => l > zeroTol).map(Math.sqrt) };
     }
   }
-  // Численное интегрирование для графиков.
-  let sim: VibResult['sim'] = null;
+  let band: Band | null = null;
+  if (sys.info.src === 'chain' && n >= 2) {
+    const ch = sys.info;
+    const lk = (i: number) => (ch.used[i] ? ch.c[i] : 0);
+    const ci = ch.c.slice(1, n),
+      m0 = sys.A[0][0];
+    // Пружина к неподвижной точке у каждого тела: cᵢᵢ без звеньев цепочки.
+    const cgs = sys.A.map((_, i) => sys.C[i][i] - lk(i) - lk(i + 1));
+    const g0 = cgs[0];
+    const same = (a: number, b: number, sc: number) => Math.abs(a - b) <= 1e-9 * sc;
+    if (
+      ci[0] > 0 &&
+      ci.every((x) => same(x, ci[0], ci[0])) &&
+      sys.A.every((r, i) => same(r[i], m0, m0)) &&
+      cgs.every((x) => same(x, g0, ci[0] + Math.abs(g0)))
+    ) {
+      const c = ci[0],
+        c0 = Math.max(0, g0);
+      let at: Band['at'] = null;
+      if (kind === 'harm') {
+        const cosMu = 1 - (m0 * p * p - c0) / (2 * c);
+        at = Math.abs(cosMu) <= 1 ? { p, cosMu, mu: Math.acos(cosMu), kappa: null } : { p, cosMu, mu: null, kappa: Math.acosh(Math.abs(cosMu)) };
+      }
+      band = { m: m0, c, c0, lo: Math.sqrt(c0 / m0), hi: Math.sqrt((c0 + 4 * c) / m0), at };
+    }
+  }
+  const kTop = Math.max(...modes.map((m) => m.k));
+  const sim = simulate(sys, tEnd, Math.sqrt(Math.max(0, lamMax)), sys.B);
+  const afc = kind === 'harm' && hasH ? afcOf(sys, 1.5 * Math.max(kTop, p), dynRe, dynIm) : null;
+  return { ok: true, sys, n, modes, repeated, damping, ortho, modal, stat, partial, resonance, res, forced, zeroAt, band, gyro: null, sim, afc };
+}
+
+/** Многочлен det(C − k²A + ikG) по степеням λ = k²: значения на окружности в плоскости k и дискретное преобразование Фурье. */
+export function gyroPoly(A: Mat, G: Mat, C: Mat): { poly: number[]; scale: number } {
+  const n = A.length,
+    N = 2 * n + 1;
+  const tr = (M: Mat) => M.reduce((s, r, i) => s + Math.abs(r[i]), 0);
+  const R = Math.sqrt(Math.max(1e-300, (tr(C) + maxAbs(G) ** 2 / Math.max(1e-300, tr(A))) / Math.max(1e-300, tr(A))));
+  const f: { re: number; im: number }[] = [];
+  for (let m = 0; m < N; m++) {
+    const th = (2 * Math.PI * m) / N;
+    // k = R·e^(iθ): k² = R²e^(2iθ), ik = −R sin θ + iR cos θ.
+    const Re = C.map((r, i) => r.map((c, j) => c - R * R * Math.cos(2 * th) * A[i][j] - R * Math.sin(th) * G[i][j]));
+    const Im = C.map((r, i) => r.map((_, j) => -R * R * Math.sin(2 * th) * A[i][j] + R * Math.cos(th) * G[i][j]));
+    f.push(cdet(Re, Im));
+  }
+  // Коэффициент при k^(2j), умноженный на R^(2j): многочлен от μ = λ/R².
+  const poly = Array.from(
+    { length: n + 1 },
+    (_, j) => f.reduce((s, z, m) => s + z.re * Math.cos((2 * Math.PI * m * 2 * j) / N) + z.im * Math.sin((2 * Math.PI * m * 2 * j) / N), 0) / N,
+  );
+  return { poly, scale: R * R };
+}
+
+/** Комплексная форма: решение (C − k²A + ikG)·X = 0 с Xᵣ = 1 (строка с наименьшей невязкой отброшена). */
+function gyroShape(A: Mat, G: Mat, C: Mat, k: number): { amp: number[]; phase: number[]; ref: number } {
+  const n = A.length;
+  const Re = C.map((r, i) => r.map((c, j) => c - k * k * A[i][j]));
+  const Im = G.map((r) => r.map((g) => k * g));
+  if (n === 1) return { amp: [1], phase: [0], ref: 0 };
+  let best: { re: number[]; im: number[]; ref: number; res: number } | null = null;
+  for (let ref = 0; ref < n; ref++)
+    for (let drop = 0; drop < n; drop++) {
+      const rows = Array.from({ length: n }, (_, i) => i).filter((i) => i !== drop),
+        cols = Array.from({ length: n }, (_, j) => j).filter((j) => j !== ref);
+      const x = solveComplex(
+        rows.map((i) => cols.map((j) => Re[i][j])),
+        rows.map((i) => cols.map((j) => Im[i][j])),
+        rows.map((i) => -Re[i][ref]),
+        rows.map((i) => -Im[i][ref]),
+      );
+      if (!x) continue;
+      const re = new Array(n).fill(0),
+        im = new Array(n).fill(0);
+      re[ref] = 1;
+      cols.forEach((j, t) => {
+        re[j] = x.re[t];
+        im[j] = x.im[t];
+      });
+      if (Math.max(...re.map((v, j) => Math.hypot(v, im[j]))) > 1 + 1e-9) continue;
+      let rr = 0,
+        ri = 0;
+      for (let j = 0; j < n; j++) {
+        rr += Re[drop][j] * re[j] - Im[drop][j] * im[j];
+        ri += Re[drop][j] * im[j] + Im[drop][j] * re[j];
+      }
+      const res = Math.hypot(rr, ri);
+      if (!best || res < best.res) best = { re, im, ref, res };
+    }
+  if (!best) return { amp: new Array(n).fill(NaN), phase: new Array(n).fill(NaN), ref: 0 };
+  const b = best;
+  return {
+    amp: b.re.map((v, j) => Math.hypot(v, b.im[j])),
+    phase: b.re.map((v, j) => (Math.hypot(v, b.im[j]) < 1e-12 ? 0 : Math.atan2(b.im[j], v))),
+    ref: b.ref,
+  };
+}
+
+/** Гироскопическая система: частоты — корни det(C − k²A + ikG) = 0, формы комплексные, движение — численно. */
+function analyzeGyro(sys: LinSys, tEnd: number): VibOut {
+  const n = sys.A.length,
+    G = sys.G!;
+  if (!cholesky(sys.A))
+    return fail(
+      'T',
+      'Матрица инерционных коэффициентов не положительно определена: каждая координата должна входить в кинетическую энергию со своей скоростью.',
+    );
+  const { poly, scale } = gyroPoly(sys.A, G, sys.C);
+  const big = Math.max(...poly.map(Math.abs));
+  const roots = polyRoots(poly.map((x) => (Math.abs(x) < 1e-13 * big ? 0 : x))).map((z) => ({ re: z.re * scale, im: z.im * scale }));
+  while (roots.length < n) roots.unshift({ re: 0, im: 0 });
+  const lamMax = Math.max(...roots.map((z) => Math.hypot(z.re, z.im)));
+  const tol = 1e-7 * Math.max(1e-300, lamMax);
+  const modes: GyroMode[] = roots
+    .map((z) => {
+      const kind: Mode['kind'] = Math.hypot(z.re, z.im) <= tol ? 'zero' : Math.abs(z.im) <= tol && z.re > 0 ? 'osc' : 'unstable';
+      const lam = kind === 'zero' ? { re: 0, im: 0 } : kind === 'osc' ? { re: z.re, im: 0 } : z;
+      const k = kind === 'osc' ? Math.sqrt(z.re) : 0;
+      const sh = kind === 'osc' ? gyroShape(sys.A, G, sys.C, k) : { amp: [], phase: [], ref: 0 };
+      return { lam, k, kind, ...sh };
+    })
+    .sort((a, b) => (a.kind === b.kind ? a.lam.re - b.lam.re : a.kind === 'zero' ? -1 : b.kind === 'zero' ? 1 : a.kind === 'osc' ? -1 : 1));
+  const stabilized = !cholesky(sys.C) && modes.every((m) => m.kind === 'osc');
+  const kind = sys.force.kind,
+    p = sys.force.p;
+  const hasH = sys.Hs.some((x) => x !== 0) || sys.Hc.some((x) => x !== 0);
+  const D = sys.B ? sys.B.map((r, i) => r.map((b, j) => b + G[i][j])) : G;
+  const dynRe = (pp: number) => sys.C.map((r, i) => r.map((c, j) => c - pp * pp * sys.A[i][j]));
+  const dynIm = (pp: number) => D.map((r) => r.map((x) => pp * x));
+  let forced: Forced | null = null;
+  if (kind === 'harm' && hasH) {
+    const X = solveComplex(dynRe(p), dynIm(p), sys.Hs, sys.Hc);
+    if (X)
+      forced = {
+        p,
+        re: X.re,
+        im: X.im,
+        amp: X.re.map((x, j) => Math.hypot(x, X.im[j])),
+        phase: X.re.map((x, j) => Math.atan2(X.im[j], x)),
+        det: null,
+        dets: null,
+        X: null,
+        fn: null,
+      };
+  }
+  const H0 = kind === 'harm' && sys.cos ? sys.Hc : sys.Hs;
+  const stat = kind !== 'none' && H0.some((x) => x !== 0) ? solve(sys.C, H0) : null;
+  const kTop = Math.max(0, ...modes.map((m) => m.k));
+  const sim = simulate(sys, tEnd, Math.max(kTop, Math.sqrt(lamMax)), D);
+  const afc = kind === 'harm' && hasH ? afcOf(sys, 1.5 * Math.max(kTop, p), dynRe, dynIm) : null;
+  const asMode = (m: GyroMode): Mode => ({
+    lam: m.lam.re,
+    k: m.k,
+    kind: m.kind,
+    shape: m.amp,
+    ref: m.ref,
+    M: NaN,
+    C: NaN,
+    h: null,
+    kd: null,
+    nodes: [],
+  });
+  return {
+    ok: true,
+    sys,
+    n,
+    modes: modes.map(asMode),
+    repeated: false,
+    damping: sys.B && maxAbs(sys.B) > 0 ? 'coupled' : 'none',
+    ortho: 0,
+    modal: { th0: [], dth0: [], F: [] },
+    stat,
+    partial: null,
+    resonance: null,
+    res: null,
+    forced,
+    zeroAt: null,
+    band: null,
+    gyro: { poly: poly.map((x, j) => x / scale ** j), modes, stabilized },
+    sim,
+    afc,
+  };
+}
+
+/** Численное интегрирование (Рунге — Кутта) A·q̈ + D·q̇ + C·q = F(t) для графиков; D — сопротивление и гироскопические силы. */
+function simulate(sys: LinSys, tEnd: number, kFree: number, D: Mat | null): VibResult['sim'] {
+  const kind = sys.force.kind,
+    p = sys.force.p;
+  const hasH = sys.Hs.some((x) => x !== 0) || sys.Hc.some((x) => x !== 0);
   const moving = sys.q0.some((x) => x !== 0) || sys.v0.some((x) => x !== 0) || (kind !== 'none' && hasH);
   const Ainv = inverse(sys.A);
-  if (tEnd > 0 && moving && Ainv) {
-    const kMax = Math.max(Math.sqrt(Math.max(0, lamMax)), kind === 'harm' ? p : 0);
-    const steps = Math.min(200000, Math.max(2000, Math.ceil(((tEnd * kMax) / (2 * Math.PI)) * 60)));
-    const h = tEnd / steps;
-    const F = (t: number) =>
-      kind === 'none' ? sys.Hs.map(() => 0) : kind === 'const' ? sys.Hs : sys.Hs.map((x, j) => x * Math.sin(p * t) + sys.Hc[j] * Math.cos(p * t));
-    const acc = (q: number[], v: number[], t: number) => {
-      const f = F(t);
-      const Cq = matVec(sys.C, q),
-        Bv = sys.B ? matVec(sys.B, v) : q.map(() => 0);
-      return matVec(
-        Ainv,
-        f.map((x, i) => x - Cq[i] - Bv[i]),
-      );
-    };
-    let q = sys.q0.slice(),
-      v = sys.v0.slice();
-    const every = Math.max(1, Math.floor(steps / 1000));
-    const ts = [0],
-      qs = q.map((x) => [x]);
-    for (let s = 1; s <= steps; s++) {
-      const t = (s - 1) * h;
-      const a1 = acc(q, v, t);
-      const q2 = q.map((x, i) => x + (h / 2) * v[i]),
-        v2 = v.map((x, i) => x + (h / 2) * a1[i]);
-      const a2 = acc(q2, v2, t + h / 2);
-      const q3 = q.map((x, i) => x + (h / 2) * v2[i]),
-        v3 = v.map((x, i) => x + (h / 2) * a2[i]);
-      const a3 = acc(q3, v3, t + h / 2);
-      const q4 = q.map((x, i) => x + h * v3[i]),
-        v4 = v.map((x, i) => x + h * a3[i]);
-      const a4 = acc(q4, v4, t + h);
-      q = q.map((x, i) => x + (h / 6) * (v[i] + 2 * v2[i] + 2 * v3[i] + v4[i]));
-      v = v.map((x, i) => x + (h / 6) * (a1[i] + 2 * a2[i] + 2 * a3[i] + a4[i]));
-      if (!q.every(Number.isFinite)) break;
-      if (s % every === 0 || s === steps) {
-        ts.push(s * h);
-        q.forEach((x, i) => qs[i].push(x));
-      }
+  if (!(tEnd > 0 && moving && Ainv)) return null;
+  const kMax = Math.max(kFree, kind === 'harm' ? p : 0);
+  const steps = Math.min(200000, Math.max(2000, Math.ceil(((tEnd * kMax) / (2 * Math.PI)) * 60)));
+  const h = tEnd / steps;
+  const F = (t: number) =>
+    kind === 'none' ? sys.Hs.map(() => 0) : kind === 'const' ? sys.Hs : sys.Hs.map((x, j) => x * Math.sin(p * t) + sys.Hc[j] * Math.cos(p * t));
+  const acc = (q: number[], v: number[], t: number) => {
+    const f = F(t);
+    const Cq = matVec(sys.C, q),
+      Bv = D ? matVec(D, v) : q.map(() => 0);
+    return matVec(
+      Ainv,
+      f.map((x, i) => x - Cq[i] - Bv[i]),
+    );
+  };
+  let q = sys.q0.slice(),
+    v = sys.v0.slice();
+  const every = Math.max(1, Math.floor(steps / 1000));
+  const ts = [0],
+    qs = q.map((x) => [x]);
+  for (let s = 1; s <= steps; s++) {
+    const t = (s - 1) * h;
+    const a1 = acc(q, v, t);
+    const q2 = q.map((x, i) => x + (h / 2) * v[i]),
+      v2 = v.map((x, i) => x + (h / 2) * a1[i]);
+    const a2 = acc(q2, v2, t + h / 2);
+    const q3 = q.map((x, i) => x + (h / 2) * v2[i]),
+      v3 = v.map((x, i) => x + (h / 2) * a2[i]);
+    const a3 = acc(q3, v3, t + h / 2);
+    const q4 = q.map((x, i) => x + h * v3[i]),
+      v4 = v.map((x, i) => x + h * a3[i]);
+    const a4 = acc(q4, v4, t + h);
+    q = q.map((x, i) => x + (h / 6) * (v[i] + 2 * v2[i] + 2 * v3[i] + v4[i]));
+    v = v.map((x, i) => x + (h / 6) * (a1[i] + 2 * a2[i] + 2 * a3[i] + a4[i]));
+    if (!q.every(Number.isFinite)) break;
+    if (s % every === 0 || s === steps) {
+      ts.push(s * h);
+      q.forEach((x, i) => qs[i].push(x));
     }
-    sim = { t: ts, q: qs };
   }
-  // Амплитудно-частотная характеристика.
-  let afc: VibResult['afc'] = null;
-  if (kind === 'harm' && hasH) {
-    const kTop = Math.max(...modes.map((m) => m.k));
-    const pMax = 1.5 * Math.max(kTop, p);
-    const ps: number[] = [],
-      amp: number[][] = sys.names.map(() => []);
-    for (let i = 1; i <= N_AFC; i++) {
-      const pp = (pMax * i) / N_AFC;
-      const X = solveComplex(
-        dynRe(pp),
-        dynIm(pp),
-        sys.Hs,
-        sys.Hc.map((x) => (x * pp) / (p || 1)),
-      );
-      ps.push(pp);
-      sys.names.forEach((_, j) => amp[j].push(X ? Math.hypot(X.re[j], X.im[j]) : Infinity));
-    }
-    afc = { p: ps, amp };
+  return { t: ts, q: qs };
+}
+
+/** Амплитудно-частотная характеристика на 0 < p ≤ pMax. */
+function afcOf(sys: LinSys, pMax: number, dynRe: (pp: number) => Mat, dynIm: (pp: number) => Mat): VibResult['afc'] {
+  const p = sys.force.p;
+  const ps: number[] = [],
+    amp: number[][] = sys.names.map(() => []);
+  for (let i = 1; i <= N_AFC; i++) {
+    const pp = (pMax * i) / N_AFC;
+    // Часть силы от демпфера движущегося конца пропорциональна частоте (при H cos pt она в Hs).
+    const X = sys.cos
+      ? solveComplex(
+          dynRe(pp),
+          dynIm(pp),
+          sys.Hs.map((x) => (x * pp) / (p || 1)),
+          sys.Hc,
+        )
+      : solveComplex(
+          dynRe(pp),
+          dynIm(pp),
+          sys.Hs,
+          sys.Hc.map((x) => (x * pp) / (p || 1)),
+        );
+    ps.push(pp);
+    sys.names.forEach((_, j) => amp[j].push(X ? Math.hypot(X.re[j], X.im[j]) : Infinity));
   }
-  return { ok: true, sys, n, modes, repeated, damping, ortho, modal, stat, resonance, forced, zeroAt, sim, afc };
+  return { p: ps, amp };
 }
 
 export function solveVib(pr: VibProblem): VibOut {

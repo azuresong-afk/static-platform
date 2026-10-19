@@ -746,6 +746,22 @@ async function main() {
   check(vb.includes('c₂ = H/A = 10/0,002 = 5000') && vb.includes('гашение колебаний'), 'Мещерский 54.37: гаситель — масса и жёсткость, амплитуда фундамента нулевая', vb.slice(0, 400));
   await p.selectOption('#vbpreset', 'm5438');
   check((await p.innerText('#vbsolution')).includes('φ₁ = −0,014737·sin 15t'), 'Мещерский 54.38: вынужденные колебания дисков');
+  await p.selectOption('#vbpreset', 'y26');
+  vb = await p.innerText('#vbsolution');
+  check(
+    vb.includes('F₀ = δ/(hᵀC⁻¹h) = 16,8') && vb.includes('z = 0,014·cos 89,443t') && (await p.inputValue('#vbforce')) === 'harmcos',
+    'Яблонский, Д.26: амплитуда момента по статическому повороту, антирезонанс',
+    vb.slice(-400),
+  );
+  await p.selectOption('#vbpreset', 'y26r1');
+  check((await p.innerText('#vbsolution')).includes('z = −0,16788·t sin 66,452t + 0,0034571·cos 66,452t'), 'Яблонский, Д.26: резонанс — вековой член');
+  await p.selectOption('#vbpreset', 'm5420');
+  vb = await p.innerText('#vbsolution');
+  check(vb.includes('k⁴ − 16,715·k² + 34,403 = 0') && vb.includes('ε₂ = −90°'), 'Мещерский 54.20: гироскопические силы', vb.slice(0, 400));
+  await p.selectOption('#vbpreset', 'm5436');
+  check((await p.innerText('#vbsolution')).includes('k₁ = 0,49662') && (await p.locator('#vbmasses .vb-item').count()) === 1, 'Мещерский 54.36: груз на стойке');
+  await p.selectOption('#vbpreset', 'm5448');
+  check((await p.innerText('#vbsolution')).includes('в полосе пропускания'), 'Мещерский 54.48: фильтр крутильных колебаний');
   await p.selectOption('#vbpreset', 'm549');
   check((await p.innerText('#vbsolution')).includes('A₂ = 1,18'), 'Мещерский 54.9: формы главных колебаний по T и Π');
   await p.fill('#vb-ceq0', '0,3');
