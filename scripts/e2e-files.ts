@@ -31,7 +31,7 @@ const state = (p: Page) =>
   p.evaluate(`(() => ({
     solution: document.querySelector('#solution').innerText,
     fields: [...document.querySelectorAll('.panel[aria-label="Конфигуратор"] input, .panel[aria-label="Конфигуратор"] select')]
-      .filter((e) => e.offsetParent !== null && e.id !== 'asFrom' && !(e.dataset.f in { at: 1, from: 1, to: 1 }))
+      .filter((e) => e.offsetParent !== null && e.id !== 'asFrom' && e.id !== 'bodyFrom' && !(e.dataset.f in { at: 1, from: 1, to: 1 }) && !('linka' in e.dataset || 'linkb' in e.dataset || 'addvia' in e.dataset))
       .map((e) => (e.type === 'checkbox' ? String(e.checked) : e.value)),
     stamp: [...document.querySelectorAll('#svg .t-stv')].map((t) => t.textContent),
   }))()`) as Promise<{ solution: string; fields: string[]; stamp: string[] }>;
@@ -149,7 +149,7 @@ async function main() {
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 35, 'готово тридцать пять пунктов');
+  check((await p.locator('.rm-done').count()) === 36, 'готово тридцать шесть пунктов');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -765,6 +765,46 @@ async function main() {
   check((await p.getAttribute('[data-tab="vibration"]', 'aria-selected')) === 'true' && (await p.innerText('#vbsolution')) === vbSol, 'файл колебаний открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // Контакт тел («Балки и рамы»): несколько тел, касания, нити через блоки, перебор случаев.
+  await p.selectOption('#preset', 'tb:3.35');
+  const ctS = await p.innerText('#solution');
+  check(
+    ctS.includes('Расчленяем систему на тела') && ctS.includes('= 160') && ctS.includes('= 400') && ctS.includes('Проверяем односторонние связи'),
+    'Мещерский 3.35: балка опирается на балку, давление 160, опора 400',
+    ctS.slice(0, 300),
+  );
+  check((await p.locator('#svg .icontact').count()) === 1 && (await p.textContent('.notice'))!.includes('R_B = 160'), 'на схеме — касание, показан ответ задачника');
+  const [dlct] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const ctText = await (await dlct.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const ctJ = JSON.parse(ctText).structure;
+  check(ctJ.links?.[0]?.type === 'contact' && ctJ.nodes.some((n: { place?: unknown }) => n.place), 'в файле — второе тело и касание');
+  await p.selectOption('#preset', 'simple');
+  await openText('contact.json', ctText, 'ok');
+  check((await p.innerText('#solution')) === ctS, 'схема с двумя телами сохраняется и открывается без потерь');
+  await p.selectOption('#bodyFrom', { index: 0 });
+  await p.fill('#bodyDx', '0');
+  await p.fill('#bodyDy', '0');
+  const nLinks = await p.locator('.linkcard').count();
+  await p.click('#bodyGo');
+  check((await p.locator('[data-body]').count()) === 2 && (await p.locator('.linkcard').count()) === nLinks + 1, 'новое тело в точке — сразу с касанием');
+  await p.click('[data-addlink="thread"]');
+  check((await p.locator('.linkcard').count()) === nLinks + 2 && (await p.locator('#svg polyline.thread').count()) === 1, 'нить между телами');
+  await p.click('#undo');
+  await p.click('#undo');
+  check((await p.innerText('#solution')) === ctS, 'отмена возвращает схему');
+  await tab('virtual');
+  check((await p.innerText('.dg-empty')).includes('только во вкладке «Балки и рамы»'), '«Возможные перемещения» объясняют, что несколько тел здесь не считаются');
+  await tab('frames');
+  await p.selectOption('#preset', 'yb:С.9');
+  const c9 = await p.innerText('#solution');
+  check(c9.includes('Случай 1') && c9.includes('предположение неверно') && c9.includes('Случай 2') && c9.includes('9,949'), 'Яблонский С.9: перебор случаев, работает связь F', c9.slice(-400));
+  await p.selectOption('#preset', 'tb:2.66');
+  const c266 = await p.innerText('#solution');
+  check(c266.includes('98,038') && c266.includes('101,962') && c266.includes('трение между телами'), 'Мещерский 2.66: тело на теле, интервал силы 98…102');
+  await p.selectOption('#preset', 'yb:С.5а');
+  check((await p.innerText('#solution')).includes('94,281') && (await p.locator('#svg .pulley').count()) === 1, 'Яблонский С.5: тормоз, нить через блок, P_min = 94,3');
+  if (out) await p.screenshot({ path: pathResolve(out, 'contact.png'), fullPage: true });
+
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');
   const pbS = await p.innerText('#pbsolution');
@@ -1171,7 +1211,11 @@ async function main() {
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true' && (await p.inputValue('#preset')) === 'tb:3.7', 'задача Мещерского 3.7 открывается в «Балках и рамах»');
   check((await p.textContent('.notice'))!.includes('Ответ задачника: R_B = 300; R_E = 400') && (await p.innerText('#solution')).includes('300'), 'при загрузке задачи из книги показан ответ задачника');
   const groups = await p.locator('#preset optgroup').evaluateAll((els) => els.map((e) => e.getAttribute('label')));
-  check(groups[0]!.startsWith('Мещерский, § 3.') && groups.some((g) => g!.startsWith('Мещерский, § 4.')) && groups[groups.length - 1] === 'Другие примеры', 'список «Готовая задача» сгруппирован: Мещерский по параграфам, затем примеры', groups.join(' | '));
+  check(
+    groups[0]!.startsWith('Мещерский, § 2.') && groups[1]!.startsWith('Мещерский, § 3.') && groups.some((g) => g!.startsWith('Мещерский, § 4.')) && groups[groups.length - 1] === 'Другие примеры',
+    'список «Готовая задача» сгруппирован: Мещерский по параграфам, затем примеры',
+    groups.join(' | '),
+  );
   // Пример задания С.3 Яблонского: скользящая заделка между частями.
   await tab('tasks');
   await p.fill('#tksearch', 'скользящая заделка в C');

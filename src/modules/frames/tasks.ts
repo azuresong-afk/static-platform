@@ -9,6 +9,7 @@ import type { TaskEntry } from '../../shared/tasks';
 import { PRESET_TITLES, presetStructure, type PresetKey } from './model/presets';
 import { TEXTBOOK, TEXTBOOK_COMPOSITE, TEXTBOOK_FRICTION, TEXTBOOK_INCLINED, type FrictionProblem, type TextbookProblem } from './model/textbook';
 import type { Structure } from './model/types';
+import { CONTACT_PROBLEMS } from './model/contacts';
 
 export interface BookTask extends TaskEntry {
   build: (ids?: IdGen) => Structure;
@@ -100,10 +101,22 @@ export const YAB_FRAMES: (BookTask & { answerVals: Record<string, number> })[] =
   },
 ];
 
+/** Контакт тел (Мещерский §2–4, Яблонский С.5, С.9): несколько тел, касания, нити, блоки. */
+export const CONTACT_BOOK: BookTask[] = CONTACT_PROBLEMS.map((p) => ({
+  key: (p.book === 'mesh' ? 'tb:' : 'yb:') + numOf(p.id),
+  title: p.book === 'mesh' ? `Мещерский ${numOf(p.id)}: ${lc(p.title)}` : `Яблонский, ${p.id}: ${lc(p.title)}`,
+  build: (ids?: IdGen) => p.build(ids),
+  answer: [p.answer, ...Object.values(p.discrepancy ?? {}).map((d) => `Расхождение: ${d.why}`)].join(' '),
+}));
+
+/** Задачи из книг с ответом (загружаются с пояснением). */
+export const BOOK_TASKS: BookTask[] = [...FRAMES_BOOK, ...YAB_FRAMES, ...CONTACT_BOOK];
+
 /** Все задачи вкладки: задачи Мещерского и примеры прототипа (ключи прототипа — как были). */
 export const FRAMES_TASKS: TaskEntry[] = [
   ...FRAMES_BOOK.map(({ key, title }) => ({ key, title })),
   ...YAB_FRAMES.map(({ key, title }) => ({ key, title })),
+  ...CONTACT_BOOK.map(({ key, title }) => ({ key, title })),
   ...(Object.keys(PRESET_TITLES) as PresetKey[]).map((k) => ({ key: k, title: PRESET_TITLES[k] })),
 ];
 

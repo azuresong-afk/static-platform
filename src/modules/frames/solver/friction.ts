@@ -8,17 +8,26 @@
 import { linprog } from '../../../shared/lp';
 import { rankOf } from '../../../shared/rank';
 import type { Eq } from './equations';
-import type { Model, SupportInfo, Unknown } from './model';
+import { eqCount, oneSidedLinks, type LinkInfo, type Model, type SupportInfo, type Unknown } from './model';
 
 /** Опоры, из-за которых нужен расчёт с неравенствами. */
 export const frictionSupports = (m: Model): SupportInfo[] => m.supports.filter((s) => s.it.type === 'rough' || (s.it.type === 'roller' && s.it.oneSided));
-export const isFrictionModel = (m: Model): boolean => frictionSupports(m).length > 0;
+/**
+ * Расчёт с неравенствами нужен при опорах с трением и односторонних катках, при касании тел с трением, а также
+ * когда при односторонних связях между телами ищется нагрузка и неизвестных больше, чем уравнений.
+ */
+export const isFrictionModel = (m: Model): boolean =>
+  frictionSupports(m).length > 0 || m.links.some((l) => l.f > 0) || (oneSidedLinks(m).length > 0 && m.unkLoads.length > 0 && m.unknowns.length > eqCount(m));
 
-/** Что происходит со связью в предельном состоянии. */
+/** Что происходит со связью в предельном состоянии: с опорой s или со связью между телами l. */
 export interface Active {
-  s: SupportInfo;
-  /** slip — трение достигло f·N (sign — знак силы трения); lift — связь отрывается (N = 0); roll — момент качения достиг k·N. */
-  kind: 'slip' | 'lift' | 'roll';
+  s?: SupportInfo;
+  l?: LinkInfo;
+  /**
+   * slip — трение достигло f·N (sign — знак силы трения); lift — связь отрывается (N = 0); roll — момент качения
+   * достиг k·N; slack — нить провисает (T = 0).
+   */
+  kind: 'slip' | 'lift' | 'roll' | 'slack';
   sign: number;
 }
 
@@ -76,10 +85,21 @@ function constraints(m: Model, keys: string[], scale: number) {
       row({ [M]: -1, [N]: -k });
     }
   }
+  // Касание: N ≥ 0 и |Fтр| ≤ f·N; нить: T ≥ 0.
+  for (const l of oneSidedLinks(m)) {
+    const N = l.list[0].key;
+    row({ [N]: -1 });
+    if (l.list[1]) {
+      const T = l.list[1].key,
+        f = l.f * scale;
+      row({ [T]: 1, [N]: -f });
+      row({ [T]: -1, [N]: -f });
+    }
+  }
   return { G, h };
 }
 
-function activeOf(m: Model, vals: Record<string, number>): Active[] {
+export function activeOf(m: Model, vals: Record<string, number>): Active[] {
   const out: Active[] = [];
   for (const s of frictionSupports(m)) {
     const it = s.it;
@@ -98,6 +118,16 @@ function activeOf(m: Model, vals: Record<string, number>): Active[] {
     }
     if (Math.abs(Math.abs(T) - it.f * N) < tol && it.f * N > 1e-9) out.push({ s, kind: 'slip', sign: Math.sign(T) });
     if ((it.k ?? 0) > 0 && Math.abs(Math.abs(M) - (it.k ?? 0) * N) < tol) out.push({ s, kind: 'roll', sign: Math.sign(M) });
+  }
+  for (const l of oneSidedLinks(m)) {
+    const N = vals[l.list[0].key];
+    if (Math.abs(N) < 1e-7) {
+      out.push({ l, kind: l.link.type === 'thread' ? 'slack' : 'lift', sign: 0 });
+      continue;
+    }
+    if (!l.list[1]) continue;
+    const T = vals[l.list[1].key];
+    if (Math.abs(Math.abs(T) - l.f * N) < 1e-7 * Math.max(1, Math.abs(N)) && l.f * N > 1e-9) out.push({ l, kind: 'slip', sign: Math.sign(T) });
   }
   return out;
 }
@@ -129,7 +159,20 @@ export function solveFriction(m: Model): FrictionResult {
     // Без искомой нагрузки ищем, при каком запасе по трению равновесие стало бы возможным.
     return { ...base, param: m.unkLoads[0] ?? null, lambda: m.unkLoads.length ? null : minLambda(m, keys, rows, b) };
   }
-  const sample = toVals(feas.x);
+  let sample = toVals(feas.x);
+  // Нити между телами не натянуты сверх необходимого: из допустимых распределений берём то, где натяжение наименьшее
+  // (так считают в задачниках: тело, готовое скользить, натягивает нить, остальные удерживает трение).
+  const tk = m.links.filter((l) => l.link.type === 'thread').map((l) => l.list[0].key);
+  if (tk.length) {
+    const r = linprog(
+      keys.map((k) => (tk.includes(k) ? 1 : 0)),
+      rows,
+      b,
+      G,
+      h,
+    );
+    if (r.status === 'optimal' && consistent(toVals(r.x))) sample = toVals(r.x);
+  }
   if (!m.unkLoads.length) return { ...base, feasible: true, sample, lambda: minLambda(m, keys, rows, b) };
   const param = m.unkLoads[0];
   const pi = keys.indexOf(param.key);
@@ -145,7 +188,7 @@ export function solveFriction(m: Model): FrictionResult {
 
 /** Наименьший множитель λ к коэффициентам трения, при котором равновесие возможно (бисекция), или null — не поможет никакой. */
 function minLambda(m: Model, keys: string[], rows: number[][], b: number[]): number | null {
-  if (!m.supports.some((s) => s.it.type === 'rough')) return null;
+  if (!m.supports.some((s) => s.it.type === 'rough') && !m.links.some((l) => l.f > 0)) return null;
   const ok = (lam: number) => {
     const { G, h } = constraints(m, keys, lam);
     return linprog(keys.map(() => 0), rows, b, G, h).status === 'optimal';

@@ -22,15 +22,20 @@ export interface Geom {
   root: string;
   /** Участки в порядке обхода (по узлу-потомку). */
   segOrder: Seg[];
+  /** Номер тела (дерева участков) для каждой точки: 0 — основное, 1, 2… — тела, поставленные от других (Node.place). */
+  body: Record<string, number>;
 }
 
 /** Округление координат с наклонными участками: только шум вычислений (1e-12 м), не миллиметры. */
 const r12 = (v: number) => Math.round(v * 1e12) / 1e12 + 0;
 
-/** Координаты узлов обходом дерева участков от корня (узла, в который не входит ни один участок). */
+/**
+ * Координаты узлов обходом дерева участков от корня (узла, в который не входит ни один участок и который не поставлен
+ * от другого тела). Затем — отдельные тела: их начальная точка смещена от точки уже построенного тела (Node.place).
+ */
 export function geom(s: Pick<Structure, 'nodes' | 'segs'>): Geom {
   const inc = new Set(s.segs.map((q) => q.b));
-  const root = (s.nodes.find((n) => !inc.has(n.id)) || s.nodes[0]).id;
+  const root = (s.nodes.find((n) => !inc.has(n.id) && !n.place) || s.nodes[0]).id;
   const kids: Record<string, Seg[]> = {};
   const adj: Record<string, Set<Dir>> = {};
   const rays: Record<string, number[]> = {};
@@ -53,9 +58,12 @@ export function geom(s: Pick<Structure, 'nodes' | 'segs'>): Geom {
     if (rays[q.b]) rays[q.b].push(normAng(t + 180));
   });
   const inclined = s.segs.some((q) => q.dir === 'a');
+  const body: Record<string, number> = {};
+  let nb = 0;
   const visit = (id: string, x: number, y: number): void => {
     if (id in pos) return;
     pos[id] = [x, y];
+    body[id] = nb;
     order.push(id);
     (kids[id] || []).forEach((q) => {
       parent[q.b] = q;
@@ -64,20 +72,35 @@ export function geom(s: Pick<Structure, 'nodes' | 'segs'>): Geom {
     });
   };
   visit(root, 0, 0);
+  // Отдельные тела — в порядке точек; тело, поставленное от ещё не построенного, ждёт следующего прохода.
+  for (let more = true; more; ) {
+    more = false;
+    for (const n of s.nodes)
+      if (n.place && !(n.id in pos) && n.place.from in pos && !inc.has(n.id)) {
+        const [fx, fy] = pos[n.place.from];
+        nb++;
+        visit(n.id, fx + n.place.dx, fy + n.place.dy);
+        more = true;
+      }
+  }
   let mx = Infinity,
     my = Infinity;
   Object.values(pos).forEach(([x, y]) => {
     mx = Math.min(mx, x);
     my = Math.min(my, y);
   });
-  // Рамы из участков по осям — с точностью до миллиметра, как в прототипе; с наклонными — без огрубления.
-  const rr = inclined ? r12 : r3;
+  // Рамы из участков по осям — с точностью до миллиметра, как в прототипе; с наклонными и с отдельными телами
+  // (их место задаётся смещением, у тел-точек — любыми координатами) — без огрубления.
+  const rr = inclined || nb > 0 ? r12 : r3;
   Object.keys(pos).forEach((k) => (pos[k] = [rr(pos[k][0] - mx), rr(pos[k][1] - my)]));
   const name: Record<string, string> = {};
   order.forEach((id, i) => (name[id] = ptName(i)));
   const segOrder = order.filter((id) => parent[id]).map((id) => parent[id]);
-  return { pos, order, name, parent, adj, rays, inclined, root, segOrder };
+  return { pos, order, name, parent, adj, rays, inclined, root, segOrder, body };
 }
+
+/** В конструкции несколько тел (точки, поставленные от других тел) или связи между ними. */
+export const hasBodies = (s: Pick<Structure, 'nodes' | 'links'>): boolean => s.nodes.some((n) => n.place) || !!s.links?.length;
 
 const EPS = 1e-7;
 /** Расстояние от точки P до отрезка AB. */
@@ -100,7 +123,10 @@ function touch(A: Pt, B: Pt, C: Pt, D: Pt): boolean {
   return distToSeg(C, A, B) < EPS || distToSeg(D, A, B) < EPS || distToSeg(A, C, D) < EPS || distToSeg(B, C, D) < EPS;
 }
 
-/** Все узлы достижимы, участки не пересекаются и не накладываются (касаться можно только общим концом). */
+/**
+ * Все узлы достижимы, участки не пересекаются и не накладываются (касаться можно только общим концом).
+ * Участки разных тел не проверяются: тела касаются друг друга, а грань одного может лежать на грани другого.
+ */
 export function geomOK(s: Pick<Structure, 'nodes' | 'segs'>): boolean {
   const g = geom(s);
   if (Object.keys(g.pos).length !== s.nodes.length) return false;
@@ -109,6 +135,7 @@ export function geomOK(s: Pick<Structure, 'nodes' | 'segs'>): boolean {
     for (let j = i + 1; j < S.length; j++) {
       const p = S[i],
         q = S[j];
+      if (g.body[p.s.a] !== g.body[q.s.a]) continue;
       if (p.s.dir === 'a' || q.s.dir === 'a') {
         // Наклонный участок: с общим концом участки не должны идти из него в одну сторону,
         // без общего конца — не должны иметь ни одной общей точки.
@@ -157,7 +184,9 @@ export function pathNodes(g: Geom, a: string, b: string): string[] {
   const pa = up(a),
     pb = up(b),
     sb = new Set(pb),
-    lca = pa.find((id) => sb.has(id))!;
+    lca = pa.find((id) => sb.has(id));
+  // Точки разных тел путём по участкам не соединены.
+  if (lca === undefined) return [a, b];
   return [...pa.slice(0, pa.indexOf(lca) + 1), ...pb.slice(0, pb.indexOf(lca)).reverse()];
 }
 
@@ -181,6 +210,7 @@ export function distGeom(g: Geom, it: Pick<DistItem, 'from' | 'to'>): DistGeom {
   const P = g.pos[it.from],
     Q = g.pos[it.to];
   if (!P || !Q || it.from === it.to) return { ok: false, why: 'zero' };
+  if (g.body[it.from] !== g.body[it.to]) return { ok: false, why: 'line' };
   const horiz = Math.abs(P[1] - Q[1]) < 1e-9,
     vert = Math.abs(P[0] - Q[0]) < 1e-9;
   if (!horiz && !vert) {
@@ -246,7 +276,11 @@ export function resolve(s: Structure): Resolved {
     items.push(r);
     return it;
   });
-  return { structure: { nodes: s.nodes, segs: s.segs, items: norm }, g, items };
+  const structure: Structure = { nodes: s.nodes, segs: s.segs, items: norm };
+  // Связи — только между существующими точками; касание — между разными точками.
+  if (s.links)
+    structure.links = s.links.filter((l) => l.a in g.pos && l.b in g.pos && (l.type === 'thread' ? (l.via ?? []).every((id) => id in g.pos) : l.a !== l.b));
+  return { structure, g, items };
 }
 
 /** Разбиение рамы на жёсткие части по внутренним шарнирам. */
@@ -260,6 +294,12 @@ export interface Parts {
   hinges: string[];
   /** Соединения скользящей заделкой: узел → угол нормали к направляющей, град. */
   slides: Record<string, number>;
+  /**
+   * Число независимых уравнений равновесия каждой части: 3, у тела-точки (точки отдельного тела без участков) — 2.
+   */
+  dof: number[];
+  /** Тела-точки: номер части → точка. */
+  points: Record<number, string>;
 }
 
 /**
@@ -282,19 +322,29 @@ export function partsOf(s: Pick<Structure, 'nodes' | 'segs'>, g: Geom): Parts {
   }
   const num: Record<string, number> = {};
   const segPart: Record<string, number> = {};
+  const points: Record<number, string> = {};
+  // Нумерация — в порядке обхода точек: участок, ведущий в точку, или тело-точка (точка без участков).
+  // В одной раме это тот же порядок, что обход участков.
+  const multi = s.nodes.some((n) => n.place);
   let count = 0;
-  for (const q of g.segOrder) {
-    const r = find(q.id);
-    if (!(r in num)) num[r] = count++;
-    segPart[q.id] = num[r];
+  for (const id of g.order) {
+    const q = g.parent[id];
+    if (q) {
+      const r = find(q.id);
+      if (!(r in num)) num[r] = count++;
+      segPart[q.id] = num[r];
+    } else if (multi && !incident[id]?.length) points[count++] = id;
   }
+  const pointOf = Object.fromEntries(Object.entries(points).map(([p, id]) => [id, +p]));
   const nodeParts: Record<string, number[]> = {};
-  for (const id of g.order) nodeParts[id] = [...new Set((incident[id] || []).map((sid) => segPart[sid]))].sort((a, b) => a - b);
-  if (!s.segs.length) for (const id of g.order) nodeParts[id] = [0];
+  for (const id of g.order) nodeParts[id] = id in pointOf ? [pointOf[id]] : [...new Set((incident[id] || []).map((sid) => segPart[sid]))].sort((a, b) => a - b);
+  if (!s.segs.length && !multi) for (const id of g.order) nodeParts[id] = [0];
   const hinges = g.order.filter((id) => hinge.has(id) && nodeParts[id].length >= 2);
   const slides: Record<string, number> = {};
   for (const n of s.nodes) if (n.slide != null && hinges.includes(n.id)) slides[n.id] = n.slide;
-  return { count: Math.max(count, 1), segPart, nodeParts, hinges, slides };
+  count = Math.max(count, 1);
+  const dof = Array.from({ length: count }, (_, p) => (p in points ? 2 : 3));
+  return { count, segPart, nodeParts, hinges, slides, dof, points };
 }
 
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];

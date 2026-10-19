@@ -2,13 +2,15 @@
  * Решение с трением и односторонними связями: освобождение от связей, уравнения равновесия,
  * условия для реакций (неравенства), предельные состояния на границах искомой величины, ответ.
  */
-import { b, join, sub, sym, v, type Block, type Doc, type Inline } from '../../../shared/doc';
+import { b, join, sub, sym, v, type AnswerRow, type Block, type Doc, type Inline } from '../../../shared/doc';
 import { fmt } from '../../../shared/format';
 import { SIDES, TYPES } from '../model/constants';
-import type { Active, Extreme } from '../solver/friction';
+import { activeOf as activeOfSample, type Active, type Extreme } from '../solver/friction';
 import type { Model, SupportInfo } from '../solver/model';
 import type { Solution } from '../solver/solve';
 import { eqSym, type SolutionOptions } from './solution';
+import { badLinkText, linkActiveText, linkConds, linkText, manyBodies } from './links';
+import { roman } from '../model/geometry';
 import { forceDirText } from './labels';
 import type { ForceItem } from '../model/types';
 
@@ -24,7 +26,8 @@ function dirWord(a: number): string {
 }
 
 function activeText(a: Active, m: Model, all: Active[]): Inline[] {
-  const s = a.s,
+  if (a.l) return linkActiveText(a, m);
+  const s = a.s!,
     P = v(s.P);
   if (a.kind === 'lift') {
     // Опрокидывание вокруг единственной оставшейся опоры — называем её.
@@ -86,7 +89,18 @@ export function frictionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
         ? ['Сила ', sym(param), `: ${forceDirText(param.item as ForceItem)}; ищем, при каких значениях возможно равновесие`]
         : ['Момент ', sym(param), ': ищем, при каких значениях возможно равновесие'],
     );
-  const b1: Block[] = [{ k: 'p', c: ['Отбрасываем опоры и заменяем их действие реакциями:'] }, { k: 'ul', items: li }];
+  const b1: Block[] = [{ k: 'p', c: ['Отбрасываем опоры и заменяем их действие реакциями:'] }, { k: 'ul', items: li.length ? li : [['опор нет']] }];
+  // Несколько тел: каждое рассматриваем отдельно, связи между ними заменяем силами.
+  if (manyBodies(m)) {
+    b1.push(
+      { k: 'p', c: ['Расчленяем систему на тела и заменяем связи между ними силами:'] },
+      { k: 'ul', items: m.partNames.map((names, p) => [`Тело ${roman(p)}: `, ...(p in m.parts.points ? ['точка '] : ['точки ']), ...join(names.map((n) => [v(n)]), ', ')]) },
+      ...m.links.map((l): Block => ({ k: 'p', c: linkText(m, l) })),
+      ...badLinkText(m).map((c): Block => ({ k: 'p', cls: 's-bad', c })),
+    );
+    if (Object.keys(m.parts.points).length)
+      b1.push({ k: 'p', c: ['Тело-точка (материальная точка) даёт два уравнения проекций: все силы приложены в одной точке, уравнение моментов выполняется само.'] });
+  }
   if (ex)
     b1.push(
       explain(
@@ -121,7 +135,7 @@ export function frictionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
         }
         if (it.type === 'roller' && it.oneSided) return [[sym(s.list[0]), ' ≥ 0']];
         return [];
-      }),
+      }).concat(m.links.flatMap(linkConds)),
     },
   ];
   if (ex)
@@ -136,11 +150,14 @@ export function frictionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   // 3. Без искомой нагрузки — только проверка.
   if (!param) {
     const b3: Block[] = [];
-    if (fr.feasible) b3.push({ k: 'badge', tone: 'ok', text: 'равновесие возможно' }, { k: 'p', c: ['Существуют реакции, удовлетворяющие и уравнениям, и всем условиям, — тело остаётся в покое.'] });
+    if (fr.feasible)
+      b3.push({ k: 'badge', tone: 'ok', text: 'равновесие возможно' }, { k: 'p', c: [`Существуют реакции, удовлетворяющие и уравнениям, и всем условиям, — ${manyBodies(m) ? 'тела остаются' : 'тело остаётся'} в покое.`] });
     else b3.push({ k: 'badge', tone: 'bad', text: 'равновесие невозможно' }, { k: 'p', c: ['Уравнения равновесия нельзя удовлетворить при допустимых реакциях: тело скользит, катится или опрокидывается.'] });
     const rough = m.supports.filter((s) => s.it.type === 'rough');
-    if (fr.lambda != null && rough.length) {
-      const fs = rough.map((s) => (s.it.type === 'rough' ? s.it.f : 0));
+    const fs = [...rough.map((s) => (s.it.type === 'rough' ? s.it.f : 0)), ...m.links.filter((l) => l.f > 0).map((l) => l.f)];
+    if (fr.lambda != null && fs.length && fr.lambda < 1e-6)
+      b3.push({ k: 'p', c: ['Равновесие возможно при любом коэффициенте трения больше нуля: достаточно сильнее натянуть нить.'] });
+    else if (fr.lambda != null && fs.length) {
       const same = fs.every((f) => Math.abs(f - fs[0]) < 1e-12);
       if (same)
         b3.push({
@@ -148,9 +165,26 @@ export function frictionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
           c: ['Наименьший коэффициент трения, при котором равновесие возможно: ', v('f'), sub('min'), ' = ', b(fmt(fr.lambda * fs[0])), `${fr.feasible ? ' — заданный f не меньше.' : ' — заданный f меньше, поэтому равновесия нет.'}`],
         });
       else b3.push({ k: 'p', c: [`Равновесие станет ${fr.feasible ? 'невозможным' : 'возможным'}, если все коэффициенты трения умножить на ${fmt(fr.lambda)}.`] });
-    } else if (!fr.feasible && rough.length) b3.push({ k: 'p', c: ['Никакое трение не удержит тело: мешают отрыв или опрокидывание.'] });
+    } else if (!fr.feasible && fs.length) b3.push({ k: 'p', c: ['Никакое трение не удержит тело: мешают отрыв или опрокидывание.'] });
+    // Силы между телами при равновесии: одно из допустимых распределений — с наименьшим натяжением нитей.
+    if (fr.feasible && fr.sample && m.links.length) {
+      const th = m.links.filter((l) => l.link.type === 'thread');
+      b3.push({
+        k: 'p',
+        c: th.length
+          ? ['Силы определяются неоднозначно: нить можно натянуть сильнее, тогда трение перераспределится. Берём наименьшее натяжение, при котором равновесие возможно (нить не натянута сверх необходимого):']
+          : ['Одно из возможных распределений сил (уравнений меньше, чем неизвестных, поэтому силы трения определяются неоднозначно):'],
+      });
+      b3.push({ k: 'eq', lines: [{ num: true, c: join(m.unknowns.map((x) => [sym(x), ` = ${fmt(fr.sample![x.key])} ${unit(x.kind)}`]), '; ') }] });
+      const act = activeOfSample(m, fr.sample);
+      if (act.length) b3.push({ k: 'p', c: ['При этом: '] }, { k: 'ul', items: act.map((a) => activeText(a, m, act)) });
+    }
     steps.push({ title: 'Возможно ли равновесие', blocks: b3 });
-    steps.push({ title: 'Ответ', blocks: [{ k: 'answer', rows: [{ kind: 'main', val: [fr.feasible ? 'равновесие возможно' : 'равновесие невозможно'], note: fr.lambda != null ? 'см. наименьший коэффициент трения' : '' }] }] });
+    const rows: AnswerRow[] = [{ kind: 'main', val: [fr.feasible ? 'равновесие возможно' : 'равновесие невозможно'], note: fr.lambda != null ? 'см. наименьший коэффициент трения' : '' }];
+    if (fr.feasible && fr.sample)
+      for (const l of m.links.filter((x) => x.link.type === 'thread'))
+        rows.push({ kind: 'main', val: [sym(l.list[0]), ` = ${fmt(fr.sample[l.list[0].key])} кН`], note: 'наименьшее натяжение нити' });
+    steps.push({ title: 'Ответ', blocks: [{ k: 'answer', rows }] });
     return { steps };
   }
 

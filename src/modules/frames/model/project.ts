@@ -3,10 +3,12 @@
  *
  * Конверт (format, version, module, title, savedAt) — src/shared/projectFile.ts; данные модуля:
  * {
- *   "structure": { "nodes": [...], "segs": [...], "items": [...] },
+ *   "structure": { "nodes": [...], "segs": [...], "items": [...], "links": [...] },
  *   "notTarget": ["X_A", …]
  * }
  * Поля конструкции — те же, что в model/types.ts (у наклонного участка dir = "a" и угол ang). Лишние поля игнорируются.
+ * Несколько тел: начальная точка отдельного тела — с полем place { from, dx, dy }; связи между телами — links
+ * (касание contact: a, b, angle, f; нить thread: a, b, via). Без них файл такой же, как раньше.
  * Файлы версии 1 (без поля module) открываются этим модулем.
  * Загрузка проверяет всё, от чего зависит расчёт, и сообщает понятные ошибки по-русски.
  */
@@ -14,7 +16,7 @@ import { isNum, isObj, isStr, readEnvelope, writeEnvelope } from '../../../share
 import { axisDir, normAng } from './constants';
 import { geomOK } from './geometry';
 import type { IdGen } from '../../../shared/ids';
-import type { Dir, Item, Node, Seg, Structure } from './types';
+import type { Dir, Item, Link, Node, Seg, Structure } from './types';
 
 export { projectFileName } from '../../../shared/projectFile';
 
@@ -33,12 +35,25 @@ export function serializeProject(p: Project, now = new Date()): string {
     nodes: p.structure.nodes.map((n) => cleanNode(n)),
     segs: p.structure.segs.map(({ id, a, b, dir, len, ang }) => (dir === 'a' ? { id, a, b, dir, len, ang } : { id, a, b, dir, len })),
     items: p.structure.items.map(cleanItem),
+    ...(p.structure.links?.length ? { links: p.structure.links.map(cleanLink) } : {}),
   };
   return writeEnvelope(FRAMES_MODULE, p.title, { structure, notTarget: [...p.notTarget] }, now);
 }
 
-/** Точка: идентификатор, признак шарнира, угол скользящей заделки между частями. */
-const cleanNode = (n: Node, id = n.id): Node => (n.slide != null ? { id, slide: n.slide } : n.hinge ? { id, hinge: true } : { id });
+/** Точка: идентификатор, признак шарнира, угол скользящей заделки между частями, место отдельного тела. */
+const cleanNode = (n: Node, id = n.id, from = n.place?.from): Node => {
+  const r: Node = n.slide != null ? { id, slide: n.slide } : n.hinge ? { id, hinge: true } : { id };
+  if (n.place && from) r.place = { from, dx: n.place.dx, dy: n.place.dy };
+  return r;
+};
+
+/** Связь: только поля её типа. */
+const cleanLink = (l: Link): Link =>
+  l.type === 'contact'
+    ? { id: l.id, type: 'contact', a: l.a, b: l.b, angle: l.angle, ...(l.angleName ? { angleName: l.angleName } : {}), f: l.f }
+    : l.type === 'hinge'
+      ? { id: l.id, type: 'hinge', a: l.a, b: l.b }
+      : { id: l.id, type: 'thread', a: l.a, b: l.b, ...(l.via?.length ? { via: [...l.via] } : {}) };
 
 /** Только поля, которые относятся к типу элемента (производные вроде x, y не сохраняются). */
 function cleanItem(it: Item): Item {
@@ -110,8 +125,11 @@ export function parseProject(text: string): ParseResult {
     nodeIds.add(n.id);
     if (n.hinge !== undefined && typeof n.hinge !== 'boolean') return errors.push(`Точка «${n.id}»: признак шарнира должен быть true или false.`);
     if (n.slide !== undefined && !(typeof n.slide === 'number' && Number.isFinite(n.slide))) return errors.push(`Точка «${n.id}»: угол скользящей заделки должен быть числом.`);
+    if (n.place !== undefined && !(isObj(n.place) && isStr(n.place.from) && isNum(n.place.dx) && isNum(n.place.dy)))
+      return errors.push(`Точка «${n.id}»: место тела задаётся точкой from и смещением dx, dy (числа, м).`);
     nodes.push(cleanNode(n as unknown as Node));
   });
+  for (const n of nodes) if (n.place && !nodeIds.has(n.place.from)) errors.push(`Точка «${n.id}»: тело поставлено от несуществующей точки.`);
   if (!nodes.length) errors.push('В конструкции нет ни одной точки.');
 
   const segs: Seg[] = [];
@@ -208,9 +226,35 @@ export function parseProject(text: string): ParseResult {
     if (ok) items.push(cleanItem(it as unknown as Item));
   });
 
+  const links: Link[] = [];
+  if (st.links !== undefined && !Array.isArray(st.links)) errors.push('Связи между телами (links) должны быть списком.');
+  (Array.isArray(st.links) ? st.links : []).forEach((l, i) => {
+    const where = `Связь №${i + 1}`;
+    if (!isObj(l) || !isStr(l.id)) return errors.push(`${where}: нет идентификатора.`);
+    if (l.type !== 'contact' && l.type !== 'thread' && l.type !== 'hinge')
+      return errors.push(`${where}: неизвестный тип «${String(l.type)}» (касание — contact, нить — thread, шарнир — hinge).`);
+    const via = l.type === 'thread' && l.via !== undefined ? l.via : [];
+    if (!Array.isArray(via) || ![l.a, l.b, ...via].every((x) => isStr(x) && nodeIds.has(x))) return errors.push(`${where}: ссылается на несуществующую точку.`);
+    if (l.type === 'contact') {
+      if (!isNum(l.angle)) return errors.push(`${where}: у касания должен быть угол нормали angle — число, градусы.`);
+      if (!isNum(l.f) || l.f < 0) return errors.push(`${where}: коэффициент трения f — неотрицательное число.`);
+      if (l.a === l.b) return errors.push(`${where}: касание соединяет две разные точки.`);
+    }
+    if (l.type === 'hinge' && l.a === l.b) return errors.push(`${where}: шарнир соединяет две разные точки.`);
+    links.push(cleanLink(l as unknown as Link));
+  });
+
   const structure: Structure = { nodes, segs, items };
+  if (links.length) structure.links = links;
   if (!errors.length) {
-    if (segs.length !== nodes.length - 1) errors.push('Участки должны соединять все точки в одну раму без замкнутых контуров (участков на один меньше, чем точек).');
+    const bodies = nodes.filter((n) => n.place).length + 1;
+    if (segs.length !== nodes.length - bodies)
+      errors.push(
+        bodies > 1
+          ? 'Участки каждого тела должны соединять его точки без замкнутых контуров (участков на столько меньше, чем точек, сколько тел).'
+          : 'Участки должны соединять все точки в одну раму без замкнутых контуров (участков на один меньше, чем точек).',
+      );
+    else if (segs.some((q) => nodes.find((n) => n.id === q.b)?.place)) errors.push('Начальная точка отдельного тела не может быть концом участка.');
     else if (!geomOK(structure)) errors.push('Участки не образуют связную раму или пересекаются.');
   }
   const nt = Array.isArray(raw.notTarget) ? raw.notTarget.filter(isStr) : [];
@@ -229,5 +273,12 @@ export function remapIds(s: Structure, ids: IdGen): Structure {
     const id = ids.item();
     return it.type === 'dist' ? { ...it, id, from: nm.get(it.from)!, to: nm.get(it.to)! } : { ...it, id, at: nm.get(it.at)! };
   }) as Item[];
-  return { nodes: s.nodes.map((n) => cleanNode(n, nm.get(n.id)!)), segs, items };
+  const links = s.links?.map((l): Link =>
+    l.type === 'thread'
+      ? { ...l, id: ids.item(), a: nm.get(l.a)!, b: nm.get(l.b)!, ...(l.via ? { via: l.via.map((x) => nm.get(x)!) } : {}) }
+      : { ...l, id: ids.item(), a: nm.get(l.a)!, b: nm.get(l.b)! },
+  );
+  const r: Structure = { nodes: s.nodes.map((n) => cleanNode(n, nm.get(n.id)!, n.place ? nm.get(n.place.from) : undefined)), segs, items };
+  if (links?.length) r.links = links;
+  return r;
 }

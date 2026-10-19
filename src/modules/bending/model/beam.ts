@@ -7,7 +7,7 @@ import { dirOf } from '../../../shared/format';
 import { polyAdd, polyEval, polyDeriv, rootsInside, type Poly } from '../../../shared/poly';
 import type { Analysis } from '../../frames/analyze';
 import { LOADDIR } from '../../frames/model/constants';
-import { resolve, type Pt } from '../../frames/model/geometry';
+import { hasBodies, resolve, type Pt } from '../../frames/model/geometry';
 import type { DistItem, Structure } from '../../frames/model/types';
 import type { Action } from '../../frames/solver/model';
 import { coupleContribution, distBehindContribution, distOwnContribution, forceContribution, frameOf, type Contribution } from './forces';
@@ -65,13 +65,14 @@ export interface Beam {
   scaleM: number;
 }
 
-export type BeamResult = { ok: true; beam: Beam } | { ok: false; why: 'notbeam' | 'status' | 'baddist' };
+export type BeamResult = { ok: true; beam: Beam } | { ok: false; why: 'notbeam' | 'status' | 'baddist' | 'bodies' };
 
 const EPS = 1e-9;
 
 /** Балка для эпюр: все участки горизонтальны, система определима и решена. */
 export function analyzeBeam(s: Structure, a: Analysis): BeamResult {
   const { model: m, solution: sol } = a;
+  if (hasBodies(s)) return { ok: false, why: 'bodies' };
   if (s.segs.some((q) => q.dir !== 'r' && q.dir !== 'l')) return { ok: false, why: 'notbeam' };
   if (sol.status !== 'ok') return { ok: false, why: 'status' };
   if (m.badDists.length) return { ok: false, why: 'baddist' };

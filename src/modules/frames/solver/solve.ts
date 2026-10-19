@@ -8,7 +8,7 @@
 import { known, type Eq } from './equations';
 import { firstViolated, pickCheck, residual } from './check';
 import { gauss } from '../../../shared/gauss';
-import type { Model } from './model';
+import { eqCount, oneSidedKeys, type Model } from './model';
 import { rankOf } from '../../../shared/rank';
 import { isFrictionModel, solveFriction, type FrictionResult } from './friction';
 
@@ -36,7 +36,27 @@ export interface Solution {
   badR?: number;
   /** Расчёт с трением и односторонними связями. */
   friction?: FrictionResult;
+  /**
+   * Односторонние связи между телами, которые по расчёту должны были бы тянуть (давление или натяжение < 0):
+   * равновесие при такой нагрузке невозможно — тела расходятся, нить провисает.
+   */
+  slack?: string[];
+  /** Перебор случаев: какие односторонние связи работают (см. analyze). */
+  cases?: CaseTry[];
 }
+
+/** Один случай перебора: работают связи work, остальные односторонние (off) не работают. */
+export interface CaseTry {
+  work: string[];
+  off: string[];
+  /** Статус решения в этом случае и неизвестное, оказавшееся отрицательным (если есть). */
+  status: Status;
+  neg: { key: string; val: number } | null;
+  ok: boolean;
+}
+
+/** Допуск знака односторонней связи. */
+export const signTol = (vals: Record<string, number>): number => 1e-7 * Math.max(1, ...Object.values(vals).map(Math.abs));
 
 export function solve(m: Model): Solution {
   const keys = m.unknowns.map((u) => u.key),
@@ -54,7 +74,8 @@ export function solve(m: Model): Solution {
   // ранг < 3 — какое-то перемещение не закреплено (изменяемая система), даже если связей больше трёх.
   // (Прототип ставил «неопределима» при любом n > 3 до проверки ранга — баг №1.)
   // Для составной конструкции независимых уравнений 3 на каждую часть.
-  if (out.rank < n) return { ...out, status: out.rank === 3 * m.parts.count ? 'indeterminate' : 'mechanism' };
+  // Тело-точка даёт два уравнения проекций, остальные части — по три.
+  if (out.rank < n) return { ...out, status: out.rank === eqCount(m) ? 'indeterminate' : 'mechanism' };
 
   const used = new Set<string>(),
     vals: Record<string, number> = {};
@@ -103,5 +124,9 @@ export function solve(m: Model): Solution {
   const best = pickCheck(m.cands, used);
   if (best) out.check = { e: best, r: residual(best, vals) };
   out.status = 'ok';
+  // Касание может только давить, нить — только тянуть.
+  const tol = signTol(vals);
+  const slack = oneSidedKeys(m).filter((k) => vals[k] < -tol);
+  if (slack.length) return { ...out, status: 'noequilibrium', slack };
   return out;
 }

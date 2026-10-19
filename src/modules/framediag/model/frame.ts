@@ -16,7 +16,7 @@ import { dirOf } from '../../../shared/format';
 import { polyAdd, polyDeriv, polyEval, rootsInside, type Poly } from '../../../shared/poly';
 import type { Analysis } from '../../frames/analyze';
 import { loadAngle } from '../../frames/model/constants';
-import { distGeom, pathNodes, resolve, type Geom, type Pt } from '../../frames/model/geometry';
+import { distGeom, hasBodies, pathNodes, resolve, type Geom, type Pt } from '../../frames/model/geometry';
 import type { DistItem, Seg, Structure } from '../../frames/model/types';
 import type { Action } from '../../frames/solver/model';
 import { coupleContribution, distBehindContribution, distOwnContribution, forceContribution, frameOf, type Contribution } from '../../bending/model/forces';
@@ -87,7 +87,7 @@ export interface FrameDiag {
   scaleM: number;
 }
 
-export type FrameResult = { ok: true; frame: FrameDiag } | { ok: false; why: 'empty' | 'status' | 'baddist' };
+export type FrameResult = { ok: true; frame: FrameDiag } | { ok: false; why: 'empty' | 'status' | 'baddist' | 'bodies' };
 
 
 /** Узлы поддерева с корнем id (включая его). */
@@ -115,6 +115,7 @@ export function canonical(A: Pt, B: Pt): boolean {
 export function analyzeFrame(s: Structure, a: Analysis): FrameResult {
   const { model: m, solution: sol } = a;
   if (!s.segs.length) return { ok: false, why: 'empty' };
+  if (hasBodies(s)) return { ok: false, why: 'bodies' };
   if (sol.status !== 'ok') return { ok: false, why: 'status' };
   if (m.badDists.length) return { ok: false, why: 'baddist' };
   const { g, items } = resolve(s);

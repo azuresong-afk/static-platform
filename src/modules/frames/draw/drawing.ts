@@ -396,6 +396,43 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
     }
     o.push(`<circle cx="${r1(hx)}" cy="${r1(hy)}" r="6.5" class="hinge ihinge" stroke-width="2"><title>Внутренний шарнир</title></circle>`);
   });
+  // Отдельные тела и связи между ними (в одной раме ничего не добавляется).
+  const links = resolve(s).structure.links ?? [];
+  const bad = new Set(m.badLinks.map((x) => x.link.id));
+  for (const id of Object.values(m.parts.points)) {
+    const [px, py] = sp(id);
+    o.push(`<circle cx="${r1(px)}" cy="${r1(py)}" r="7" class="bodypt"><title>Тело-точка</title></circle>`);
+  }
+  for (const l of links) {
+    if (l.type === 'thread') {
+      const chain = [l.a, ...(l.via ?? []), l.b].map(sp);
+      o.push(`<polyline points="${chain.map(([x, y]) => r1(x) + ',' + r1(y)).join(' ')}" class="${bad.has(l.id) ? 'badlink' : 'thread'}"><title>Нить</title></polyline>`);
+      for (const [x, y] of chain.slice(1, -1)) o.push(`<circle cx="${r1(x)}" cy="${r1(y)}" r="9" class="pulley"><title>Блок</title></circle><circle cx="${r1(x)}" cy="${r1(y)}" r="2.2" class="bodypt"/>`);
+      continue;
+    }
+    if (l.type === 'hinge') {
+      const [hx, hy] = sp(l.b);
+      o.push(`<circle cx="${r1(hx)}" cy="${r1(hy)}" r="6.5" class="hinge ihinge" stroke-width="2"><title>Шарнир между телами</title></circle>`);
+      continue;
+    }
+    // Касание: линия касательной плоскости, штриховка — со стороны тела точки a (оно давит на тело точки b).
+    // У тела-точки точки касания могут не совпадать: знак касания — посередине, точки соединены пунктиром.
+    const [bx0, by0] = sp(l.b),
+      [ax0, ay0] = sp(l.a);
+    const apart = Math.hypot(bx0 - ax0, by0 - ay0) > 0.5;
+    if (apart) o.push(`<line x1="${r1(ax0)}" y1="${r1(ay0)}" x2="${r1(bx0)}" y2="${r1(by0)}" class="angref"/>`);
+    const [px, py] = apart ? [(ax0 + bx0) / 2, (ay0 + by0) / 2] : [bx0, by0];
+    const t = (l.angle * Math.PI) / 180,
+      n = [Math.cos(t), -Math.sin(t)],
+      u = [Math.sin(t), Math.cos(t)];
+    let g = `<line x1="${r1(px - u[0] * 20)}" y1="${r1(py - u[1] * 20)}" x2="${r1(px + u[0] * 20)}" y2="${r1(py + u[1] * 20)}" class="${bad.has(l.id) ? 'badlink' : 'contact'}"/>`;
+    for (let k = -16; k <= 16; k += l.f > 0 ? 5 : 8) {
+      const x0 = px + u[0] * k,
+        y0 = py + u[1] * k;
+      g += `<line x1="${r1(x0)}" y1="${r1(y0)}" x2="${r1(x0 - n[0] * 7 - u[0] * 4)}" y2="${r1(y0 - n[1] * 7 - u[1] * 4)}" class="hatch"/>`;
+    }
+    o.push(`<g class="icontact">${g}<title>${l.f > 0 ? `Касание с трением, f = ${fmt(l.f)}` : 'Гладкое касание'}</title></g>`);
+  }
   // нагрузки
   const loadObj = (id: string): Action | undefined => [...m.knowns, ...m.unkLoads].find((a) => a.itemId === id);
   const angleMark = (px: number, py: number, it: PointItem & { type: 'force' }) => {
@@ -486,6 +523,34 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
         o.push(forceArrow(px, py, ang, side, 'rc', false, lab, 't-rc', u.L === 'X' ? 60 : 72, 7));
       }
     }
+    // Силы связей между телами: давление и трение — на тело точки касания b, натяжение — на концы нити.
+    for (const l of m.links) {
+      if (l.link.type === 'contact') {
+        const [px, py] = sp(l.link.b);
+        for (const u of l.list) {
+          const v = solved ? sol.vals[u.key] : null,
+            lab = ssym(u, v != null ? ` = ${fmt(Math.abs(v))}` : '');
+          const t = (u.angle * Math.PI) / 180;
+          o.push(forceArrow(px, py, u.angle + (v != null && v < 0 ? 180 : 0), [-Math.cos(t), Math.sin(t)], 'rc', false, lab, 't-rc', u.L === 'N' ? 64 : 52, 7));
+        }
+        continue;
+      }
+      if (l.link.type !== 'thread') continue;
+      const T = l.list[0],
+        v = solved ? sol.vals[T.key] : null,
+        lab = ssym(T, v != null ? ` = ${fmt(Math.abs(v))}` : '');
+      const chain = [l.link.a, ...(l.link.via ?? []), l.link.b];
+      for (const [at, to] of [
+        [chain[0], chain[1]],
+        [chain[chain.length - 1], chain[chain.length - 2]],
+      ]) {
+        const [px, py] = sp(at),
+          [qx, qy] = sp(to);
+        const ang = (Math.atan2(py - qy, qx - px) * 180) / Math.PI,
+          d = Math.hypot(qx - px, qy - py) || 1;
+        o.push(forceArrow(px, py, ang + (v != null && v < 0 ? 180 : 0), [(qx - px) / d, (qy - py) / d], 'rc', false, lab, 't-rc', Math.min(60, d * 0.45), 7));
+      }
+    }
   }
   // имена точек — в самом свободном из восьми направлений
   const occ: Record<string, number[][]> = {};
@@ -526,7 +591,28 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
     const l = Math.hypot(x, y);
     return [x / l, y / l];
   });
+  // Связи занимают направления у своих точек: касательная плоскость, ветви нити.
+  for (const l of links) {
+    if (l.type === 'contact') {
+      const t = (l.angle * Math.PI) / 180;
+      for (const id of [l.a, l.b]) occ[id]?.push([Math.sin(t), Math.cos(t)], [-Math.sin(t), -Math.cos(t)], [-Math.cos(t), Math.sin(t)]);
+      continue;
+    }
+    if (l.type === 'hinge') continue;
+    const chain = [l.a, ...(l.via ?? []), l.b];
+    chain.forEach((id, i) => {
+      for (const j of [i - 1, i + 1]) {
+        if (j < 0 || j >= chain.length) continue;
+        const [x0, y0] = G.pos[id],
+          [x1, y1] = G.pos[chain[j]];
+        occ[id]?.push([x1 - x0, -(y1 - y0)]);
+      }
+    });
+  }
+  // Совпадающие точки разных тел: имя следующей — не там, где уже стоит имя предыдущей.
+  const labelled: { x: number; y: number; d: number[] }[] = [];
   for (const p of m.pts) {
+    for (const q of labelled) if (Math.abs(q.x - p.x) < 1e-9 && Math.abs(q.y - p.y) < 1e-9) occ[p.id].push(q.d, q.d, q.d);
     let best = cand[0],
       bs = -2;
     cand.forEach((c, i) => {
@@ -540,6 +626,7 @@ export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawO
         best = c;
       }
     });
+    labelled.push({ x: p.x, y: p.y, d: best });
     const lx = X(p.x) + best[0] * 24,
       ly = Y(p.y) + best[1] * 24 + 6,
       anc = best[0] < -0.3 ? 'end' : best[0] > 0.3 ? 'start' : 'middle';

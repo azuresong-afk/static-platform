@@ -293,6 +293,189 @@ function Hinges({ model }: { model: Model }) {
   );
 }
 
+/** Выбор точки для тела или связи. */
+function PointSelect({ value, label, g, data, onChange, skip = [] }: { value: string; label: string; g: Geom; data: Record<string, string>; onChange: (id: string) => void; skip?: string[] }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} {...data} onChange={(e) => onChange(e.target.value)}>
+        {g.order
+          .filter((id) => id === value || !skip.includes(id))
+          .map((id) => (
+            <option key={id} value={id}>
+              {nodeLabel(g, id)}
+            </option>
+          ))}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * Отдельные тела и связи между ними: тело ставится от точки другого тела со смещением (0 — касается её),
+ * касание (гладкое или с трением) и нить, в том числе через блоки.
+ */
+function Bodies({ model }: { model: Model }) {
+  const [st, store] = useStore();
+  const g = model.g;
+  const [from, setFrom] = useState('');
+  const [dx, setDx] = useState('0');
+  const [dy, setDy] = useState('0');
+  const fromId = g.order.includes(from) ? from : g.order[g.order.length - 1];
+  const placed = st.s.nodes.filter((n) => n.place);
+  const links = st.s.links ?? [];
+  const bodies = new Set(g.order.map((id) => g.body[id])).size;
+  const end = (k: string) => () => store.endSession(k);
+  return (
+    <div data-port-only="" id="bodies">
+      <div className="sub">
+        Отдельные тела и связи между ними {bodies > 1 && <span className="lentotal">тел: {bodies}</span>}
+      </div>
+      {placed.map((n) => (
+        <div className="bodyrow" key={n.id} data-body={n.id}>
+          <span className="segname">тело {g.name[n.id]}</span>
+          <label className="field">
+            <span>от точки {g.name[n.place!.from]}: Δx</span>
+            <NumField value={n.place!.dx} unit="м" data={{ 'data-bodydx': n.id }} onValue={(v) => store.typeBodyPlace(n.id, v, n.place!.dy)} onBlur={end('place:' + n.id)} />
+          </label>
+          <label className="field">
+            <span>Δy</span>
+            <NumField value={n.place!.dy} unit="м" data={{ 'data-bodydy': n.id }} onValue={(v) => store.typeBodyPlace(n.id, n.place!.dx, v)} onBlur={end('place:' + n.id)} />
+          </label>
+          <button type="button" className="del" data-delbody={n.id} title="Убрать тело с его участками, опорами, нагрузками и связями" onClick={() => store.removeBody(n.id)}>
+            ×
+          </button>
+        </div>
+      ))}
+      <div className="addseg">
+        <div className="asrow bodyadd">
+          <PointSelect value={fromId} label="Новое тело от точки" g={g} data={{ id: 'bodyFrom' }} onChange={setFrom} />
+          <label className="field">
+            <span>Δx, м</span>
+            <div className="inp">
+              <input id="bodyDx" type="text" inputMode="decimal" value={dx} onChange={(e) => setDx(e.target.value)} />
+            </div>
+          </label>
+          <label className="field">
+            <span>Δy, м</span>
+            <div className="inp">
+              <input id="bodyDy" type="text" inputMode="decimal" value={dy} onChange={(e) => setDy(e.target.value)} />
+            </div>
+          </label>
+        </div>
+        <button type="button" className="addbtn" id="bodyGo" onClick={() => store.addBody(fromId, parseNum(dx) || 0, parseNum(dy) || 0)}>
+          Добавить тело
+        </button>
+        <p className="hint">
+          Новое тело — точка; участки из неё строят тело, без участков это тело-точка. Смещение 0 — тело касается выбранной точки: касание ставится сразу.
+        </p>
+      </div>
+      {links.map((l) => {
+        const head = `${l.type === 'contact' ? 'Касание' : l.type === 'hinge' ? 'Шарнир между телами' : 'Нить'} ${g.name[l.a] ?? '?'}–${g.name[l.b] ?? '?'}`;
+        const bad = model.badLinks.find((x) => x.link.id === l.id);
+        return (
+          <div className="item linkcard" key={l.id} data-link={l.id}>
+            <div className="item-head">
+              <span>{head}</span>
+              <button type="button" className="del" data-dellink={l.id} title="Убрать связь" onClick={() => store.removeLink(l.id)}>
+                ×
+              </button>
+            </div>
+            <div className="fields">
+              <PointSelect value={l.a} label={l.type === 'contact' ? 'Опора — точка тела' : l.type === 'hinge' ? 'Точка первого тела' : 'Начало нити'} g={g} data={{ 'data-linka': l.id }} onChange={(id) => store.setLink(l.id, { a: id })} />
+              <PointSelect value={l.b} label={l.type === 'contact' ? 'Опирается точка' : l.type === 'hinge' ? 'Точка второго тела' : 'Конец нити'} g={g} data={{ 'data-linkb': l.id }} onChange={(id) => store.setLink(l.id, { b: id })} />
+              {l.type === 'contact' ? (
+                <>
+                  <label className="field">
+                    <span>Нормаль: давление на тело второй точки</span>
+                    <NumField value={l.angle} unit="°" data={{ 'data-linkang': l.id }} onValue={(v) => store.typeLinkField(l.id, { angle: normAng(v) })} onBlur={end('link:' + l.id + ':angle')} />
+                  </label>
+                  <label className="field">
+                    <span>Коэффициент трения f (0 — гладко)</span>
+                    <NumField value={l.f} data={{ 'data-linkf': l.id }} onValue={(v) => (v < 0 ? false : store.typeLinkField(l.id, { f: v }))} onBlur={end('link:' + l.id + ':f')} />
+                  </label>
+                  <div className="field wide">
+                    <span>Нормаль</span>
+                    <div className="quick">
+                      {[
+                        [90, '↑'],
+                        [270, '↓'],
+                        [0, '→'],
+                        [180, '←'],
+                      ].map(([a, t]) => (
+                        <button key={a} type="button" data-linknormal={a} aria-pressed={Math.abs(l.angle - +a) < 1e-9 ? 'true' : 'false'} onClick={() => store.setLink(l.id, { angle: +a })}>
+                          {t} {a}°
+                        </button>
+                      ))}
+                      {g.segOrder
+                        .filter((q) => q.dir === 'a' && [q.a, q.b].some((x) => x === l.a || x === l.b))
+                        .flatMap((q) =>
+                          [90, -90].map((d) => {
+                            const a = Math.round(normAng(segAngle(q) + d) * 1e9) / 1e9;
+                            return (
+                              <button key={q.id + d} type="button" data-linknormal={a} aria-pressed={Math.abs(l.angle - a) < 1e-6 ? 'true' : 'false'} onClick={() => store.setLink(l.id, { angle: a })}>
+                                ⊥ {g.name[q.a]}–{g.name[q.b]}: {fmt(a, 2)}°
+                              </button>
+                            );
+                          }),
+                        )}
+                    </div>
+                  </div>
+                </>
+              ) : l.type === 'hinge' ? null : (
+                <div className="field wide">
+                  <span>Блоки, через которые перекинута нить</span>
+                  <div className="targets">
+                    {(l.via ?? []).map((id, i) => (
+                      <span className="chip" key={id + i}>
+                        <span className="v">{g.name[id]}</span>
+                        <button type="button" className="del" data-delvia={id} title="Убрать блок" onClick={() => store.setLink(l.id, { via: (l.via ?? []).filter((_, j) => j !== i) })}>
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <select
+                      value=""
+                      data-addvia={l.id}
+                      aria-label="Добавить блок"
+                      onChange={(e) => e.target.value && store.setLink(l.id, { via: [...(l.via ?? []), e.target.value] })}
+                    >
+                      <option value="">+ блок в точке…</option>
+                      {g.order
+                        .filter((id) => id !== l.a && id !== l.b && !(l.via ?? []).includes(id))
+                        .map((id) => (
+                          <option key={id} value={id}>
+                            {nodeLabel(g, id)}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+            {bad && (
+              <p className="msg">
+                {bad.why === 'apart' ? 'Точки не совпадают — касание не учитывается.' : bad.why === 'same' ? 'Обе точки принадлежат одному телу — связь не учитывается.' : 'Соседние точки нити совпадают — нить не учитывается.'}
+              </p>
+            )}
+          </div>
+        );
+      })}
+      <div className="palette">
+        <button type="button" className="pal" data-addlink="contact" onClick={() => store.addLink('contact')}>
+          Касание
+        </button>
+        <button type="button" className="pal" data-addlink="thread" onClick={() => store.addLink('thread')}>
+          Нить
+        </button>
+        <button type="button" className="pal" data-addlink="hinge" title="Шарнир между телами в совпадающих точках: замыкает контур" onClick={() => store.addLink('hinge')}>
+          Шарнир
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Каток на наклонном участке: реакция перпендикулярно участку — в одну или другую сторону. */
 function NormalButtons({ it, model }: { it: Item & { type: 'roller' | 'rough' }; model: Model }) {
   const [, store] = useStore();
@@ -627,6 +810,7 @@ export function Configurator({ model }: { model: Model }) {
           {st.msg.text}
         </p>
         <Hinges model={model} />
+        <Bodies model={model} />
       </div>
       <div hidden={!show2}>
         <div className="sub">Опоры</div>

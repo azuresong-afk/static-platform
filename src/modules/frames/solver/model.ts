@@ -4,8 +4,9 @@
  */
 import { OPPLOAD, REFS, loadAngle } from '../model/constants';
 import { dirOf, type RefAxis } from '../../../shared/format';
+import { normAng } from '../model/constants';
 import { distGeom, pathNodes, partsOf, resolve, roman, type Geom, type Parts, type PointItem, type Pt } from '../model/geometry';
-import type { DistItem, ForceItem, LoadDir, MomentItem, Structure, SupportItem, SupportType } from '../model/types';
+import type { DistItem, ForceItem, Link, LoadDir, MomentItem, Structure, SupportItem, SupportType } from '../model/types';
 import { makeEq, type Eq } from './equations';
 
 /** Обозначение: буква и индекс (X с индексом A, F с индексом 2…). */
@@ -45,6 +46,8 @@ export interface Action extends Sym {
    * slide — соединение скользящей заделкой (сила по нормали к направляющей и момент), иначе — шарнир (X, Y).
    */
   hinge?: { node: string; name: string; on: number; from: number; slide?: boolean };
+  /** Сила связи между телами (касание, нить): её силы на все тела — в Model.linkActs, link — номер в Model.links. */
+  link?: { index: number; kind: 'contact' | 'thread' | 'hinge' };
 }
 export type Unknown = Action & { key: string };
 export type Known = Action & { val: number };
@@ -103,6 +106,32 @@ export interface DistPart {
 }
 
 
+/** Связь между телами в расчёте. */
+export interface LinkInfo {
+  link: Link;
+  /** Имена точек a и b и блоков. */
+  A: string;
+  B: string;
+  via: string[];
+  /** Неизвестные: у касания — давление N и сила трения Fтр (если f > 0), у нити — натяжение T. */
+  list: Unknown[];
+  /** Касание: часть точки b (на неё давление N направлено под углом нормали) и часть точки a. */
+  on: number;
+  from: number;
+  /** Части, на которые действует связь (у нити — части точек a, блоков и b). */
+  parts: number[];
+  /** Коэффициент трения касания (у нити 0). */
+  f: number;
+  /** Касание тела-точки, точки которого не совпадают (положение тела-точки условно). */
+  apart?: boolean;
+}
+
+/** Связь, которая не учтена: точки касания не совпадают, точки одного тела, участок нити нулевой длины. */
+export interface BadLink {
+  link: Link;
+  why: 'apart' | 'same' | 'zero';
+}
+
 export interface BadDist {
   it: DistItem;
   S: string;
@@ -144,6 +173,12 @@ export interface Model {
   cands: Eq[];
   /** Разбиение на жёсткие части по внутренним шарнирам. */
   parts: Parts;
+  /** Связи между телами (касания и нити) и силы, которыми они действуют на каждую часть. */
+  links: LinkInfo[];
+  linkActs: Action[];
+  badLinks: BadLink[];
+  /** Односторонние связи, принятые неработающими (их силы равны нулю, см. перебор случаев в analyze). */
+  offLinks: Link[];
   /** Имена точек каждой части. */
   partNames: string[][];
   /** Габарит, м. */
@@ -151,8 +186,13 @@ export interface Model {
   h: number;
 }
 
-export function buildModel(s: Structure): Model {
-  const { g, items } = resolve(s);
+export interface ModelOptions {
+  /** Связи (идентификаторы), которые не учитываются: односторонние связи, принятые неработающими. */
+  off?: ReadonlySet<string>;
+}
+
+export function buildModel(s: Structure, opts: ModelOptions = {}): Model {
+  const { g, items, structure } = resolve(s);
   const parts = partsOf(s, g);
   const carrier = (id: string) => parts.nodeParts[id]?.[0] ?? 0;
   const segPartBetween = (u: string, v: string) => {
@@ -370,12 +410,112 @@ export function buildModel(s: Structure): Model {
       }
     }
   }
+  // Связи между телами: касания (давление по нормали и трение вдоль касательной) и нити (натяжение вдоль ветвей).
+  const links: LinkInfo[] = [],
+    linkActs: Action[] = [],
+    badLinks: BadLink[] = [],
+    offLinks: Link[] = [];
+  const nThreads = (structure.links ?? []).filter((l) => l.type === 'thread').length;
+  for (const l of structure.links ?? []) {
+    if (opts.off?.has(l.id)) {
+      offLinks.push(l);
+      continue;
+    }
+    const A = g.name[l.a],
+      B = g.name[l.b];
+    const index = links.length;
+    if (l.type === 'hinge') {
+      const [ax, ay] = g.pos[l.a],
+        [bx, by] = g.pos[l.b];
+      const on = carrier(l.b),
+        from = carrier(l.a);
+      if (Math.hypot(bx - ax, by - ay) > 1e-6 || on === from) {
+        badLinks.push({ link: l, why: on === from ? 'same' : 'apart' });
+        continue;
+      }
+      const list: Unknown[] = [];
+      for (const [L, angle] of [
+        ['X', 0],
+        ['Y', 90],
+      ] as const) {
+        const u: Unknown = { key: mkKey(L + '_' + B), L, S: B, kind: 'f', x: bx, y: by, ...dirOf(angle), angle, s: 0, itemId: 'link:' + l.id, part: on, link: { index, kind: 'hinge' } };
+        unknowns.push(u);
+        list.push(u);
+        linkActs.push(u, { ...u, x: ax, y: ay, ...dirOf(angle + 180), angle: angle + 180, part: from });
+      }
+      links.push({ link: l, A, B, via: [], list, on, from, parts: [on, from], f: 0 });
+      continue;
+    }
+    if (l.type === 'contact') {
+      const [ax, ay] = g.pos[l.a],
+        [bx, by] = g.pos[l.b];
+      const on = carrier(l.b),
+        from = carrier(l.a);
+      if (on === from) {
+        badLinks.push({ link: l, why: 'same' });
+        continue;
+      }
+      // Точки касания должны совпадать; у тела-точки положение условно — там допускаем и несовпадающие.
+      const apart = Math.hypot(bx - ax, by - ay) > 1e-6;
+      if (apart && !(on in parts.points) && !(from in parts.points)) {
+        badLinks.push({ link: l, why: 'apart' });
+        continue;
+      }
+      const f = Math.max(0, +l.f || 0);
+      const list: Unknown[] = [];
+      // Индекс — точка касания; если тело в этой точке касается нескольких тел, — обе точки (N_AB).
+      const SB = (structure.links ?? []).filter((x) => x.type === 'contact' && x.b === l.b).length > 1 ? A + B : B;
+      const add = (L: string, angle: number, extra: Partial<Action> = {}) => {
+        const d = dirOf(angle);
+        const base = L + '_' + SB,
+          key = mkKey(base);
+        const u: Unknown = { key, L, S: SB + key.slice(base.length), kind: 'f', x: bx, y: by, ...d, angle, s: 0, itemId: 'link:' + l.id, part: on, link: { index, kind: 'contact' }, ...extra };
+        const back = (angle + 180) % 360;
+        unknowns.push(u);
+        list.push(u);
+        linkActs.push(u, { ...u, x: ax, y: ay, ...dirOf(back), angle: back, part: from });
+      };
+      const angle = normAng(+l.angle || 0);
+      add('N', angle, l.angleName ? { angleName: l.angleName, userAngle: angle } : {});
+      if (f > 0) add('Fтр', normAng(angle - 90));
+      links.push({ link: l, A, B, via: [], list, on, from, parts: [on, from], f, ...(apart ? { apart } : {}) });
+      continue;
+    }
+    const chain = [l.a, ...(l.via ?? []), l.b];
+    if (chain.some((id, i) => i > 0 && Math.hypot(g.pos[id][0] - g.pos[chain[i - 1]][0], g.pos[id][1] - g.pos[chain[i - 1]][1]) < 1e-9)) {
+      badLinks.push({ link: l, why: 'zero' });
+      continue;
+    }
+    const ps = chain.map(carrier);
+    if (new Set(ps).size < 2) {
+      badLinks.push({ link: l, why: 'same' });
+      continue;
+    }
+    const S = nThreads > 1 ? A + B : '';
+    const key = mkKey('T' + (S ? '_' + S : ''));
+    let T: Unknown | null = null;
+    for (let i = 0; i + 1 < chain.length; i++) {
+      const [x0, y0] = g.pos[chain[i]],
+        [x1, y1] = g.pos[chain[i + 1]];
+      const ang = normAng((Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI),
+        back = normAng(ang + 180);
+      const act: Unknown = { key, L: 'T', S, kind: 'f', x: x0, y: y0, ...dirOf(ang), angle: ang, s: 0, itemId: 'link:' + l.id, part: ps[i], link: { index, kind: 'thread' } };
+      if (!T) T = act;
+      linkActs.push(act, { ...act, x: x1, y: y1, ...dirOf(back), angle: back, part: ps[i + 1] });
+    }
+    unknowns.push(T!);
+    links.push({ link: l, A, B, via: (l.via ?? []).map((id) => g.name[id]), list: [T!], on: ps[ps.length - 1], from: ps[0], parts: [...new Set(ps)], f: 0 });
+  }
   const byKey: Record<string, Unknown> = {};
   unknowns.forEach((u) => (byKey[u.key] = u));
-  const external: Action[] = [...unknowns.filter((u) => !u.hinge), ...knowns];
+  const external: Action[] = [...unknowns.filter((u) => !u.hinge && !u.link), ...knowns];
   const supIds = [...new Set(supports.map((q) => q.it.at))];
+  // Касание тела-точки с несовпадающими точками: силы взаимодействия не на одной прямой, и моменты внешних сил
+  // для всей системы не равны нулю — для неё берём только проекции.
+  const anyApart = links.some((l) => l.apart);
   const wholeEqs = (actions: Action[]) => {
     const mEq = (id: string) => makeEq('m', g.name[id], g.pos[id], actions);
+    if (anyApart) return [makeEq('x', null, null, actions), makeEq('y', null, null, actions)];
     return [
       ...supIds.map(mEq),
       makeEq('x', null, null, actions),
@@ -387,10 +527,16 @@ export function buildModel(s: Structure): Model {
   if (parts.count === 1) cands = wholeEqs(external);
   else {
     cands = [];
+    const linkPts = new Set((structure.links ?? []).flatMap((l) => (l.type === 'thread' ? [l.a, l.b, ...(l.via ?? [])] : [l.a, l.b])));
     for (let p = 0; p < parts.count; p++) {
-      const acts = [...external.filter((a) => a.part === p), ...hingeActs.filter((a) => a.part === p)];
+      const acts = [...external.filter((a) => a.part === p), ...hingeActs.filter((a) => a.part === p), ...linkActs.filter((a) => a.part === p)];
       const nodes = g.order.filter((id) => parts.nodeParts[id].includes(p));
-      const key = nodes.filter((id) => supIds.includes(id) || parts.hinges.includes(id));
+      // Тело-точка: только два уравнения проекций.
+      if (p in parts.points) {
+        cands.push(makeEq('x', null, null, acts, p), makeEq('y', null, null, acts, p));
+        continue;
+      }
+      const key = nodes.filter((id) => supIds.includes(id) || parts.hinges.includes(id) || linkPts.has(id));
       const mEq = (id: string) => makeEq('m', g.name[id], g.pos[id], acts, p);
       cands.push(...key.map(mEq), makeEq('x', null, null, acts, p), makeEq('y', null, null, acts, p), ...nodes.filter((id) => !key.includes(id)).map(mEq));
     }
@@ -399,5 +545,13 @@ export function buildModel(s: Structure): Model {
   const partNames = Array.from({ length: parts.count }, (_, p) => g.order.filter((id) => parts.nodeParts[id].includes(p)).map((id) => g.name[id]));
   const w = Math.max(...pts.map((p) => p.x)),
     h = Math.max(...pts.map((p) => p.y));
-  return { g, pts, unknowns, knowns, supports, dists, badDists, unkLoads, labels, byKey, cands, parts, partNames, w, h };
+  return { g, pts, unknowns, knowns, supports, dists, badDists, unkLoads, labels, byKey, cands, parts, partNames, w, h, links, linkActs, badLinks, offLinks };
 }
+
+/** Сумма независимых уравнений равновесия всех частей. */
+export const eqCount = (m: Model): number => m.parts.dof.reduce((a, b) => a + b, 0);
+
+/** Односторонние неизвестные связей между телами: давление касания и натяжение нити (должны быть ≥ 0). */
+export const oneSidedKeys = (m: Model): string[] => oneSidedLinks(m).map((l) => l.list[0].key);
+/** Односторонние связи между телами: касания и нити (шарнир — двусторонняя связь). */
+export const oneSidedLinks = (m: Model): LinkInfo[] => m.links.filter((l) => l.link.type !== 'hinge');

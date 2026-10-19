@@ -5,12 +5,28 @@
  * - Состояние конструкции всегда хранится после resolve(): элементы на существующих узлах,
  *   углы опор синхронизированы — как прототип, который правит состояние при каждом пересчёте.
  */
-import { addItem, addSeg, addSegXY, removeSeg, setSegAng, setSegDir, setSegLen, splitSeg, type EditResult } from '../model/edit';
+import {
+  addBody,
+  addItem,
+  addLink,
+  addSeg,
+  addSegXY,
+  patchLink,
+  removeBody,
+  removeLink,
+  removeSeg,
+  setBodyPlace,
+  setSegAng,
+  setSegDir,
+  setSegLen,
+  splitSeg,
+  type EditResult,
+} from '../model/edit';
 import { resolve } from '../model/geometry';
 import { createIdGen, type IdGen } from '../../../shared/ids';
 import { loadPreset, PRESET_TITLES, type PresetKey } from '../model/presets';
 import { parseProject, projectFileName, remapIds, serializeProject } from '../model/project';
-import type { Item, ItemType, RefDir, SegDir, Structure } from '../model/types';
+import type { Item, ItemType, Link, RefDir, SegDir, Structure } from '../model/types';
 import type { View } from '../draw/drawing';
 import { clamp } from '../../../shared/format';
 import { History } from '../../../shared/history';
@@ -43,6 +59,7 @@ interface Snap {
   nodes: Structure['nodes'];
   segs: Structure['segs'];
   items: Structure['items'];
+  links?: Structure['links'];
   nt: string[];
   preset: PresetValue;
   title: string;
@@ -95,7 +112,7 @@ export class Store {
   /* ---------- история ---------- */
   private snap(): string {
     const { s, nt, preset, title } = this.st;
-    const o: Snap = { nodes: s.nodes, segs: s.segs, items: s.items, nt, preset, title };
+    const o: Snap = { nodes: s.nodes, segs: s.segs, items: s.items, ...(s.links ? { links: s.links } : {}), nt, preset, title };
     return JSON.stringify(o);
   }
   /** Запомнить текущее состояние перед изменением; схема становится «своей». */
@@ -111,7 +128,7 @@ export class Store {
   endSession = (key: string) => this.hist.endSession(key);
   private restore(str: string) {
     const o = JSON.parse(str) as Snap;
-    this.set({ s: { nodes: o.nodes, segs: o.segs, items: o.items }, nt: o.nt, preset: o.preset, title: o.title });
+    this.set({ s: { nodes: o.nodes, segs: o.segs, items: o.items, ...(o.links ? { links: o.links } : {}) }, nt: o.nt, preset: o.preset, title: o.title });
   }
   undo = () => {
     const prev = this.hist.undo(this.snap());
@@ -236,6 +253,29 @@ export class Store {
     this.commit();
     const nodes = this.st.s.nodes.map((x) => (x.id !== nodeId ? x : angle == null ? { id: x.id } : { id: x.id, slide: angle }));
     this.set({ s: { ...this.st.s, nodes } });
+  };
+
+  /* ---------- отдельные тела и связи между ними ---------- */
+  /** Новое тело от точки from со смещением (dx, dy); при нулевом смещении сразу ставится касание. */
+  addBody = (from: string, dx: number, dy: number) => this.applyEdit(addBody(this.st.s, from, dx, dy, this.ids));
+  removeBody = (root: string) => this.applyEdit(removeBody(this.st.s, root));
+  /** Смещение тела из поля: правки поля — одна запись истории. */
+  typeBodyPlace = (root: string, dx: number, dy: number) => {
+    const r = setBodyPlace(this.st.s, root, dx, dy);
+    if (!r.ok) return;
+    this.touch('place:' + root);
+    this.set({ s: r.s });
+  };
+  addLink = (type: Link['type']) => this.applyEdit(addLink(this.st.s, type, this.ids));
+  removeLink = (id: string) => this.applyEdit(removeLink(this.st.s, id));
+  /** Точки, блоки связи (выпадающие списки) — отдельная запись истории. */
+  setLink = (id: string, patch: Partial<Link>) => this.applyEdit(patchLink(this.st.s, id, patch));
+  /** Числовое поле связи (угол нормали, коэффициент трения): правки поля — одна запись истории. */
+  typeLinkField = (id: string, patch: Partial<Link>) => {
+    const r = patchLink(this.st.s, id, patch);
+    if (!r.ok) return;
+    this.touch('link:' + id + ':' + Object.keys(patch).join());
+    this.set({ s: r.s });
   };
 
   /* ---------- элементы ---------- */

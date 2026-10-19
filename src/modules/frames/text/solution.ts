@@ -9,12 +9,13 @@ import { acuteExpr, fmt, trigFactor, trigText } from '../../../shared/format';
 import type { ForceItem } from '../model/types';
 import { checkPasses } from '../solver/check';
 import type { Eq, Term } from '../solver/equations';
-import type { Action, Model, Unknown } from '../solver/model';
+import { eqCount, oneSidedLinks, type Action, type Model, type Unknown } from '../solver/model';
 import type { Solution } from '../solver/solve';
 import { b, join, sub, sup, sym, v, type AnswerRow, type Block, type Doc, type Inline } from '../../../shared/doc';
 import { roman } from '../model/geometry';
 import { STATUS, STATUS_TONE, forceDirText, loadDirText } from './labels';
 import { frictionDoc } from './friction';
+import { badLinkText, linkNote, linkText, manyBodies } from './links';
 
 export interface SolutionOptions {
   /** Искомые, отмеченные как промежуточные («что найти» снято). */
@@ -189,8 +190,12 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
 
   // 1а. Составная конструкция: расчленение по шарнирам
   const comp = m.parts.count > 1,
-    NP = m.parts.count;
-  if (comp) {
+    NP = m.parts.count,
+    bodies = manyBodies(m);
+  if (comp && bodies) step('Расчленяем систему на тела', bodiesBlocks(m, ex));
+  // Связь не учтена, а тело одно: причину показываем в первом шаге.
+  else if (m.badLinks.length) steps[steps.length - 1].blocks.push(...badLinkText(m).map((c): Block => ({ k: 'p', cls: 's-bad', c })));
+  if (comp && !bodies) {
     const hn = m.parts.hinges.filter((h) => m.parts.slides[h] == null).map((h) => m.g.name[h]),
       sn = m.parts.hinges.filter((h) => m.parts.slides[h] != null).map((h) => m.g.name[h]);
     const joints: Inline[] = [
@@ -392,11 +397,23 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   }
 
   // 3. Определимость
-  const st = STATUS[sol.status];
-  const nEq = 3 * NP,
+  const st = STATUS[sol.slack || sol.cases ? 'ok' : sol.status];
+  const nEq = eqCount(m),
     nHinge = m.unknowns.filter((u) => u.hinge).length;
+  const nOff = m.offLinks.length;
   const det: Block[] = [
-    comp
+    comp && bodies
+      ? {
+          k: 'p',
+          c: [
+            'Неизвестных: ',
+            b(String(sol.n + nOff)),
+            ` (из них сил в связях между телами и частями: ${nHinge + m.links.reduce((a, l) => a + l.list.length, 0) + nOff}). Для каждого из ${NP} тел можно составить три независимых уравнения равновесия${Object.keys(m.parts.points).length ? ', для тела-точки — два' : ''}, всего `,
+            b(String(nEq)),
+            '.',
+          ],
+        }
+      : comp
       ? {
           k: 'p',
           c: [
@@ -440,7 +457,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
     det.push(
       explain(
         comp
-          ? `Число неизвестных равно числу независимых уравнений (${nEq}), и система уравнений имеет единственное решение (её ранг равен ${nEq}). Значит, все неизвестные, включая силы в шарнирах, находятся из уравнений статики.`
+          ? `Число неизвестных равно числу независимых уравнений (${nEq}), и система уравнений имеет единственное решение (её ранг равен ${nEq}). Значит, все неизвестные, включая ${bodies ? 'силы взаимодействия тел' : 'силы в шарнирах'}, находятся из уравнений статики.`
           : 'Число неизвестных равно числу независимых уравнений равновесия, и связи расположены так, что система уравнений имеет единственное решение (ранг системы равен трём). Значит, все неизвестные находятся из уравнений статики.',
       ),
     );
@@ -450,7 +467,12 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
         `Из ${comp ? nEq : 'трёх'} уравнений ${sol.n} уйдут на поиск неизвестных, остальные должны выполняться сами собой — это и есть условие, что нагрузка допускает равновесие.`,
       ),
     );
+  if (sol.cases) det.splice(1, 1, { k: 'badge', tone: 'warn', text: `Неизвестных больше на ${nOff || sol.cases[0].off.length}, но связи односторонние` });
   step('Проверяем статическую определимость', det);
+  if (sol.cases) {
+    step('Какие односторонние связи работают', casesBlocks(m, sol, ex));
+    if (!sol.cases.some((c) => c.ok)) return { steps };
+  }
   if (sol.status === 'indeterminate' || sol.status === 'mechanism') return { steps };
 
   // 4. Уравнения
@@ -510,7 +532,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   step('Составляем и решаем уравнения равновесия', eqs);
 
   // 5. Проверка
-  if (sol.status === 'noequilibrium') {
+  if (sol.status === 'noequilibrium' && !sol.slack) {
     const be = sol.badEq as Eq;
     const blocks: Block[] = [
       { k: 'eq', lines: [{ c: eqSym(be) }, { num: true, c: [...lhsNum(be, sol.vals, m), ` = ${fmt(sol.badR as number)} ≠ 0`] }] },
@@ -549,6 +571,28 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
     step('Проверка', blocks);
   }
 
+  // 5а. Односторонние связи между телами: давления и натяжения не отрицательны.
+  if (oneSidedLinks(m).length) {
+    const blocks: Block[] = [{ k: 'ul', items: oneSidedLinks(m).map((l) => signLine(m, l.list[0], sol.vals[l.list[0].key])) }];
+    if (sol.slack) {
+      blocks.push(
+        { k: 'badge', tone: 'bad', text: 'Равновесие невозможно' },
+        {
+          k: 'p',
+          c: [
+            'Уравнения равновесия выполняются только при ',
+            ...join(sol.slack.map((k) => [sym(m.byKey[k]), ' < 0']), ', '),
+            ', а такая связь не может тянуть (касание) или сжиматься (нить): тела разойдутся, нить провиснет. Равновесие при этой нагрузке невозможно.',
+          ],
+        },
+      );
+      step('Проверяем односторонние связи', blocks);
+      return { steps };
+    }
+    if (ex) blocks.push(explain('Касание может только давить, а нить — только тянуть. Все давления и натяжения получились не отрицательными — связи работают так, как предполагалось на схеме.'));
+    step('Проверяем односторонние связи', blocks);
+  }
+
   // 6. Ответ
   const anyT = m.unknowns.some((u) => !notTarget.has(u.key));
   const rows: AnswerRow[] = [];
@@ -561,11 +605,18 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       anyNeg = true;
       note = u.kind === 'm' ? (u.s > 0 ? 'направлен по часовой стрелке' : 'направлен против часовой стрелки') : 'направлена противоположно принятой на схеме';
     }
-    if (u.hinge)
+    if (u.hinge) {
+      const w = bodies ? 'тело' : 'часть';
       note =
         (u.hinge.slide
-          ? `скользящая заделка ${u.hinge.name}: ${u.kind === 'm' ? 'момент' : 'сила'} на часть ${roman(u.hinge.on)}, на часть ${roman(u.hinge.from)} — в обратную сторону`
-          : `шарнир ${u.hinge.name}: сила на часть ${roman(u.hinge.on)}, на часть ${roman(u.hinge.from)} — в обратную сторону`) + (note ? '; ' + note : '');
+          ? `скользящая заделка ${u.hinge.name}: ${u.kind === 'm' ? 'момент' : 'сила'} на ${w} ${roman(u.hinge.on)}, на ${w} ${roman(u.hinge.from)} — в обратную сторону`
+          : `шарнир ${u.hinge.name}: сила на ${w} ${roman(u.hinge.on)}, на ${w} ${roman(u.hinge.from)} — в обратную сторону`) + (note ? '; ' + note : '');
+    }
+    if (u.link) {
+      // Знак давления и натяжения поясняет сама подпись связи; у силы трения и сил в шарнире — обычное «противоположно».
+      const own = u.link.kind === 'hinge' || u.key !== m.links[u.link.index].list[0].key;
+      note = linkNote(m, m.links[u.link.index], u.key, val) + (own && note ? '; ' + note : '');
+    }
     if (aux) note = (note ? note + '; ' : '') + 'промежуточная';
     rows.push({ kind: aux ? 'aux' : 'main', val: [sym(u), ` = ${fmt(val)} ${unitOf(u)}`], note });
     if (u.L === 'Y' && (u.support === 'pin' || u.support === 'fixed')) {
@@ -580,6 +631,8 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       }
     }
   }
+  for (const l of m.offLinks)
+    rows.push({ kind: 'main', val: [l.type === 'contact' ? 'касание ' : 'нить ', v(m.g.name[l.a]), '–', v(m.g.name[l.b]), ': сила равна 0'], note: 'связь не работает' });
   const ans: Block[] = [{ k: 'answer', rows }];
   if (ex && anyNeg)
     ans.push(explain('Знак «−» означает, что величина направлена противоположно направлению, принятому на расчётной схеме; модуль при этом тот же.'));
@@ -599,7 +652,7 @@ function whyEquation(m: Model, e: Eq, key: string, before: Record<string, number
     other: Unknown[] = [],
     internal: Unknown[] = [];
   const comp = m.parts.count > 1;
-  const actsOn = (u: Unknown, p: number) => (u.hinge ? u.hinge.on === p || u.hinge.from === p : u.part === p);
+  const actsOn = (u: Unknown, p: number) => (u.link ? m.links[u.link.index].parts.includes(p) : u.hinge ? u.hinge.on === p || u.hinge.from === p : u.part === p);
   for (const u of m.unknowns) {
     if (u.key === key) continue;
     if (u.key in before) {
@@ -610,7 +663,7 @@ function whyEquation(m: Model, e: Eq, key: string, before: Record<string, number
       other.push(u);
       continue;
     }
-    if (comp && e.part == null && u.hinge) {
+    if (comp && e.part == null && (u.hinge || u.link)) {
       internal.push(u);
       continue;
     }
@@ -620,11 +673,14 @@ function whyEquation(m: Model, e: Eq, key: string, before: Record<string, number
     else perp.push(u);
   }
   const r: Inline[] = [];
-  const whom = !comp ? '' : e.part != null ? ` для части ${roman(e.part)}` : ' для всей конструкции';
+  const bodies = manyBodies(m);
+  const whom = !comp ? '' : e.part != null ? ` для ${bodies ? 'тела' : 'части'} ${roman(e.part)}` : bodies ? ' для всей системы' : ' для всей конструкции';
   if (e.type === 'm') r.push(`Уравнение моментов${whom} относительно точки `, v(e.P || ''), '. ');
   else r.push(`Уравнение проекций${whom} на ось `, v(e.type), '. ');
   const plural = (us: Unknown[], one: string, many: string) => (us.length > 1 ? many : one);
-  if (other.length)
+  if (other.length && bodies)
+    r.push(...symList(other), plural(other, ' действует на другое тело и сюда не входит. ', ' действуют на другие тела и сюда не входят. '));
+  else if (other.length)
     r.push(
       ...symList(other),
       m.parts.count === 2
@@ -632,7 +688,7 @@ function whyEquation(m: Model, e: Eq, key: string, before: Record<string, number
         : plural(other, ' действует на другую часть и сюда не входит. ', ' действуют на другие части и сюда не входят. '),
     );
   if (internal.length)
-    r.push(...symList(internal), ' — внутренние силы в шарнирах: для всей конструкции они взаимно уничтожаются. ');
+    r.push(...symList(internal), bodies ? ' — силы взаимодействия тел: для всей системы они взаимно уничтожаются. ' : ' — внутренние силы в шарнирах: для всей конструкции они взаимно уничтожаются. ');
   if (through.length)
     r.push(
       ...symList(through),
@@ -729,3 +785,94 @@ function armExplain(m: Model, e: Eq): Block | null {
 
 /** Заголовок статуса для штампа и подсказок. */
 export const statusText = (s: Solution['status']): string => STATUS[s][0];
+
+/** Шаг «Расчленяем систему на тела»: тела, шарниры между частями, касания и нити. */
+function bodiesBlocks(m: Model, ex: boolean): Block[] {
+  const explain = (...c: Inline[]): Block => ({ k: 'p', cls: 'explain', c });
+  const blocks: Block[] = [
+    { k: 'p', c: ['Рассматриваем каждое тело отдельно, а действие других тел заменяем силами:'] },
+    {
+      k: 'ul',
+      items: m.partNames.map((names, p) => [`Тело ${roman(p)}: `, ...(p in m.parts.points ? ['точка ', v(names[0]), ' (тело-точка)'] : ['точки ', ...join(names.map((n) => [v(n)]), ', ')])]),
+    },
+  ];
+  for (const h of m.parts.hinges) {
+    const us = m.unknowns.filter((u) => u.hinge?.node === h);
+    const ons = [...new Set(us.map((u) => u.hinge!.on))];
+    const from = us[0]?.hinge?.from ?? 0;
+    const sl = m.parts.slides[h];
+    for (const on of ons) {
+      const pair = us.filter((u) => u.hinge!.on === on);
+      blocks.push({
+        k: 'p',
+        c:
+          sl != null
+            ? ['В скользящей заделке ', v(m.g.name[h]), ` на тело ${roman(on)} действуют сила `, sym(pair[0]), ' и пара сил с моментом ', sym(pair[1]), `, на тело ${roman(from)} — такие же в обратную сторону.`]
+            : ['В шарнире ', v(m.g.name[h]), ` на тело ${roman(on)} действуют силы `, ...symList(pair), `, на тело ${roman(from)} — такие же силы в обратную сторону.`],
+      });
+    }
+  }
+  for (const l of m.links) blocks.push({ k: 'p', c: linkText(m, l) });
+  for (const c of badLinkText(m)) blocks.push({ k: 'p', cls: 's-bad', c });
+  if (Object.keys(m.parts.points).length)
+    blocks.push({ k: 'p', c: ['Тело-точка: все силы приложены в одной точке, поэтому для него два уравнения — проекции на оси ', v('x'), ' и ', v('y'), '.'] });
+  if (ex)
+    blocks.push(
+      explain(
+        'Касание передаёт только давление по общей нормали к поверхностям (и силу трения вдоль касательной, если поверхность шероховатая); нить — только натяжение вдоль себя, одинаковое по обе стороны идеального блока. ',
+        'Для каждого тела составляем свои уравнения равновесия; уравнения для всей системы — их сумма, в них силы взаимодействия тел взаимно уничтожаются.',
+      ),
+    );
+  return blocks;
+}
+
+/** Давление или натяжение связи и его знак. */
+function signLine(m: Model, u: Unknown, val: number): Inline[] {
+  const l = m.links[u.link!.index];
+  const ok = val >= -1e-9 * Math.max(1, Math.abs(val));
+  const zero = Math.abs(val) < 1e-9;
+  const what =
+    l.link.type === 'thread'
+      ? zero
+        ? 'нить не натянута'
+        : ok
+          ? 'нить натянута'
+          : 'нить должна была бы сжиматься — так не бывает'
+      : zero
+        ? 'тела касаются без давления'
+        : ok
+          ? 'тела прижаты друг к другу, касание работает'
+          : 'касание должно было бы тянуть — тела разойдутся';
+  return [sym(u), ` = ${fmt(val)} кН ${zero ? '= 0' : ok ? '> 0' : '< 0'} — ${what}`];
+}
+
+/** Шаг перебора предположений: какие односторонние связи работают. */
+function casesBlocks(m: Model, sol: Solution, ex: boolean): Block[] {
+  const explain = (...c: Inline[]): Block => ({ k: 'p', cls: 'explain', c });
+  const cases = sol.cases!;
+  const name = (id: string): Inline[] => {
+    const l = [...m.links.map((x) => x.link), ...m.offLinks].find((x) => x.id === id)!;
+    return [l.type === 'contact' ? 'касание ' : 'нить ', v(m.g.name[l.a]), '–', v(m.g.name[l.b])];
+  };
+  const k = cases[0].off.length;
+  const blocks: Block[] = [
+    {
+      k: 'p',
+      c: [
+        `Неизвестных больше, чем уравнений, на ${k}, но связи между телами односторонние: касание может только давить, нить — только тянуть. `,
+        `При заданной нагрузке работают не все такие связи. Предполагаем, какие из них работают (сила остальных равна нулю), решаем уравнения и проверяем знаки:`,
+      ],
+    },
+  ];
+  const items: Inline[][] = cases.map((c, i) => {
+    const r: Inline[] = [`Случай ${i + 1}: работа${c.work.length > 1 ? 'ют' : 'ет'} `, ...join(c.work.map(name), ', '), '; не работа', c.off.length > 1 ? 'ют ' : 'ет ', ...join(c.off.map(name), ', '), '. '];
+    if (c.ok) r.push('Все давления и натяжения не отрицательны — предположение верно.');
+    else if (c.neg) r.push('Получается ', sym(m.byKey[c.neg.key] ?? { L: c.neg.key, S: '' }), ` = ${fmt(c.neg.val)} < 0 — предположение неверно.`);
+    else r.push(`Система ${STATUS[c.status][0]} — предположение не подходит.`);
+    return r;
+  });
+  blocks.push({ k: 'ul', items });
+  if (!cases.some((c) => c.ok)) blocks.push({ k: 'badge', tone: 'bad', text: 'Равновесие невозможно' }, { k: 'p', c: ['Ни одно предположение не даёт допустимых сил: при такой нагрузке тела не остаются в покое.'] });
+  else if (ex) blocks.push(explain('Дальше решаем уравнения равновесия для подходящего случая; силы неработающих связей в них не входят.'));
+  return blocks;
+}

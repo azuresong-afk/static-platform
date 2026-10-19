@@ -18,6 +18,11 @@ export interface Node {
    * (направления взаимной силы R) к оси x, град.
    */
   slide?: number;
+  /**
+   * Начальная точка отдельного тела: положение задано смещением от точки from другого тела, м (dx — вправо, dy — вверх).
+   * Из неё участки строят тело, как обычно; без участков это тело-точка. Тела друг с другом соединяют связи links.
+   */
+  place?: { from: string; dx: number; dy: number };
 }
 
 /** Участок рамы: из узла a в узел b (a — родитель в дереве обхода). */
@@ -141,10 +146,49 @@ export type Item = SupportItem | LoadItem;
 export type ItemType = Item['type'];
 export type SupportType = SupportItem['type'];
 
+/**
+ * Касание двух тел: точка b одного тела опирается на тело точки a (точки совпадают; если одно из тел — тело-точка,
+ * его положение на чертеже условно, и точки могут не совпадать). Давление N направлено по общей
+ * нормали: на тело точки b — под углом angle к оси x, на тело точки a — в обратную сторону. Связь односторонняя (N ≥ 0);
+ * при f > 0 — ещё сила трения вдоль касательной, |Fтр| ≤ f·N.
+ */
+export interface ContactLink {
+  id: string;
+  type: 'contact';
+  a: string;
+  b: string;
+  /** Угол нормали (направления давления на тело точки b) к оси x, град. */
+  angle: number;
+  angleName?: string;
+  /** Коэффициент трения скольжения; 0 — гладкое касание. */
+  f: number;
+}
+/**
+ * Нить от точки a к точке b, может огибать блоки — точки via (размеры блоков не учитываются, трения на блоке нет):
+ * натяжение T одно по всей нити, нить только тянет (T ≥ 0).
+ */
+export interface ThreadLink {
+  id: string;
+  type: 'thread';
+  a: string;
+  b: string;
+  via?: string[];
+}
+/** Шарнир между телами в совпадающих точках a и b: передаёт силу (X, Y на тело точки b), но не момент. Замыкает контуры. */
+export interface HingeLink {
+  id: string;
+  type: 'hinge';
+  a: string;
+  b: string;
+}
+export type Link = ContactLink | ThreadLink | HingeLink;
+
 export interface Structure {
   nodes: Node[];
   segs: Seg[];
   items: Item[];
+  /** Связи между телами (касания, нити, шарниры). */
+  links?: Link[];
 }
 
 export const isSupport = (it: Item): it is SupportItem =>
