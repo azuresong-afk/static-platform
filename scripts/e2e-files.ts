@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 35 && seen.length === 35, 'тридцать пять разделов, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 36 && seen.length === 36, 'тридцать шесть разделов, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 38, 'готово тридцать восемь пунктов');
+  check((await p.locator('.rm-done').count()) === 39, 'готово тридцать девять пунктов');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -902,6 +902,33 @@ async function main() {
   check((await p.getAttribute('[data-tab="masscenter"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === pwSol, 'файл работы и мощности открывается без потерь');
   await tab('frames');
 
+  // Вкладка «Устойчивость и нелинейные колебания».
+  await tab('hamilton');
+  let hm = await p.innerText('#hmsolution');
+  check(hm.includes('R = l²·m·θ̇²/2 + g·l·m·cos θ − n²/(2·l²·m·sin² θ)') && hm.includes('ω = 5,836 рад/с'), 'Мещерский 55.24: функция Рауса, устойчивость конического движения', hm.slice(-400));
+  check((await p.locator('#hmplot .rt-line').count()) === 4, 'графики θ, ψ, циклического импульса и H');
+  await p.selectOption('#hmpreset', 'm499');
+  check((await p.innerText('#hmsolution')).includes('H = −g·l·m·cos φ + p_φ²/(2·l²·m)'), 'Мещерский 49.9: функция Гамильтона');
+  await p.selectOption('#hmpreset', 'm5518');
+  hm = await p.innerText('#hmsolution');
+  check(hm.includes('−A·B·m + J·c·β > 0') && hm.includes('A = 6') && (await p.getAttribute('#hm-mode-stab', 'aria-pressed')) === 'true', 'Мещерский 55.18: условие Гурвица и граница по A', hm.slice(-400));
+  await p.click('#hm-form-first');
+  check((await p.innerText('#hmsolution')).includes('det(λI − A) = 0'), 'устойчивость по матрице системы');
+  await p.click('#hm-form-poly');
+  await p.selectOption('#hmpreset', 'm566');
+  hm = await p.innerText('#hmsolution');
+  check(hm.includes('a = 0,5 — устойчивый (автоколебания) цикл') && (await p.locator('#hmplot .vb-mode-l').count()) >= 3, 'Мещерский 56.6: предельный цикл и фазовый портрет', hm.slice(-400));
+  await p.click('#hmaddst');
+  check((await p.locator('[id^="hm-st"]').count()) === 2, 'добавлена фазовая траектория');
+  const [dlhm] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const hmText = await (await dlhm.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(hmText).module === 'hamilton' && JSON.parse(hmText).problem.nonlin.starts.length === 2, 'файл задачи об устойчивости и колебаниях');
+  const hmSol = await p.innerText('#hmsolution');
+  await tab('frames');
+  await openText('hm.json', hmText, 'ok');
+  check((await p.getAttribute('[data-tab="hamilton"]', 'aria-selected')) === 'true' && (await p.innerText('#hmsolution')) === hmSol, 'файл открывается в своей вкладке без потерь');
+  await tab('frames');
+
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');
   const pbS = await p.innerText('#pbsolution');
@@ -1358,7 +1385,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 37, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 38, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });
