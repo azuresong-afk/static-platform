@@ -1,13 +1,13 @@
-/** Раздел «Пространственное движение тела» (Мещерский §19, 20, 25, 40): неподвижная точка, углы Эйлера, гироскоп; файл проекта. */
+/** Раздел «Гироскоп» (Мещерский §40): гироскопический момент, давления на опоры, прецессия, равновесие оси; файл проекта. */
 import type { Chrome, StatikaModule } from '../../app/module';
+import { GyroStore, GYRO_MODULE } from './ui/store';
+import { GyroView } from './ui/GyroView';
 import { taskEntries } from '../../shared/tasks';
-import { SP_PRESETS, type SpPresetKey } from './presets';
-import { SpStore, SPATIAL_MODULE } from './ui/store';
-import { SpatialView } from './ui/SpatialView';
+import { GYRO_PRESETS, type GyroPresetKey } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
-export function createSpatialModule(): StatikaModule {
+export function createGyroModule(): StatikaModule {
   let explain = true;
   try {
     const v = localStorage.getItem(EXPLAIN_KEY);
@@ -15,7 +15,7 @@ export function createSpatialModule(): StatikaModule {
   } catch {
     /* по умолчанию */
   }
-  const store = new SpStore({ explain });
+  const store = new GyroStore({ explain });
   store.subscribe(() => {
     try {
       localStorage.setItem(EXPLAIN_KEY, store.get().explain ? '1' : '0');
@@ -24,11 +24,11 @@ export function createSpatialModule(): StatikaModule {
     }
   });
   function Screen({ chrome }: { chrome: Chrome }) {
-    return <SpatialView chrome={chrome} store={store} />;
+    return <GyroView chrome={chrome} store={store} />;
   }
   return {
-    id: SPATIAL_MODULE,
-    tab: 'Пространственное движение',
+    id: GYRO_MODULE,
+    tab: 'Гироскоп',
     store: {
       undo: store.undo,
       redo: store.redo,
@@ -38,7 +38,7 @@ export function createSpatialModule(): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
-    tasks: taskEntries(SP_PRESETS),
-    loadTask: (k) => store.loadPreset(k as SpPresetKey),
+    tasks: taskEntries(GYRO_PRESETS),
+    loadTask: (k) => store.loadPreset(k as GyroPresetKey),
   };
 }

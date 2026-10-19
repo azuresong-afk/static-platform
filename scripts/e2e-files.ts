@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 35 && seen.length === 35, 'тридцать пять разделов, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 36 && seen.length === 36, 'тридцать шесть разделов, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 38, 'готово тридцать восемь пунктов');
+  check((await p.locator('.rm-done').count()) === 39, 'готово тридцать девять пунктов');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -821,38 +821,77 @@ async function main() {
   check((await p.innerText('#solution')).includes('94,281') && (await p.locator('#svg .pulley').count()) === 1, 'Яблонский С.5: тормоз, нить через блок, P_min = 94,3');
   if (out) await p.screenshot({ path: pathResolve(out, 'contact.png'), fullPage: true });
 
-  // Вкладка «Пространственное движение».
-  await tab('spatial');
-  let sp = await p.innerText('#spsolution');
-  check(sp.includes('|ω| = 240 об/мин') && sp.includes('v_D = 251,33'), 'Мещерский 19.5–19.6: конус обегает неподвижный конус', sp.slice(-400));
-  check((await p.locator('#spsvg .sp-w').count()) === 1 && (await p.locator('#spsvg .sp-cone1').count()) > 0, 'чертёж: ω и конусы качения');
-  await p.selectOption('#sppreset', 'm2015');
-  sp = await p.innerText('#spsolution');
-  check(sp.includes('ω = 3,4641 с⁻¹') && sp.includes('ε = 6,9282 с⁻²'), 'Мещерский 20.15: угловая скорость и ускорение по углам Эйлера', sp.slice(-400));
-  await p.selectOption('#sppreset', 'm2514');
-  check((await p.innerText('#spsolution')).includes('ω_H = 20'), 'Мещерский 25.14: дифференциал автомобиля');
-  await p.selectOption('#sppreset', 'm2529');
-  check((await p.innerText('#spsolution')).includes('v = (−12; 12; −8)'), 'Мещерский 25.29: четыре вращения куба — поступательное движение');
-  await p.click('#spaddrot');
-  check((await p.locator('#sprots .vb-item').count()) === 5, 'добавлено вращение');
-  await p.selectOption('#sppreset', 'm4006');
-  check((await p.innerText('#spsolution')).includes('ΔN = 125,66'), 'Мещерский 40.6: гироскопическое давление на рельсы');
-  await p.selectOption('#spmode', 'compose');
-  await p.click('#spaddpt');
-  check((await p.locator('#cpoints .sp-row').count()) === 1, 'режим сложения вращений: добавлена точка');
-  const [dlsp] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
-  const spText = await (await dlsp.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
-  check(JSON.parse(spText).module === 'spatial' && JSON.parse(spText).problem.mode === 'compose', 'файл задачи о пространственном движении');
-  const spSol = await p.innerText('#spsolution');
+  // Вкладка «Неподвижная точка».
+  await tab('fixedpoint');
+  const fpS = await p.innerText('#fpsolution');
+  check(fpS.includes('25,1327') && fpS.includes('Аксоиды') && fpS.includes('3158,2734'), 'Мещерский 19.5–19.6: конус обегает неподвижный конус — ω = 8π, аксоиды, ускорение точки C', fpS.slice(-300));
+  await p.selectOption('#fppreset', 'm2512');
+  const fp12 = await p.innerText('#fpsolution');
+  check(fp12.includes('кривошип IV = 4 с⁻¹') && fp12.includes('|v| = 28 см/с'), 'Мещерский 25.12: дифференциал — угловая скорость кривошипа и скорость точки A', fp12.slice(-300));
+  check((await p.locator('#fpsvg .fp-inst').count()) === 1 && (await p.locator('#fpsvg .fp-cone').count()) >= 3, 'схема: мгновенная ось сателлита и конусы колёс');
+  await p.selectOption('#fppreset', 'm2015');
+  check((await p.innerText('#fpsolution')).includes('|ω| = 3,4641'), 'Мещерский 20.15: углы Эйлера — ω = 2√3');
+  await p.selectOption('#fppreset', 'm2529');
+  check((await p.innerText('#fpsolution')).includes('поступательное со скоростью v = (x: −12; y: 12; z: −8)'), 'Мещерский 25.29: четыре вращения куба — поступательное движение');
+  await p.selectOption('#fppreset', 'm2517');
+  check((await p.innerText('#fpsolution')).includes('210,3426'), 'Мещерский 25.17: ускорение точки сателлита');
+  const nb = await p.locator('#fpbodies > div').count();
+  await p.click('#fp-addbody');
+  check((await p.locator('#fpbodies > div').count()) === nb + 1 && (await p.innerText('#fpsolution')).includes('Не хватает условий'), 'новое звено без условий — сообщение «не хватает условий»');
+  const [dlfp] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const fpText = await (await dlfp.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(fpText).module === 'fixedpoint' && JSON.parse(fpText).problem.scheme.bodies.length === nb + 1, 'файл задачи о теле с неподвижной точкой');
+  const fpSol = await p.innerText('#fpsolution');
   await tab('frames');
-  await openText('sp.json', spText, 'ok');
-  check((await p.getAttribute('[data-tab="spatial"]', 'aria-selected')) === 'true' && (await p.innerText('#spsolution')) === spSol, 'файл пространственного движения открывается в своей вкладке без потерь');
+  await openText('fp.json', fpText, 'ok');
+  check((await p.getAttribute('[data-tab="fixedpoint"]', 'aria-selected')) === 'true' && (await p.innerText('#fpsolution')) === fpSol, 'файл неподвижной точки открывается в своей вкладке без потерь');
+  await tab('frames');
+
+  // Вкладка «Гироскоп».
+  await tab('gyro');
+  const gyS = await p.innerText('#gysolution');
+  check(gyS.includes('778,4913') && gyS.includes('621,5087'), 'Мещерский 40.8: колёсный скат на закруглении — давления на рельсы 700 ± 79 кГ', gyS.slice(-300));
+  await p.selectOption('#gypreset', 'm4011');
+  check((await p.innerText('#gysolution')).includes('α = 45,0555°'), 'Мещерский 40.11: равновесие рамки гироскопа на широте 30°');
+  await p.selectOption('#gypreset', 'm405');
+  check((await p.innerText('#gysolution')).includes('8,6614'), 'Мещерский 40.5: период прецессии оси снаряда');
+  await p.selectOption('#gy-mode', 'forced');
+  check((await p.inputValue('#gy-jMode')) === 'J' && (await p.innerText('#gysolution')).includes('Гироскопический момент'), 'смена режима: кинетический момент заменён моментом инерции');
+  const [dlgy] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const gyText = await (await dlgy.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(gyText).module === 'gyro' && JSON.parse(gyText).problem.mode === 'forced', 'файл задачи о гироскопе');
+  const gySol = await p.innerText('#gysolution');
+  await tab('frames');
+  await openText('gy.json', gyText, 'ok');
+  check((await p.getAttribute('[data-tab="gyro"]', 'aria-selected')) === 'true' && (await p.innerText('#gysolution')) === gySol, 'файл гироскопа открывается в своей вкладке без потерь');
+  await tab('frames');
+
+  // Вкладка «Центр масс»: сохранение количества движения, давление струи, работа и мощность (§29, 36).
+  await tab('masscenter');
+  await p.selectOption('#mpreset', 'm368');
+  const moS = await p.innerText('#msolution');
+  check(moS.includes('−4,4182') && (await p.locator('#msvg .cv-r').count()) === 1, 'Мещерский 36.8: откат ствола 4,42 м/с', moS.slice(-300));
+  await p.selectOption('#mpreset', 'm3616');
+  check((await p.innerText('#msolution')).includes('51,24'), 'Мещерский 36.16: давление на колено трубы 51,2 кГ');
+  await p.selectOption('#mpreset', 'm3618');
+  check((await p.innerText('#msolution')).includes('давление на опоры 0'), 'Мещерский 36.18: давление котла на опоры равно нулю');
+  await p.selectOption('#mpreset', 'm293');
+  check((await p.innerText('#msolution')).includes('34 ч 43 мин 20 с'), 'Мещерский 29.3: время работы насоса');
+  await p.click('#maddload');
+  check((await p.locator('#mwloads .cvrow').count()) === 2 && (await p.locator('#mmode').inputValue()) === 'power', 'работа и мощность: добавлена нагрузка');
+  const [dlpw] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const pwText = await (await dlpw.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(pwText).module === 'masscenter' && JSON.parse(pwText).problem.power.loads.length === 2, 'файл задачи о работе и мощности');
+  const pwSol = await p.innerText('#msolution');
+  await tab('frames');
+  await openText('pw.json', pwText, 'ok');
+  check((await p.getAttribute('[data-tab="masscenter"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === pwSol, 'файл работы и мощности открывается без потерь');
   await tab('frames');
 
   // Вкладка «Устойчивость и нелинейные колебания».
   await tab('hamilton');
   let hm = await p.innerText('#hmsolution');
-  check(hm.includes('R = l²·m·θ̇²/2 + g·l·m·cos θ − n²/(2·l²·m·sin² θ)') && hm.includes('ω = 5,848 рад/с'), 'Мещерский 55.24: функция Рауса, устойчивость конического движения', hm.slice(-400));
+  check(hm.includes('R = l²·m·θ̇²/2 + g·l·m·cos θ − n²/(2·l²·m·sin² θ)') && hm.includes('ω = 5,836 рад/с'), 'Мещерский 55.24: функция Рауса, устойчивость конического движения', hm.slice(-400));
   check((await p.locator('#hmplot .rt-line').count()) === 4, 'графики θ, ψ, циклического импульса и H');
   await p.selectOption('#hmpreset', 'm499');
   check((await p.innerText('#hmsolution')).includes('H = −g·l·m·cos φ + p_φ²/(2·l²·m)'), 'Мещерский 49.9: функция Гамильтона');
@@ -1317,7 +1356,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 37, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 38, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });
