@@ -831,30 +831,3 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .vb-s0{stroke:var(--react)} .vb-s1{stroke:var(--load)} .vb-s2{stroke:var(--ok)} .vb-s3{stroke:var(--warn)} .vb-s4{stroke:var(--ink-2)} .vb-s5{stroke:var(--grid)}
 .vb-bar{stroke:none;opacity:.85}
 .vb-bar.vb-s0{fill:var(--react)} .vb-bar.vb-s1{fill:var(--load)} .vb-bar.vb-s2{fill:var(--ok)} .vb-bar.vb-s3{fill:var(--warn)} .vb-bar.vb-s4{fill:var(--ink-2)} .vb-bar.vb-s5{fill:var(--grid)}
-/* Пространственное движение */
-.sp-row{display:grid;grid-template-columns:52px repeat(3,minmax(0,1fr)) 28px;gap:6px;align-items:end;margin:4px 0}
-.sp-row.sp-row2{grid-template-columns:64px minmax(0,1fr) 28px}
-.sp-law{display:grid;grid-template-columns:52px minmax(0,1fr);gap:6px;align-items:end;grid-column:1/-1}
-.sp-ax{stroke:var(--ink-3);stroke-width:1.2}
-.sp-axl{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:15px;fill:var(--ink-2)}
-.sp-lab{font-family:"Golos Text",system-ui,sans-serif;font-size:12.5px;fill:var(--ink-3)}
-.sp-ptl{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:15px;fill:var(--ink)}
-.sp-pt{fill:var(--ink)}
-.sp-cone0{fill:none;stroke:var(--ink-3);stroke-width:1;stroke-dasharray:5 4}
-.sp-cone1{fill:color-mix(in srgb,var(--react) 8%,transparent);stroke:var(--react);stroke-width:1.4}
-.sp-inst{stroke:var(--warn);stroke-width:1.4;stroke-dasharray:7 4}
-.sp-bodyax{stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:3 3}
-.sp-rotax{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:3 3}
-.sp-rad{stroke:var(--ink-3);stroke-width:1}
-.sp-rotor{fill:none;stroke:var(--ink);stroke-width:1.6}
-.sp-shaft{stroke:var(--ink-2);stroke-width:3}
-.sp-carrier{stroke:var(--ink);stroke-width:2.4}
-.sp-gear{fill:color-mix(in srgb,var(--react) 14%,var(--sheet));stroke:var(--react);stroke-width:1.6}
-.sp-sat{fill:color-mix(in srgb,var(--load) 12%,var(--sheet));stroke:var(--load);stroke-width:1.6}
-.sp-we,.sp-wr,.sp-w,.sp-eps,.sp-v,.sp-body{stroke-width:2.2}
-.sp-we{stroke:var(--ink-2)} .sp-we-f{fill:var(--ink-2)} .sp-we-t{font-family:"Golos Text",system-ui,sans-serif;font-size:14px;fill:var(--ink-2)}
-.sp-wr{stroke:var(--ok)} .sp-wr-f{fill:var(--ok)} .sp-wr-t{font-family:"Golos Text",system-ui,sans-serif;font-size:14px;fill:var(--ok)}
-.sp-w{stroke:var(--react);stroke-width:3} .sp-w-f{fill:var(--react)} .sp-w-t{font-family:"Golos Text",system-ui,sans-serif;font-size:15px;font-weight:600;fill:var(--react)}
-.sp-eps{stroke:var(--load)} .sp-eps-f{fill:var(--load)} .sp-eps-t{font-family:"Golos Text",system-ui,sans-serif;font-size:14px;fill:var(--load)}
-.sp-v{stroke:var(--warn)} .sp-v-f{fill:var(--warn)} .sp-v-t{font-family:"Golos Text",system-ui,sans-serif;font-size:13px;fill:var(--warn)}
-.sp-body{stroke:var(--ink)} .sp-body-f{fill:var(--ink)} .sp-body-t{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:15px;fill:var(--ink)}

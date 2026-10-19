@@ -143,13 +143,13 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 34 && seen.length === 34, 'тридцать четыре раздела, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 33 && seen.length === 33, 'тридцать три раздела, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 37, 'готово тридцать семь пунктов');
+  check((await p.locator('.rm-done').count()) === 36, 'готово тридцать шесть пунктов');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -821,34 +821,6 @@ async function main() {
   check((await p.innerText('#solution')).includes('94,281') && (await p.locator('#svg .pulley').count()) === 1, 'Яблонский С.5: тормоз, нить через блок, P_min = 94,3');
   if (out) await p.screenshot({ path: pathResolve(out, 'contact.png'), fullPage: true });
 
-  // Вкладка «Пространственное движение».
-  await tab('spatial');
-  let sp = await p.innerText('#spsolution');
-  check(sp.includes('|ω| = 240 об/мин') && sp.includes('v_D = 251,33'), 'Мещерский 19.5–19.6: конус обегает неподвижный конус', sp.slice(-400));
-  check((await p.locator('#spsvg .sp-w').count()) === 1 && (await p.locator('#spsvg .sp-cone1').count()) > 0, 'чертёж: ω и конусы качения');
-  await p.selectOption('#sppreset', 'm2015');
-  sp = await p.innerText('#spsolution');
-  check(sp.includes('ω = 3,4641 с⁻¹') && sp.includes('ε = 6,9282 с⁻²'), 'Мещерский 20.15: угловая скорость и ускорение по углам Эйлера', sp.slice(-400));
-  await p.selectOption('#sppreset', 'm2514');
-  check((await p.innerText('#spsolution')).includes('ω_H = 20'), 'Мещерский 25.14: дифференциал автомобиля');
-  await p.selectOption('#sppreset', 'm2529');
-  check((await p.innerText('#spsolution')).includes('v = (−12; 12; −8)'), 'Мещерский 25.29: четыре вращения куба — поступательное движение');
-  await p.click('#spaddrot');
-  check((await p.locator('#sprots .vb-item').count()) === 5, 'добавлено вращение');
-  await p.selectOption('#sppreset', 'm4006');
-  check((await p.innerText('#spsolution')).includes('ΔN = 125,66'), 'Мещерский 40.6: гироскопическое давление на рельсы');
-  await p.selectOption('#spmode', 'compose');
-  await p.click('#spaddpt');
-  check((await p.locator('#cpoints .sp-row').count()) === 1, 'режим сложения вращений: добавлена точка');
-  const [dlsp] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
-  const spText = await (await dlsp.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
-  check(JSON.parse(spText).module === 'spatial' && JSON.parse(spText).problem.mode === 'compose', 'файл задачи о пространственном движении');
-  const spSol = await p.innerText('#spsolution');
-  await tab('frames');
-  await openText('sp.json', spText, 'ok');
-  check((await p.getAttribute('[data-tab="spatial"]', 'aria-selected')) === 'true' && (await p.innerText('#spsolution')) === spSol, 'файл пространственного движения открывается в своей вкладке без потерь');
-  await tab('frames');
-
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');
   const pbS = await p.innerText('#pbsolution');
@@ -1290,7 +1262,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 36, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 35, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });
