@@ -1,4 +1,7 @@
-/** Экран «Сложное движение точки»: переносное и относительное движения; чертёж с векторами, решение по шагам. */
+/**
+ * Экран «Сложное движение точки»: точка на движущемся теле, движение относительно вращающейся Земли, треугольник
+ * скоростей (обратные задачи); чертёж с векторами, решение по шагам.
+ */
 import { useMemo, useSyncExternalStore } from 'react';
 import type { Chrome } from '../../../app/module';
 import { DocView } from '../../../shared/ui/DocView';
@@ -6,21 +9,41 @@ import { LawField } from '../../../shared/ui/LawField';
 import { Notice } from '../../../shared/ui/Notice';
 import { Num } from '../../../shared/ui/Num';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
+import { renderEarth } from '../draw/earth';
 import { renderRel } from '../draw/rel';
+import { renderTri } from '../draw/tri';
+import { solveEarthKin, type EarthKin } from '../model/earth';
 import { solveRel, type Plane, type RelProblem } from '../model/rel';
-import { REL_PRESETS, type RelPresetKey } from '../presets';
+import { solveTri, TRI_VECS, type TriProblem, type TriVec } from '../model/tri';
+import { EARTH_PRESETS, REL_PRESETS, TRI_PRESETS } from '../presets';
+import { earthDoc } from '../text/earth';
 import { relDoc } from '../text/solution';
-import type { RelStore, RelStrKey } from './store';
+import { triDoc } from '../text/tri';
+import type { AnyRelKey, EarthNumKey, RelMode, RelStore, RelStrKey, TriKey } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
 
 export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
-  const r = useMemo(() => solveRel(pr), [pr]);
-  const fig = useMemo(() => renderRel(pr, r, st.show), [pr, r, st.show]);
-  const figA = useMemo(() => renderRel(pr, r, 'a'), [pr, r]);
-  const doc = useMemo(() => relDoc(pr, r, { explain: st.explain }), [pr, r, st.explain]);
+  const out = useMemo(() => {
+    const o = { explain: st.explain };
+    if (st.mode === 'earth') {
+      const r = solveEarthKin(st.earth);
+      return { draw: (sh: 'v' | 'a') => renderEarth(st.earth, r, sh), doc: earthDoc(st.earth, r, o) };
+    }
+    if (st.mode === 'tri') {
+      const r = solveTri(st.tri);
+      return { draw: () => renderTri(st.tri, r), doc: triDoc(st.tri, r, o) };
+    }
+    const r = solveRel(pr);
+    return { draw: (sh: 'v' | 'a') => renderRel(pr, r, sh), doc: relDoc(pr, r, o) };
+  }, [st.mode, st.earth, st.tri, pr, st.explain]);
+  const fig = out.draw(st.show),
+    figA = out.draw('a'),
+    figV = out.draw('v'),
+    doc = out.doc;
+  const tasks = [...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(TRI_PRESETS)];
 
   return (
     <>
@@ -29,13 +52,13 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
         <header className="top">
           <div>
             <h1>Сложное движение точки</h1>
-            <p className="lede">Точка движется по телу, тело вращается вокруг неподвижной оси или движется поступательно: переносные, относительные и абсолютные скорость и ускорение, кориолисово ускорение.</p>
+            <p className="lede">Точка движется по телу, тело вращается вокруг неподвижной оси или движется поступательно: переносные, относительные и абсолютные скорость и ускорение, кориолисово ускорение; движение относительно вращающейся Земли; обратные задачи — треугольник скоростей.</p>
           </div>
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="rpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as RelPresetKey)}>
-                <PresetOptions items={taskEntries(REL_PRESETS)} />
+              <select id="rpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as AnyRelKey)}>
+                <PresetOptions items={tasks} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -47,7 +70,7 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
         <Notice notice={st.notice} onClose={store.closeNotice} />
         <section className="sheet" aria-label="Схема">
           <div className="bar">
-            <div className="seg" role="group" aria-label="Что показать">
+            <div className="seg" role="group" aria-label="Что показать" hidden={st.mode === 'tri'}>
               <button type="button" id="rshow-v" aria-pressed={st.show === 'v'} onClick={() => store.setShow('v')}>
                 Скорости
               </button>
@@ -72,7 +95,15 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
-            <Editor store={store} pr={pr} />
+            <label className="field">
+              <span>Что решаем</span>
+              <select id="rmode" value={st.mode} onChange={(e) => store.setMode(e.target.value as RelMode)}>
+                <option value="body">точка на движущемся теле</option>
+                <option value="earth">движение относительно вращающейся Земли</option>
+                <option value="tri">треугольник скоростей: обратная задача</option>
+              </select>
+            </label>
+            {st.mode === 'body' ? <Editor store={store} pr={pr} /> : st.mode === 'earth' ? <EarthEditor store={store} p={st.earth} /> : <TriEditor store={store} p={st.tri} />}
           </section>
           <section className="panel" aria-label="Решение">
             <div className="sol-head">
@@ -95,13 +126,15 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
         </header>
         <section className="pr-sec pr-figs">
           <figure>
-            <svg viewBox={fig.viewBox} dangerouslySetInnerHTML={{ __html: renderRel(pr, r, 'v').svg }} />
-            <figcaption>Скорости</figcaption>
+            <svg viewBox={figV.viewBox} dangerouslySetInnerHTML={{ __html: figV.svg }} />
+            <figcaption>{st.mode === 'tri' ? (st.tri.what === 'v' ? 'Треугольник скоростей' : 'Сложение ускорений') : 'Скорости'}</figcaption>
           </figure>
-          <figure>
-            <svg viewBox={figA.viewBox} dangerouslySetInnerHTML={{ __html: figA.svg }} />
-            <figcaption>Ускорения</figcaption>
-          </figure>
+          {st.mode !== 'tri' && (
+            <figure>
+              <svg viewBox={figA.viewBox} dangerouslySetInnerHTML={{ __html: figA.svg }} />
+              <figcaption>Ускорения</figcaption>
+            </figure>
+          )}
         </section>
         <section className="pr-sec">
           <h2>Решение</h2>
@@ -178,6 +211,105 @@ function Editor({ store, pr }: { store: RelStore; pr: RelProblem }) {
         <Num id="r-t" label="момент t" value={pr.t} neg zero onType={store.typeT} onEnd={() => store.endSession('t')} />
       </div>
       <p className="empty">Оси ξηζ связаны с телом, ось вращения — ζ (через начало координат). Формулы от t: sin, cos, exp, sqrt, π; «0,5t^2». Мгновенные значения из условия можно задать многочленом: s = s₀ + v₀t + a₀t²/2 при t = 0.</p>
+    </>
+  );
+}
+
+function EarthEditor({ store, p }: { store: RelStore; p: EarthKin }) {
+  const N = (k: EarthNumKey, label: string, neg = true) => <Num key={k} id={`re-${k}`} label={label} value={p[k]} neg={neg} zero onType={(v) => store.typeEarth(k, v)} onEnd={() => store.endSession(`e:${k}`)} />;
+  return (
+    <>
+      <h2>Земля и место</h2>
+      <div className="cgpar cg0">
+        {N('lat', 'широта φ, ° (южная — «−»)')}
+        {N('h', 'высота h над поверхностью')}
+        {N('R', 'радиус Земли R', false)}
+        {N('omega', 'ω Земли, рад/с')}
+      </div>
+      <h2>Скорость относительно Земли</h2>
+      <label className="field">
+        <span>Задана</span>
+        <select id="rvin" value={p.vin} onChange={(e) => store.setEarthVin(e.target.value as EarthKin['vin'])}>
+          <option value="enu">составляющими: на восток, на север, вверх</option>
+          <option value="course">модулем и курсом</option>
+        </select>
+      </label>
+      <div className="cgpar cg0">
+        {p.vin === 'enu' ? [N('vE', 'v_E, на восток'), N('vN', 'v_N, на север')] : [N('v', 'горизонтальная v', false), N('k', 'курс k, ° (от севера к востоку)')]}
+        {N('vh', 'v_h, вверх')}
+      </div>
+      <h2>Изменение составляющих скорости (по осям места)</h2>
+      <div className="cgpar cg0">
+        {N('dE', 'v̇_E')}
+        {N('dN', 'v̇_N')}
+        {N('dh', 'v̇_h')}
+      </div>
+      <p className="empty">Оси места: x — на восток, y — на север, z — вверх. Единицы — согласованные (например, м, м/с, м/с²). ω = 2π/86 400 = 7,272·10⁻⁵ рад/с (сутки) — с этим значением решены задачи книги; по звёздным суткам — 7,292·10⁻⁵. Курс — угол от севера по часовой стрелке: 90° — на восток. Если составляющие скорости постоянны, v̇ = 0 (например, корабль идёт постоянным курсом).</p>
+    </>
+  );
+}
+
+const TRI_NAME: Record<TriVec, string> = { v: 'абсолютная', e: 'переносная', r: 'относительная' };
+function TriEditor({ store, p }: { store: RelStore; p: TriProblem }) {
+  const L = p.what === 'v' ? 'v' : 'a';
+  const row = (k: TriKey, base: TriVec, two = false) => {
+    const it = p[k];
+    return (
+      <div className="cgpar cg0" key={k}>
+        <Num id={`rt-${k}-m`} label={`${L}${base === 'v' ? '' : base === 'e' ? 'ₑ' : 'ᵣ'}${two ? '₂' : ''} — ${TRI_NAME[base]}: модуль`} value={it.mod} zero onType={(v) => store.typeTri(k, 'mod', v)} onEnd={() => store.endSession(`t:${k}:mod`)} />
+        <label className="toggle">
+          <input type="checkbox" id={`rt-${k}-qm`} checked={it.qm} onChange={(e) => store.setTriUnknown(k, 'qm', e.target.checked)} />
+          неизвестен
+        </label>
+        <Num id={`rt-${k}-d`} label="направление, °" value={it.dir} neg zero onType={(v) => store.typeTri(k, 'dir', v)} onEnd={() => store.endSession(`t:${k}:dir`)} />
+        <label className="toggle">
+          <input type="checkbox" id={`rt-${k}-qd`} checked={it.qd} onChange={(e) => store.setTriUnknown(k, 'qd', e.target.checked)} />
+          неизвестно
+        </label>
+      </div>
+    );
+  };
+  return (
+    <>
+      <h2>Векторы</h2>
+      <label className="field">
+        <span>Складываем</span>
+        <select id="rtwhat" value={p.what} onChange={(e) => store.setTriOpt({ what: e.target.value as TriProblem['what'] })}>
+          <option value="v">скорости: v = vₑ + vᵣ</option>
+          <option value="a">ускорения: a = aₑ + aᵣ + a_c</option>
+        </select>
+      </label>
+      <label className="toggle">
+        <input type="checkbox" id="rtcompass" checked={p.compass} onChange={(e) => store.setTriOpt({ compass: e.target.checked })} />
+        Направления — курсом (от севера по часовой стрелке)
+      </label>
+      {TRI_VECS.map((k) => row(k, k))}
+      {p.what === 'a' && (
+        <div className="cgpar cg0">
+          <Num id="rt-c-m" label="a_c — кориолисово (известно): модуль" value={p.c.mod} zero onType={(v) => store.typeTriC('mod', v)} onEnd={() => store.endSession('t:c:mod')} />
+          <Num id="rt-c-d" label="направление, °" value={p.c.dir} neg zero onType={(v) => store.typeTriC('dir', v)} onEnd={() => store.endSession('t:c:dir')} />
+        </div>
+      )}
+      <label className="toggle">
+        <input type="checkbox" id="rttwo" checked={p.two} onChange={(e) => store.setTriOpt({ two: e.target.checked })} />
+        Второе наблюдение с общим вектором (ветер, течение)
+      </label>
+      {p.two && (
+        <>
+          <label className="field">
+            <span>Общий вектор</span>
+            <select id="rtshared" value={p.shared} onChange={(e) => store.setTriOpt({ shared: e.target.value as TriVec })}>
+              {TRI_VECS.map((k) => (
+                <option key={k} value={k}>
+                  {TRI_NAME[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {TRI_VECS.filter((k) => k !== p.shared).map((k) => row(`${k}2` as TriKey, k, true))}
+        </>
+      )}
+      <p className="empty">Отметьте неизвестные: два из шести чисел (во втором наблюдении — четыре: модули векторов с известными направлениями и общий вектор). Направление — {p.compass ? 'курс: 0° — на север, 90° — на восток' : 'угол от оси x против часовой стрелки'}. Ветер: абсолютная скорость воздуха = скорость судна (переносная) + ветер, который видит флюгер (относительная); флюгер показывает, откуда дует ветер.</p>
     </>
   );
 }
