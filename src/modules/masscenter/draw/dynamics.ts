@@ -40,7 +40,8 @@ export function renderMomentum(pr: MomentumProblem, r: MomentumResult) {
       const vv = (st ? r.abs1 : r.abs0)[i];
       const unk = pr.unknown.i === i && pr.unknown.when === st;
       const A: P2 = [cx, y + 30 - 0.75 * sz];
-      if (Math.abs(vv) * k > 1) out.push(arrow(A, [A[0] + vv * k, A[1]], unk ? 'cv-r' : 'en-v'));
+      // Малую скорость рядом с большой показываем стрелкой наименьшей длины.
+      if (Math.abs(vv) > 1e-12) out.push(arrow(A, [A[0] + Math.sign(vv) * Math.max(24, Math.abs(vv) * k), A[1]], unk ? 'cv-r' : 'en-v'));
       out.push(`<text class="t cv-t ${unk ? 't-cvr' : 'en-vt'}" x="${r1(cx)}" y="${y + 52}" text-anchor="middle">${st ? 'u' : 'v'} = ${fmt(vv, 4)}</text>`);
     });
   }
