@@ -9,16 +9,20 @@ import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { renderOrbit, renderPlanet, renderRadial } from '../draw/orbit';
+import { renderTraj } from '../draw/traj';
+import { solveTraj, type TrajProblem } from '../model/traj';
 import { BODIES, solveOrbit, solvePlanet, solveRadial, type OrbitProblem, type PlanetProblem, type RadialProblem, type Unit } from '../model/orbit';
 import { ORB_PRESETS, type OrbMode, type OrbPresetKey } from '../presets';
 import { LEN, orbitDoc, planetDoc, radialDoc } from '../text/solution';
-import type { OrbitNumKey, OrbStore, PlanetNumKey, RadialNumKey } from './store';
+import { trajDoc } from '../text/traj';
+import type { OrbitNumKey, OrbStore, PlanetNumKey, RadialNumKey, TrajNumKey } from './store';
 
 type Kind = 'any' | 'pos' | 'nonneg';
 const HINT: Record<OrbMode, string> = {
   planet: 'Тело и круговые орбиты в одном масштабе.',
   orbit: 'Орбита с телом в фокусе: начальная точка, скорость, перицентр и апоцентр.',
   radial: 'Ось x по линии центров; графики движения или потенциал U(x) с уровнем энергии.',
+  traj: 'Аномалии и время полёта, средние радиусы, граница падения, сила по траектории (Бине), трасса спутника.',
 };
 
 export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }) {
@@ -33,13 +37,18 @@ export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }
       const r = solveOrbit(s.orbit);
       return { fig: renderOrbit(s.orbit, r), doc: orbitDoc(s.orbit, r, { explain: st.explain }) };
     }
+    if (s.mode === 'traj') {
+      const r = solveTraj(s.traj);
+      return { fig: renderTraj(s.traj, r), doc: trajDoc(s.traj, r, { explain: st.explain }) };
+    }
     const r = solveRadial(s.radial);
     return { fig: renderRadial(s.radial, r), doc: radialDoc(s.radial, r, { explain: st.explain }) };
   }, [s, st.explain]);
   const end = (k: string) => () => store.endSession(k);
   const P = s.planet,
     O = s.orbit,
-    X = s.radial;
+    X = s.radial,
+    K = s.traj;
   const NP = (k: PlanetNumKey, label: string, kind: Kind = 'pos') => (
     <Num
       key={k}
@@ -76,6 +85,30 @@ export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }
       onEnd={end(`x:${k}`)}
     />
   );
+  const NK = (k: TrajNumKey, label: string, kind: Kind = 'pos') => (
+    <Num
+      key={k}
+      id={`orb-k-${k}`}
+      label={label}
+      value={K[k]}
+      neg={kind === 'any'}
+      zero={kind !== 'pos'}
+      onType={(v) => store.typeTraj(k, v)}
+      onEnd={end(`k:${k}`)}
+    />
+  );
+  const KSEL = <T extends 'kind' | 'unit' | 'muMode' | 'anom' | 'inv' | 'fw'>(id: string, label: string, key: T, opts: [TrajProblem[T], string][]) => (
+    <label className="sfield ob-wide">
+      <span>{label}</span>
+      <select id={id} value={K[key] as string} onChange={(e) => store.setTraj(key, e.target.value as TrajProblem[T])}>
+        {opts.map(([v, t]) => (
+          <option key={v as string} value={v as string}>
+            {t}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
   const unitSel = (id: string, value: Unit, on: (u: Unit) => void) => (
     <label className="sfield ob-wide">
       <span>единица длины</span>
@@ -87,7 +120,16 @@ export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }
     </label>
   );
   const Lo = LEN[O.unit],
-    Lx = LEN[X.unit];
+    Lx = LEN[X.unit],
+    Lk = LEN[K.unit];
+  const needMuK =
+    K.kind === 'point' ||
+    K.kind === 'time' ||
+    K.kind === 'mean' ||
+    K.kind === 'fall' ||
+    K.kind === 'track' ||
+    (K.kind === 'inverse' && (K.inv === 'ecc' || K.inv === 'sma'));
+  const anomUnit = K.anom === 't' ? 'с' : '°';
   const needMu = O.def === 'state' || O.scale === 'mu';
   const SHAPE: Record<OrbitProblem['shape'], [string, string, Kind]> = {
     apsides: [`r_п, ${Lo}`, `r_а, ${Lo}`, 'pos'],
@@ -149,6 +191,7 @@ export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }
                 <option value="planet">небесное тело: μ, космические скорости</option>
                 <option value="orbit">орбита в центральном поле</option>
                 <option value="radial">движение по прямой (линия центров)</option>
+                <option value="traj">формулы Кеплера и Бине, трасса спутника</option>
               </select>
             </label>
             {s.mode === 'planet' && (
@@ -313,6 +356,178 @@ export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }
                 )}
               </>
             )}
+            {s.mode === 'traj' && (
+              <>
+                <label className="field">
+                  <span>Что найти</span>
+                  <select id="orbkind" value={K.kind} onChange={(e) => store.setTraj('kind', e.target.value as TrajProblem['kind'])}>
+                    <option value="point">точка эллипса: аномалии E, ν, M, скорость (50.30–50.34)</option>
+                    <option value="time">время полёта между двумя точками (уравнение Кеплера)</option>
+                    <option value="mean">среднее значение радиус-вектора (50.28)</option>
+                    <option value="fall">граница падения на планету (50.24–50.25)</option>
+                    <option value="inverse">обратные задачи по элементам (50.15, 50.17, 50.18, 50.27)</option>
+                    <option value="binet">сила по траектории — формула Бине (50.12–50.13)</option>
+                    <option value="track">трасса спутника на вращающейся Земле (50.6)</option>
+                    <option value="two">задача двух тел: относительное движение и центр масс (51.1, 51.2, 51.5)</option>
+                    <option value="flywheel">вращение аппарата маховиком (51.9–51.12)</option>
+                  </select>
+                </label>
+                <div className="cgpar cg0">
+                  {K.kind !== 'flywheel' && unitSel('orbkunit', K.unit, (u) => store.setTraj('unit', u))}
+                  {needMuK &&
+                    KSEL('orbkmumode', 'μ притягивающего центра', 'muMode', [
+                      ['mu', 'задано числом'],
+                      ['planet', 'μ = gR² (тело радиуса R)'],
+                    ])}
+                  {needMuK && K.muMode === 'mu' && NK('mu', `μ, ${Lk}³/с²`)}
+                  {needMuK && K.muMode === 'planet' && NK('g', 'g, м/с²')}
+                </div>
+                {(K.kind === 'point' || K.kind === 'time' || K.kind === 'mean') && (
+                  <div className="cgpar cg0">
+                    {NK('a', `большая полуось a, ${Lk}`)}
+                    {NK('e', 'эксцентриситет e (0 ≤ e < 1)', 'nonneg')}
+                    {K.kind !== 'mean' &&
+                      KSEL(
+                        'orbkanom',
+                        K.kind === 'time' ? 'точки заданы' : 'точка задана',
+                        'anom',
+                        K.kind === 'time'
+                          ? [
+                              ['nu', 'истинной аномалией ν'],
+                              ['E', 'эксцентрической E'],
+                              ['M', 'средней M'],
+                            ]
+                          : [
+                              ['nu', 'истинной аномалией ν'],
+                              ['E', 'эксцентрической E'],
+                              ['M', 'средней M'],
+                              ['t', 'временем от перицентра t'],
+                            ],
+                      )}
+                    {K.kind === 'point' && NK('x1', `${K.anom === 'nu' ? 'ν' : K.anom === 'E' ? 'E' : K.anom === 'M' ? 'M' : 't'}, ${anomUnit}`, 'any')}
+                    {K.kind === 'time' && NK('x1', `${K.anom === 'nu' ? 'ν₁' : K.anom === 'E' ? 'E₁' : 'M₁'}, °`, 'any')}
+                    {K.kind === 'time' && NK('x2', `${K.anom === 'nu' ? 'ν₂' : K.anom === 'E' ? 'E₂' : 'M₂'}, °`, 'any')}
+                    {K.muMode === 'planet' && needMuK && NK('R', `R тела, ${Lk}`, 'nonneg')}
+                  </div>
+                )}
+                {K.kind === 'fall' && (
+                  <div className="cgpar cg0">
+                    {NK('R', `радиус планеты R, ${Lk}`)}
+                    {NK('r0', `r₀ от центра, ${Lk}`)}
+                    {NK('th0', 'θ₀ к горизонту, °', 'any')}
+                    {NK('v0', `v₀, ${Lk}/с (0 — не задана)`, 'nonneg')}
+                  </div>
+                )}
+                {K.kind === 'inverse' && (
+                  <>
+                    <div className="cgpar cg0">
+                      {KSEL('orbkinv', 'задача', 'inv', [
+                        ['axes', 'полуоси и период по p, e, c (50.15)'],
+                        ['ecc', 'e по периоду и H = r_а − r_п (50.17)'],
+                        ['sma', 'a по e и отношению высот (50.18)'],
+                        ['mass', 'масса по периодам и радиусам орбит (50.27)'],
+                      ])}
+                      {K.inv === 'axes' && (
+                        <>
+                          {NK('p', `p, ${Lk}`)}
+                          {NK('e', 'e', 'nonneg')}
+                          {NK('c', `c, ${Lk}²/с`)}
+                        </>
+                      )}
+                      {K.inv === 'ecc' && (
+                        <>
+                          {NK('T', 'T, с')}
+                          {NK('Hd', `H, ${Lk}`, 'nonneg')}
+                        </>
+                      )}
+                      {K.inv === 'sma' && (
+                        <>
+                          {NK('R', `R планеты, ${Lk}`)}
+                          {NK('e', 'e', 'nonneg')}
+                          {NK('gam', 'γ = H_п : H_а', 'nonneg')}
+                        </>
+                      )}
+                      {K.inv === 'mass' && (
+                        <>
+                          {NK('a1', `a₁ спутника, ${Lk}`)}
+                          {NK('T1', 'T₁, с')}
+                          {NK('a2', `a₂ планеты, ${Lk}`)}
+                          {NK('T2', 'T₂, с')}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+                {K.kind === 'binet' && (
+                  <div className="cgpar cg0">
+                    <LawField
+                      id="orb-k-rphi"
+                      label="r(φ), φ — угол в радианах"
+                      value={K.rphi}
+                      vars={[]}
+                      prep={(x) => x.replace(/φ|phi/gi, 't')}
+                      onType={store.typeRphi}
+                      onEnd={end('k:rphi')}
+                    />
+                    {NK('cb', `c = r²φ̇, ${Lk}²/с`, 'any')}
+                    {NK('phi1', 'φ₁, °', 'any')}
+                  </div>
+                )}
+                {K.kind === 'two' && (
+                  <div className="cgpar cg0">
+                    {NK('m1', 'масса m₁, кг')}
+                    {NK('m2', 'масса m₂, кг')}
+                    {NK('fG', 'f, м³/(кг·с²)')}
+                    {NK('a', `большая полуось относительной орбиты, ${Lk}`)}
+                    {NK('e', 'эксцентриситет e', 'nonneg')}
+                  </div>
+                )}
+                {K.kind === 'flywheel' && (
+                  <div className="cgpar cg0">
+                    {KSEL('orbkfw', 'вопрос', 'fw', [
+                      ['stop', 'работа двигателя при остановке вращения (51.9)'],
+                      ['motor', 'торможение моментом M₀ − κω: время и угол (51.10–51.11)'],
+                      ['turn', 'поворот корпуса: разгон и торможение маховика (51.12)'],
+                    ])}
+                    {NK('Jf', 'J маховика, кг·м²')}
+                    {NK('J0', 'J₀ аппарата с маховиком, кг·м²')}
+                    {K.fw !== 'turn' && NK('Om0', 'Ω₀, рад/с')}
+                    {K.fw === 'motor' && NK('M0', 'M₀, Н·м')}
+                    {K.fw === 'motor' && NK('kap', 'κ, Н·м·с')}
+                    {K.fw === 'turn' && NK('Tc', 'постоянная времени T, с')}
+                    {K.fw === 'turn' && NK('u0', 'u₀, рад/с²')}
+                    {K.fw === 'turn' && NK('psi', 'угол поворота ψ, °')}
+                  </div>
+                )}
+                {K.kind === 'track' && (
+                  <div className="cgpar cg0">
+                    {NK('R', `радиус тела R, ${Lk}`)}
+                    {NK('H', `высота орбиты H, ${Lk}`, 'nonneg')}
+                    {NK('alpha', 'наклонение α, °', 'nonneg')}
+                    {NK('Trot', 'период вращения тела, с')}
+                    {NK('turns', 'число витков')}
+                  </div>
+                )}
+                <p className="empty">
+                  {K.kind === 'point' &&
+                    'Эллипс с телом в фокусе; углы отсчитываются от перицентра. Эксцентрическая аномалия E — угол на вспомогательной окружности радиуса a, средняя M = E − e·sin E = n·t.'}
+                  {K.kind === 'time' &&
+                    'Время идёт по движению от точки 1 к точке 2 (разность средних аномалий по модулю 2π); остаток периода — путь в обратную сторону.'}
+                  {K.kind === 'mean' && 'Среднее по времени [r] = a(1 + e²/2); для сравнения — средние по углу φ и по эксцентрической аномалии E.'}
+                  {K.kind === 'fall' &&
+                    'Угол θ₀ отсчитывается от местного горизонта, вверх — плюс. Скорость v₀ необязательна: при v₀ > 0 проверяется, падает ли точка.'}
+                  {K.kind === 'inverse' && 'Формулы эллипса и третий закон Кеплера; в 50.27 массы планеты и Солнца находятся по периодам и радиусам орбит.'}
+                  {K.kind === 'binet' &&
+                    'Формула в обозначениях φ (радианы) и стандартных функциях: sin, cos, exp, sqrt… Например: 7002/(1 + 0,0649 cos φ) или 2 exp(φ). Постоянная c = r²·dφ/dt — удвоенная секторная скорость.'}
+                  {K.kind === 'two' &&
+                    'Единицы длины — выбранные выше; массы — в килограммах, f — в системе СИ. Центр масс движется равномерно и в задаче не участвует.'}
+                  {K.kind === 'flywheel' &&
+                    'Ось вращения маховика совпадает с осью аппарата и проходит через центр масс; J₀ — момент инерции аппарата вместе с маховиком.'}
+                  {K.kind === 'track' &&
+                    'Наклонение α — от 0° (восточный) до 180° (орбита против вращения). По умолчанию период вращения — звёздные сутки (86 164 с); μ = gR² для тела радиуса R.'}
+                </p>
+              </>
+            )}
             {s.mode === 'radial' && (
               <>
                 <div className="cgpar cg0">
@@ -395,7 +610,7 @@ export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }
         <section className="pr-sec pr-figs">
           <figure>
             <svg viewBox={out.fig.viewBox} dangerouslySetInnerHTML={{ __html: out.fig.svg }} />
-            <figcaption>{s.mode === 'radial' ? 'Движение по прямой' : 'Орбита'}</figcaption>
+            <figcaption>{s.mode === 'radial' ? 'Движение по прямой' : s.mode === 'traj' ? 'Построение' : 'Орбита'}</figcaption>
           </figure>
         </section>
         <section className="pr-sec">

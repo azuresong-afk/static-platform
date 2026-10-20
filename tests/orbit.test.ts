@@ -1,6 +1,8 @@
 /** Тяготение и кеплерово движение: космические скорости, орбиты, импульс, движение по линии центров (Мещерский §28, 30, 50, 51). */
 import { describe, expect, it } from 'vitest';
 import { renderOrbit, renderPlanet, renderRadial } from '../src/modules/orbit/draw/orbit';
+import { renderTraj } from '../src/modules/orbit/draw/traj';
+import { solveTraj, type TrajResult } from '../src/modules/orbit/model/traj';
 import {
   elementsOf,
   solveOrbit,
@@ -13,6 +15,7 @@ import {
 } from '../src/modules/orbit/model/orbit';
 import { ORB_PRESETS, orbit, radial } from '../src/modules/orbit/presets';
 import { orbitDoc, planetDoc, radialDoc } from '../src/modules/orbit/text/solution';
+import { trajDoc } from '../src/modules/orbit/text/traj';
 import { OrbStore, parseOrb } from '../src/modules/orbit/ui/store';
 import { taskInfo } from '../src/shared/tasks';
 import { docText } from './helpers/doctext';
@@ -51,6 +54,46 @@ function gotRadial(pr: RadialProblem, r: RadialResult): Record<string, number> {
   return g;
 }
 
+function gotTraj(r: TrajResult): Record<string, number> {
+  const g: Record<string, number> = {};
+  const q = r.pts[0];
+  if (q)
+    Object.assign(g, { E: (q.E * 180) / Math.PI, nu: (q.nu * 180) / Math.PI, r: q.r, v: q.v, vr: q.vr, vt: q.vt, vx: q.vx, vy: q.vy, gamma: q.gamma, t: q.t });
+  if (r.pts.length === 2 && r.dt != null) Object.assign(g, { E: (r.pts[1].E * 180) / Math.PI, dt: r.dt, T: r.T });
+  if (r.mean) Object.assign(g, { meanT: r.mean.t, meanPhi: r.mean.phi, meanE: r.mean.E });
+  if (r.special) Object.assign(g, { vgeo: r.special.vgeo, gammaMax: r.special.gammaMax });
+  if (r.fall) {
+    Object.assign(g, { thCone: r.fall.thCone, vc: r.fall.vc });
+    if (r.fall.vcrit != null) g.vcrit = r.fall.vcrit;
+    if (r.fall.hits != null) g.hits = r.fall.hits ? 1 : 0;
+  }
+  const i = r.inverse;
+  if (i) {
+    if (i.a != null) Object.assign(g, { a: i.a, b: i.b!, T: i.T!, mu: i.mu! });
+    if (i.e != null) g.e = i.e;
+    if (i.aNeed != null) g.aNeed = i.aNeed;
+    if (i.rpNeed != null) Object.assign(g, { rpNeed: i.rpNeed, raNeed: i.raNeed! });
+    if (i.ratio != null) g.ratioInv = 1 / i.ratio;
+  }
+  const b = r.binet;
+  if (b) {
+    if (b.mu != null) g.mu = b.mu;
+    if (b.power != null) g.n = b.power;
+    g.ar = b.at.ar;
+  }
+  if (r.two) Object.assign(g, { mu: r.two.mu, mu1: r.two.mu1, a1: r.two.a1, ratio: r.two.ratio });
+  const w = r.fly;
+  if (w) {
+    Object.assign(g, { A: w.A, omF: w.omF });
+    if (w.Mmin != null) g.Mmin = w.Mmin;
+    if (w.T != null) Object.assign(g, { T: w.T, psi: w.psi! });
+    if (w.t1 != null) Object.assign(g, { tau: w.tau!, t1: w.t1, t2: w.t2! });
+  }
+  const t = r.track;
+  if (t) Object.assign(g, { beta: t.beta, k: t.k, shift: t.shift, T: t.T });
+  return g;
+}
+
 describe('готовые задачи: ответы книги', () => {
   for (const [key, p] of Object.entries(ORB_PRESETS))
     it(p.title, () => {
@@ -70,6 +113,13 @@ describe('готовые задачи: ответы книги', () => {
         got = gotOrbit(p.problem.orbit, r);
         text = docText(orbitDoc(p.problem.orbit, r, { explain: true }));
         svg = renderOrbit(p.problem.orbit, r).svg;
+      } else if (p.problem.mode === 'traj') {
+        const r = solveTraj(p.problem.traj);
+        expect(r.ok, key + r.errors.join()).toBe(true);
+        expect(r.notes, key).toEqual([]);
+        got = gotTraj(r);
+        text = docText(trajDoc(p.problem.traj, r, { explain: true }));
+        svg = renderTraj(p.problem.traj, r).svg;
       } else {
         const r = solveRadial(p.problem.radial);
         expect(r.ok, key + r.errors.join()).toBe(true);
@@ -327,5 +377,28 @@ describe('хранилище и файл', () => {
     expect(t.importProject(f.text.replace('"orbit"', '"varmass"'))).toBe(false);
     expect(parseOrb({ mode: 'orbit', orbit: { ...s.get().problem.orbit, shape: 'круг' } }).ok).toBe(false);
     expect(parseOrb({ mode: 'radial', radial: { ...s.get().problem.radial, x0: 'a' } }).ok).toBe(false);
+  });
+  it('формулы Кеплера и Бине: правка, отмена, файл; старый файл без раздела открывается', () => {
+    const s = new OrbStore();
+    s.loadPreset('m5013');
+    expect(s.get().problem.mode).toBe('traj');
+    s.typeRphi('5000/(1 + 0,2 cos φ)');
+    s.endSession('k:rphi');
+    s.typeTraj('cb', 40000);
+    s.endSession('k:cb');
+    s.undo();
+    expect(s.get().problem.traj.cb).toBe(52790);
+    s.redo();
+    s.setTraj('anom', 't');
+    s.setTraj('kind', 'time');
+    expect(s.get().problem.traj.anom).toBe('nu');
+    const f = s.exportProject(new Date(2026, 0, 2));
+    const t = new OrbStore();
+    expect(t.importProject(f.text, f.name)).toBe(true);
+    expect(t.get().problem.traj).toEqual(s.get().problem.traj);
+    const raw = parseOrb({ mode: 'orbit', orbit: s.get().problem.orbit });
+    expect(raw.ok).toBe(true);
+    expect(parseOrb({ mode: 'traj', traj: { ...s.get().problem.traj, kind: 'орбита' } }).ok).toBe(false);
+    expect(parseOrb({ mode: 'traj', traj: { ...s.get().problem.traj, rphi: 5 } }).ok).toBe(false);
   });
 });
