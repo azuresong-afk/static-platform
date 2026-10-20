@@ -2,13 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import { solveKin, type KinProblem } from '../src/modules/pointkin/model/kin';
 import { KIN_PRESETS, type KinPresetKey } from '../src/modules/pointkin/presets';
-import { renderKin, renderUni } from '../src/modules/pointkin/draw/kin';
 import { trajEquation } from '../src/modules/pointkin/model/traj';
 import { solveLin } from '../src/modules/pointkin/model/uniform';
-import { kinDoc } from '../src/modules/pointkin/text/solution';
-import { uniDoc } from '../src/modules/pointkin/text/uniform';
+import { solveAny } from '../src/modules/pointkin/ui/solve';
 import { KinStore, parseKin } from '../src/modules/pointkin/ui/store';
 
+const EXT_MODES: KinProblem['mode'][] = ['path', 'integ', 'harm', 'shot', 'cam'];
 const tol = (v: number, rel?: number) => {
   if (rel) return rel * Math.abs(v) + 1e-12;
   const s = String(Math.abs(v));
@@ -21,6 +20,7 @@ describe('Мещерский §10–12', () => {
     it(p.title, () => {
       const pr = p.problem as KinProblem;
       const rel = (p as { relTol?: number }).relTol;
+      if (EXT_MODES.includes(pr.mode)) return; // path, integ, harm, shot, cam — tests/pointkin-ext.test.ts
       if (pr.mode === 'uni') {
         const u = solveLin(pr.uni!);
         expect(u.ok, key + u.errors.join()).toBe(true);
@@ -72,11 +72,8 @@ describe('кинематика точки: файл проекта, чертёж
       expect(s2.importProject(text)).toBe(true);
       expect(s2.get().problem).toEqual(s.get().problem);
       const p = s.get().problem;
-      const out =
-        p.mode === 'uni'
-          ? [renderUni(solveLin(p.uni!)).svg, JSON.stringify(uniDoc(p.uni!, solveLin(p.uni!), { explain: true }))]
-          : [renderKin(p, solveKin(p)).svg, JSON.stringify(kinDoc(p, solveKin(p), { explain: true }))];
-      for (const x of out) expect(x).not.toMatch(/NaN|undefined|Infinity/);
+      const { fig, doc } = solveAny(p, true);
+      for (const x of [fig.svg, JSON.stringify(doc)]) expect(x).not.toMatch(/NaN|undefined|Infinity/);
     });
   it('ошибки и чужой файл', () => {
     expect(solveKin({ ...(KIN_PRESETS.k1228.problem as KinProblem), x: 'sin(' }).ok).toBe(false);

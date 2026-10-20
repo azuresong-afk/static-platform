@@ -203,6 +203,12 @@ export function implicit(A: number[], B: number[], a: Axis, b: Axis, check: [num
     const ints = integerize(c);
     const first = c.find((x) => x !== 0)!;
     const cc = ints ?? c.map((x) => x / first);
+    // Нецелые коэффициенты с разбросом в миллионы раз — следствие плохой обусловленности (кривая почти прямая: малые
+    // колебания около постоянного значения), а не уравнение траектории.
+    if (!ints) {
+      const nz = cc.filter((x) => x !== 0).map(Math.abs);
+      if (Math.max(...nz) / Math.min(...nz) > 1e6) continue;
+    }
     const sgn = Math.sign(cc.find((x) => x !== 0)!);
     const terms = monos.map(([i, j], k) => ({ i, j, c: cc[k] * sgn })).filter((t) => t.c !== 0);
     const deg = Math.max(...terms.map((t) => t.i + t.j));
@@ -265,9 +271,10 @@ function conic(a: Axis, b: Axis, terms: TrajRel['terms'], deg: number): { kind: 
   return { kind: 'пустое множество', detail: null };
 }
 
+const TRAJ_MODES: KinProblem['mode'][] = ['coord', 'polar', 'cyl', 'sph', 'tor'];
 /** Уравнение траектории по закону движения (координатный, полярный, цилиндрический, сферический способы). */
 export function trajEquation(pr: KinProblem, r: KinResult): TrajEq | null {
-  if (!r.ok || pr.mode === 'natural' || pr.mode === 'uni') return null;
+  if (!r.ok || !TRAJ_MODES.includes(pr.mode)) return null;
   const [ta, tb] = trajInterval(pr);
   const L = Math.max(tb - ta, 1e-6);
   // Отбор точек — на расширенном отрезке (уравнение верно при всех t), проверка — в других точках.

@@ -1048,6 +1048,22 @@ async function main() {
   await tab('frames');
   await openText('kn.json', knText, 'ok');
   check((await p.getAttribute('[data-tab="pointkin"]', 'aria-selected')) === 'true' && (await p.innerText('#ksolution')) === knSol, 'файл кинематики точки открывается в своей вкладке без потерь');
+  await p.selectOption('#kpreset', 'p101a');
+  const kp1 = await p.innerText('#ksolution');
+  check((await p.inputValue('#kmode')) === 'path' && kp1.includes('13'), 'Мещерский 10.1: путь σ = 13 см', kp1.slice(-300));
+  await p.selectOption('#kpreset', 's1015');
+  const kp2 = await p.innerText('#ksolution');
+  check((await p.inputValue('#kmode')) === 'shot' && kp2.includes('31,85') && kp2.includes('220,'), 'Мещерский 10.15: высота и дальность броска', kp2.slice(-300));
+  await p.selectOption('#kpreset', 'c1418');
+  check((await p.innerText('#ksolution')).includes('4,019'), 'Мещерский 14.18: опускание толкателя 4,02 см');
+  await p.selectOption('#kpreset', 't1239');
+  check((await p.inputValue('#kmode')) === 'tor' && (await p.locator('#ksvg').count()) === 1, 'Мещерский 12.38–12.39: тороидальные координаты');
+  const [dlk] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const kpText = await (await dlk.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const kpSol = await p.innerText('#ksolution');
+  await tab('frames');
+  await openText('kp.json', kpText, 'ok');
+  check((await p.inputValue('#kmode')) === 'tor' && (await p.innerText('#ksolution')) === kpSol, 'файл тороидальных координат открывается без потерь');
   await tab('frames');
 
   // 26. Вкладка «Вращение и передачи».
@@ -1111,6 +1127,8 @@ async function main() {
   await tab('frames');
   await openText('me.json', meText, 'ok');
   check((await p.getAttribute('[data-tab="mechanism"]', 'aria-selected')) === 'true' && (await p.innerText('#msolution')) === meSol, 'файл механизма открывается в своей вкладке без потерь');
+  await p.selectOption('#mpreset', 'm1512');
+  check((await p.innerText('#msolution')).includes('Уравнения движения звена'), 'Мещерский 15.12: уравнения движения звена в решении');
   // 27а. Кулисы, силы, массы, параметр положения.
   await p.selectOption('#mpreset', 'm2322');
   const kuS = await p.innerText('#msolution');
@@ -1180,6 +1198,17 @@ async function main() {
   await tab('frames');
   await openText('rt.json', rlTriText, 'ok');
   check((await p.inputValue('#rmode')) === 'tri' && (await p.innerText('#rsolution')) === rlTriSol, 'файл треугольника скоростей открывается без потерь');
+  await p.selectOption('#rpreset', 'e215');
+  const rlEq = await p.innerText('#rsolution');
+  check((await p.inputValue('#rmode')) === 'eq' && rlEq.includes('r = 0,5·φ'), 'Мещерский 21.5: архимедова спираль r = 0,5φ', rlEq.slice(-300));
+  await p.selectOption('#rpreset', 'e2111');
+  check((await p.innerText('#rsolution')).includes('окружность'), 'Мещерский 21.11: траектория относительно диска — окружность');
+  const [dleq] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const rlEqText = await (await dleq.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  const rlEqSol = await p.innerText('#rsolution');
+  await tab('frames');
+  await openText('re.json', rlEqText, 'ok');
+  check((await p.inputValue('#rmode')) === 'eq' && (await p.innerText('#rsolution')) === rlEqSol, 'файл уравнений сложного движения открывается без потерь');
   await tab('frames');
 
   // 29. Вкладка «Сосуды».

@@ -152,3 +152,56 @@ describe('хранилище и файл', () => {
     expect(parseMech(raw).ok).toBe(false);
   });
 });
+
+describe('§15: уравнения плоского движения звеньев (угол φ(t), таблица x(t), y(t), φ(t))', () => {
+  const P = MECH_PRESETS.m1511.problem as MechProblem;
+  it('угол звена AB на графике — без скачков 2π и совпадает с книгой: φ = −2 arctg(a sin ωt/(b − a cos ωt))', () => {
+    const sol = solveMech({ ...P, time: { ...P.time!, from: '0,02', to: '1,5', t: '0,7' } });
+    expect(sol.extraErrors).toEqual([]);
+    const pl = sol.plot!;
+    expect(pl.key).toBe('ang:AB');
+    for (let i = 1; i < pl.ys.length; i++) expect(Math.abs(pl.ys[i]! - pl.ys[i - 1]!)).toBeLessThan(0.5);
+    pl.xs.forEach((t, i) => {
+      if (i % 20) return;
+      const w = 2 * t;
+      const book = -2 * Math.atan((10 * Math.sin(w)) / (25 - 10 * Math.cos(w)));
+      const d = pl.ys[i]! - book;
+      expect(Math.abs(d - 2 * Math.PI * Math.round(d / (2 * Math.PI)))).toBeLessThan(1e-9);
+    });
+    expect(pl.cur.y).toBeCloseTo(-2 * Math.atan((10 * Math.sin(1.4)) / (25 - 10 * Math.cos(1.4))), 9);
+  });
+  it('угол в развёртке растёт при вращении против часовой стрелки, а не возвращается в (−π; π]', () => {
+    const pr = MECH_PRESETS.m155.problem as MechProblem;
+    const sol = solveMech({ ...pr, plot: 'w:AB', time: { ...pr.time!, to: '6' } });
+    expect(sol.plot!.key).toBe('w:AB');
+    // 15.5: шатун качается около горизонтали — угол остаётся малым, без скачков
+    const w = solveMech({ ...pr, plot: 'ang:AB', time: { ...pr.time!, to: '6' } });
+    expect(w.plot!.ys.every((y) => y != null && Math.abs(y) < 0.26)).toBe(true);
+    // эллипсограф 15.1: φ = −ω₀t — монотонно убывает
+    const e = MECH_PRESETS.m151.problem as MechProblem;
+    const s2 = solveMech({ ...e, time: { ...e.time!, from: '0,01', to: '0,75' } });
+    expect(s2.plot!.ys[0]).toBeCloseTo(-0.02, 9);
+    expect(s2.plot!.ys[s2.plot!.ys.length - 1]).toBeCloseTo(-1.5, 9);
+  });
+  it('таблица уравнений движения: полюс — первая точка звена, 7 моментов, значения совпадают с книгой (15.1)', () => {
+    const e = MECH_PRESETS.m151.problem as MechProblem;
+    const e2 = { ...e, time: { ...e.time!, from: '0,05', to: '0,65' } };
+    const sol = solveMech(e2);
+    const m = sol.motion!.find((q) => q.body === 'AB')!;
+    expect(m.pole).toBe('A');
+    expect(m.rows.length).toBe(7);
+    m.rows.forEach((q) => {
+      expect(q.x).toBeCloseTo(0, 9);
+      expect(q.y).toBeCloseTo(20 * Math.sin(2 * q.t), 9);
+      expect(q.phi).toBeCloseTo(-2 * q.t, 9);
+    });
+    const txt = docText(mechDoc(e2, sol));
+    expect(txt).toMatch(/Уравнения движения звена AB \(полюс A\)/);
+    expect(txt).toMatch(/t = 0,05:\s+xA = 0,\s+yA = 1,9967,\s+φ = −0,1 рад/);
+  });
+  it('график по параметру φ тоже поддерживает угол звена', () => {
+    const pr = MECH_PRESETS.m1819.problem as MechProblem;
+    const sol = solveMech({ ...pr, param: { val: '30', from: '0', to: '720' }, plot: 'ang:BC' });
+    expect(sol.plot).not.toBeNull();
+  });
+});

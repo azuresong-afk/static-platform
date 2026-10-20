@@ -67,6 +67,14 @@ export interface MechSolution extends MechResult {
   plot: PlotResult | null;
   /** Законы движения в момент t (null — режим времени не включён). */
   time: { t: number; laws: LawState[] } | null;
+  /** Уравнения плоского движения звеньев по времени: x и y полюса (первая точка звена) и угол φ направления «полюс → последняя точка». */
+  motion?: MotionTable[];
+}
+export interface MotionTable {
+  body: string;
+  pole: string;
+  end: string;
+  rows: { t: number; x: number; y: number; phi: number }[];
 }
 
 /* Числовые поля, в которых можно писать φ. */
@@ -240,6 +248,39 @@ function timeConsistency(pr: MechProblem, t: number, r: MechResult): string[] {
   return out;
 }
 
+/** Угол направления «первая точка → последняя точка» звена, рад (от оси x против часовой, (−π; π]). */
+function bodyAngle(r: MechResult, pts: string[]): number | null {
+  const a = r.points.find((p) => p.name === pts[0]),
+    b = r.points.find((p) => p.name === pts[pts.length - 1]);
+  if (!a || !b || pts.length < 2) return null;
+  return Math.atan2(b.pos[1] - a.pos[1], b.pos[0] - a.pos[0]);
+}
+
+/** Развёртка угла: убирает скачки на ±2π между соседними значениями. */
+function unwrap(vals: (number | null)[]): (number | null)[] {
+  let off = 0,
+    prev: number | null = null;
+  return vals.map((v) => {
+    if (v == null) return null;
+    if (prev != null) {
+      const d = v + off - prev;
+      if (d > Math.PI) off -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
+      else if (d < -Math.PI) off -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
+    }
+    prev = v + off;
+    return prev;
+  });
+}
+
+/** Значение угла cur, сдвинутое на 2πk к ближайшей точке развёрнутого графика. */
+function onBranch(cur: number | null, xs: number[], ys: (number | null)[], x: number): number | null {
+  if (cur == null) return null;
+  let j = 0;
+  for (let i = 1; i < xs.length; i++) if (Math.abs(xs[i] - x) < Math.abs(xs[j] - x)) j = i;
+  const y = ys[j];
+  return y == null ? cur : cur + 2 * Math.PI * Math.round((y - cur) / (2 * Math.PI));
+}
+
 /** Величины для графика: ключ и подпись. */
 export function plotKeys(pr: MechProblem): [string, string][] {
   const out: [string, string][] = [];
@@ -248,6 +289,7 @@ export function plotKeys(pr: MechProblem): [string, string][] {
   if (pr.energy && !pr.time && (pr.masses ?? []).length)
     out.push(['W', lead?.k === 'omega' ? `ω ведущего звена ${lead.b} по теореме об энергии` : `скорость ведущей точки по теореме об энергии`]);
   for (const b of pr.bodies) out.push([`w:${b.name}`, `ω звена ${b.name}`]);
+  for (const b of pr.bodies) if (b.pts.length >= 2) out.push([`ang:${b.name}`, `угол φ звена ${b.name} (направление ${b.pts[0]}→${b.pts[b.pts.length - 1]}, рад)`]);
   for (const p of pr.points.filter((q) => inBody.has(q.name)))
     out.push(
       [`x:${p.name}`, `x точки ${p.name}`],
@@ -284,7 +326,7 @@ function stateAt(pr: MechProblem, phi: number | null): State {
 }
 
 /** Значение величины key в состоянии. */
-function valueOf(key: string, s: State): number | null {
+function valueOf(key: string, s: State, pr?: MechProblem): number | null {
   const [k, n] = key.split(':');
   const r = s.r;
   if (!r.ok) return null;
@@ -314,6 +356,10 @@ function valueOf(key: string, s: State): number | null {
       return P()?.a[1] ?? null;
     case 'w':
       return B()?.omega ?? null;
+    case 'ang': {
+      const b = pr?.bodies.find((q) => q.name === n);
+      return b ? bodyAngle(r, b.pts) : null;
+    }
     case 'e':
       return B()?.eps ?? null;
     case 'vr':
@@ -525,20 +571,50 @@ function solveTimed(pr: MechProblem, tm: NonNullable<MechProblem['time']>): Mech
       const N = 180;
       const f = (x: number) => {
         const q = atTime(pr, x);
-        return q ? valueOf(pr.plot!, stateAt(q, null)) : null;
+        return q ? valueOf(pr.plot!, stateAt(q, null), q) : null;
       };
-      const xs: number[] = [],
-        ys: (number | null)[] = [];
+      const xs: number[] = [];
+      let ys: (number | null)[] = [];
       for (let i = 0; i <= N; i++) {
         const x = lo + ((hi - lo) * i) / N;
         xs.push(x);
         ys.push(f(x));
       }
+      let cur = f(t);
+      if (pr.plot.startsWith('ang:')) {
+        ys = unwrap(ys);
+        cur = onBranch(cur, xs, ys, t);
+      }
       const ext = extremes(xs, ys);
-      plot = { key: pr.plot, label, xs, ys, cur: { x: t, y: f(t) }, ...ext, approx: true, axis: 't' };
+      plot = { key: pr.plot, label, xs, ys, cur: { x: t, y: cur }, ...ext, approx: true, axis: 't' };
     }
   }
-  return { ...s.r, phi: null, forces: s.f, extraErrors, energy: null, plot, time };
+  const m0 = num(tm.from),
+    m1 = num(tm.to);
+  const motion = motionTables(pr, m0 != null && m1 != null && m1 > m0 ? [m0, m1] : [0, Math.max(t, 1)]);
+  return { ...s.r, phi: null, forces: s.f, extraErrors, energy: null, plot, time, motion };
+}
+
+/** Уравнения плоского движения звеньев: x, y полюса и угол φ в семи равноотстоящих моментах времени. */
+function motionTables(pr: MechProblem, [lo, hi]: [number, number], n = 7): MotionTable[] {
+  const inBody = pr.bodies.filter((b) => b.pts.length >= 2);
+  if (!inBody.length) return [];
+  const states = Array.from({ length: n }, (_, i) => {
+    const t = lo + ((hi - lo) * i) / (n - 1);
+    const q = atTime(pr, t);
+    return { t, r: q ? stateAt(q, null).r : null };
+  });
+  return inBody.map((b) => {
+    const pole = b.pts[0],
+      end = b.pts[b.pts.length - 1];
+    const raw = states.map((q) => (q.r && q.r.ok ? bodyAngle(q.r, b.pts) : null));
+    const ang = unwrap(raw);
+    const rows = states.flatMap((q, i) => {
+      const P = q.r && q.r.ok ? q.r.points.find((p) => p.name === pole) : null;
+      return P && ang[i] != null ? [{ t: q.t, x: P.pos[0], y: P.pos[1], phi: ang[i]! }] : [];
+    });
+    return { body: b.name, pole, end, rows };
+  });
 }
 
 function makePlot(
@@ -588,14 +664,15 @@ function makePlot(
     const ext = extremes(xs, ys);
     return { key, label, xs, ys, cur: { x: energy.phi, y: energy.lam }, ...ext, approx: true, axis: 'phi' };
   }
-  const xs: number[] = [],
-    ys: (number | null)[] = [];
-  const f = (x: number) => valueOf(key, stateAt(pr, x));
+  const xs: number[] = [];
+  let ys: (number | null)[] = [];
+  const f = (x: number) => valueOf(key, stateAt(pr, x), pr);
   for (let i = 0; i <= N; i++) {
     const x = lo + ((hi - lo) * i) / N;
     xs.push(x);
     ys.push(f(x));
   }
+  if (key.startsWith('ang:')) ys = unwrap(ys);
   const ext = extremes(xs, ys);
   const refine = (e: { x: number; y: number } | null, sgn: 1 | -1) => {
     if (!e) return e;
@@ -630,7 +707,8 @@ function makePlot(
       y = f(x);
     return y != null && sgn * y >= sgn * e.y ? { x, y } : e;
   };
-  return { key, label, xs, ys, cur: { x: phi, y: f(phi) }, max: refine(ext.max, 1), min: refine(ext.min, -1), approx: false, axis: 'phi' };
+  const cur = key.startsWith('ang:') ? onBranch(f(phi), xs, ys, phi) : f(phi);
+  return { key, label, xs, ys, cur: { x: phi, y: cur }, max: refine(ext.max, 1), min: refine(ext.min, -1), approx: false, axis: 'phi' };
 }
 
 function extremes(xs: number[], ys: (number | null)[]) {
