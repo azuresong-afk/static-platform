@@ -3,7 +3,7 @@ import type { Chrome, StatikaModule } from '../../app/module';
 import { RelStore, REL_MODULE, type AnyRelKey } from './ui/store';
 import { RelView } from './ui/RelView';
 import { taskEntries } from '../../shared/tasks';
-import { EARTH_PRESETS, REL_PRESETS, TRI_PRESETS } from './presets';
+import { EARTH_PRESETS, EQ_PRESETS, REL_PRESETS, TRI_PRESETS } from './presets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -31,7 +31,7 @@ export function createRelModule(): StatikaModule {
     tab: 'Сложное движение',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
-    tasks: [...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(TRI_PRESETS)],
+    tasks: [...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(TRI_PRESETS), ...taskEntries(EQ_PRESETS)],
     loadTask: (k) => store.loadPreset(k as AnyRelKey),
   };
 }

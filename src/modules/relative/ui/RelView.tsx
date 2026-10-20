@@ -9,17 +9,20 @@ import { LawField } from '../../../shared/ui/LawField';
 import { Notice } from '../../../shared/ui/Notice';
 import { Num } from '../../../shared/ui/Num';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
+import { renderKin } from '../../pointkin/draw/kin';
 import { renderEarth } from '../draw/earth';
 import { renderRel } from '../draw/rel';
 import { renderTri } from '../draw/tri';
 import { solveEarthKin, type EarthKin } from '../model/earth';
+import { solveEq, type EqProblem, type EqStrKey } from '../model/eq';
 import { solveRel, type Plane, type RelProblem } from '../model/rel';
 import { solveTri, TRI_VECS, type TriProblem, type TriVec } from '../model/tri';
-import { EARTH_PRESETS, REL_PRESETS, TRI_PRESETS } from '../presets';
+import { EARTH_PRESETS, EQ_PRESETS, REL_PRESETS, TRI_PRESETS } from '../presets';
 import { earthDoc } from '../text/earth';
+import { eqDoc } from '../text/eq';
 import { relDoc } from '../text/solution';
 import { triDoc } from '../text/tri';
-import type { AnyRelKey, EarthNumKey, RelMode, RelStore, RelStrKey, TriKey } from './store';
+import type { AnyRelKey, EarthNumKey, EqNumKey, RelMode, RelStore, RelStrKey, TriKey } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
 
@@ -32,18 +35,25 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
       const r = solveEarthKin(st.earth);
       return { draw: (sh: 'v' | 'a') => renderEarth(st.earth, r, sh), doc: earthDoc(st.earth, r, o) };
     }
+    if (st.mode === 'eq') {
+      const r = solveEq(st.eq);
+      return {
+        draw: () => (r.ok ? renderKin(r.kp, r.kin) : { svg: '<text class="tb-note" x="16" y="240">Проверьте формулы.</text>', viewBox: '0 0 1000 480' }),
+        doc: eqDoc(st.eq, r, o),
+      };
+    }
     if (st.mode === 'tri') {
       const r = solveTri(st.tri);
       return { draw: () => renderTri(st.tri, r), doc: triDoc(st.tri, r, o) };
     }
     const r = solveRel(pr);
     return { draw: (sh: 'v' | 'a') => renderRel(pr, r, sh), doc: relDoc(pr, r, o) };
-  }, [st.mode, st.earth, st.tri, pr, st.explain]);
+  }, [st.mode, st.earth, st.tri, st.eq, pr, st.explain]);
   const fig = out.draw(st.show),
     figA = out.draw('a'),
     figV = out.draw('v'),
     doc = out.doc;
-  const tasks = [...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(TRI_PRESETS)];
+  const tasks = [...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(TRI_PRESETS), ...taskEntries(EQ_PRESETS)];
 
   return (
     <>
@@ -70,7 +80,7 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
         <Notice notice={st.notice} onClose={store.closeNotice} />
         <section className="sheet" aria-label="Схема">
           <div className="bar">
-            <div className="seg" role="group" aria-label="Что показать" hidden={st.mode === 'tri'}>
+            <div className="seg" role="group" aria-label="Что показать" hidden={st.mode === 'tri' || st.mode === 'eq'}>
               <button type="button" id="rshow-v" aria-pressed={st.show === 'v'} onClick={() => store.setShow('v')}>
                 Скорости
               </button>
@@ -101,9 +111,10 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
                 <option value="body">точка на движущемся теле</option>
                 <option value="earth">движение относительно вращающейся Земли</option>
                 <option value="tri">треугольник скоростей: обратная задача</option>
+                <option value="eq">уравнения сложного движения и траектория</option>
               </select>
             </label>
-            {st.mode === 'body' ? <Editor store={store} pr={pr} /> : st.mode === 'earth' ? <EarthEditor store={store} p={st.earth} /> : <TriEditor store={store} p={st.tri} />}
+            {st.mode === 'body' ? <Editor store={store} pr={pr} /> : st.mode === 'eq' ? <EqEditor store={store} p={st.eq} /> : st.mode === 'earth' ? <EarthEditor store={store} p={st.earth} /> : <TriEditor store={store} p={st.tri} />}
           </section>
           <section className="panel" aria-label="Решение">
             <div className="sol-head">
@@ -127,9 +138,11 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
         <section className="pr-sec pr-figs">
           <figure>
             <svg viewBox={figV.viewBox} dangerouslySetInnerHTML={{ __html: figV.svg }} />
-            <figcaption>{st.mode === 'tri' ? (st.tri.what === 'v' ? 'Треугольник скоростей' : 'Сложение ускорений') : 'Скорости'}</figcaption>
+            <figcaption>
+              {st.mode === 'eq' ? 'Траектория' : st.mode === 'tri' ? (st.tri.what === 'v' ? 'Треугольник скоростей' : 'Сложение ускорений') : 'Скорости'}
+            </figcaption>
           </figure>
-          {st.mode !== 'tri' && (
+          {st.mode !== 'tri' && st.mode !== 'eq' && (
             <figure>
               <svg viewBox={figA.viewBox} dangerouslySetInnerHTML={{ __html: figA.svg }} />
               <figcaption>Ускорения</figcaption>
@@ -211,6 +224,47 @@ function Editor({ store, pr }: { store: RelStore; pr: RelProblem }) {
         <Num id="r-t" label="момент t" value={pr.t} neg zero onType={store.typeT} onEnd={() => store.endSession('t')} />
       </div>
       <p className="empty">Оси ξηζ связаны с телом, ось вращения — ζ (через начало координат). Формулы от t: sin, cos, exp, sqrt, π; «0,5t^2». Мгновенные значения из условия можно задать многочленом: s = s₀ + v₀t + a₀t²/2 при t = 0.</p>
+    </>
+  );
+}
+
+function EqEditor({ store, p }: { store: RelStore; p: EqProblem }) {
+  const L = (k: EqStrKey, label: string, wide = false) => (
+    <LawField key={k} id={`q-${k}`} label={label} value={p[k]} wide={wide} onType={(s) => store.typeEqStr(k, s)} onEnd={() => store.endSession(`q:${k}`)} />
+  );
+  const N = (k: EqNumKey, label: string) => (
+    <Num key={k} id={`q-${k}`} label={label} value={p[k]} neg zero onType={(v) => store.typeEqNum(k, v)} onEnd={() => store.endSession(`q:${k}`)} />
+  );
+  const abs = p.dir === 'abs';
+  return (
+    <>
+      <h2>Что задано</h2>
+      <label className="field">
+        <span>Известно движение</span>
+        <select id="qdir" value={p.dir} onChange={(e) => store.setEqDir(e.target.value as EqProblem['dir'])}>
+          <option value="abs">относительное (по подвижным осям) — найти абсолютное</option>
+          <option value="rel">абсолютное — найти относительное</option>
+        </select>
+      </label>
+      <div className="cgpar cg0">
+        {abs ? [L('u', 'ξ(t)'), L('v', 'η(t)'), L('w', 'ζ(t) — пусто: 0')] : [L('u', 'x(t)'), L('v', 'y(t)'), L('w', 'z(t) — пусто: 0')]}
+      </div>
+      <h2>Переносное движение (подвижные оси)</h2>
+      <div className="cgpar cg0">
+        {L('X0', 'начало осей: x₀(t)')}
+        {L('Y0', 'начало осей: y₀(t)')}
+        {L('Z0', 'начало осей: z₀(t) — пусто: 0')}
+        {L('phi', 'угол поворота φ(t), рад — пусто: поступательно')}
+      </div>
+      <div className="cgpar cg0">
+        {N('t', 'момент t')}
+        {N('t1', 'траектория: от t₁')}
+        {N('t2', 'до t₂')}
+      </div>
+      <p className="empty">
+        Оси ξηζ подвижные, ζ ∥ z, повёрнуты на φ от осей xyz. Формулы от t: sin, cos, arctg, exp, sqrt, π; «0,5t^2». Траектория — уравнение, из которого
+        исключено t; если его нет (синусоида, спираль), показывается явная запись или полярная форма.
+      </p>
     </>
   );
 }

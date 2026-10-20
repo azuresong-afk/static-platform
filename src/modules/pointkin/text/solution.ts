@@ -25,7 +25,7 @@ const HOW: Record<KinProblem['mode'], string> = {
 };
 
 /** Шаг «Траектория»: уравнение (исключение t), вид кривой, начальная точка и пределы координат. */
-function trajStep(pr: KinProblem, e: TrajEq, opts: { explain?: boolean }): Step {
+export function trajStep(pr: KinProblem, e: TrajEq, opts: { explain?: boolean }): Step {
   const bl: Block[] = [];
   const [ta, tb] = pr.t2 > pr.t1 ? [pr.t1, pr.t2] : [Math.min(0, pr.t), Math.max(pr.t, 1)];
   if (e.dims === 3 && e.rels.length) bl.push({ k: 'p', c: ['Траектория пространственная; уравнения её проекций на координатные плоскости — цилиндрические поверхности, на пересечении которых она лежит:'] });

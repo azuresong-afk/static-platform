@@ -21,7 +21,7 @@ const N = (v: number): Expr => ({ k: 'num', v });
 const isInt = (x: number) => Math.abs(x - Math.round(x)) < 1e-12;
 
 /** Линейная функция αt + β (null — не линейная). */
-function lin(e: Expr): { a: number; b: number } | null {
+export function lin(e: Expr): { a: number; b: number } | null {
   switch (e.k) {
     case 'num':
       return { a: 0, b: e.v };
