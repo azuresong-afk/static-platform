@@ -6,6 +6,9 @@
  * внутри ступени элементы работают параллельно (одинаковое перемещение, жёсткости складываются), ступени
  * соединены последовательно (одинаковая сила, складываются податливости 1/c).
  *
+ * Балка или стержень могут нести последовательную пружину (опора на пружине, Мещерский 32.42): податливости 1/c
+ * складываются.
+ *
  * Пружина под углом α к оси движения (точка движется в гладких направляющих, пружина не напряжена в равновесии,
  * колебания малые) даёт c·cos²α (Мещерский 32.31–32.33). Пружина на невесомом рычаге: пружина на плече a,
  * груз (или следующая ступень) на плече b — приведённая жёсткость c·(a/b)² (Мещерский 32.34, 32.45–32.46).
@@ -45,13 +48,15 @@ export interface Elem {
   J: number;
   scheme: BeamScheme;
   a: number;
+  /** Стержень и балка: пружина жёсткости cs последовательно с элементом (0 — нет). */
+  cs: number;
 }
 
 export interface Stage {
   items: Elem[];
 }
 
-export const newElem = (kind: ElemKind): Elem => ({ kind, c: 1, ang: 0, la: 0, lb: 0, E: 2e5, l: 1, A: 1, J: 1, scheme: 'ss-mid', a: 0.5 });
+export const newElem = (kind: ElemKind): Elem => ({ kind, c: 1, ang: 0, la: 0, lb: 0, E: 2e5, l: 1, A: 1, J: 1, scheme: 'ss-mid', a: 0.5, cs: 0 });
 
 /** Коэффициент приведения массы элемента (null — для схемы не задан). */
 export function massCoef(e: Elem): number | null {
@@ -92,7 +97,7 @@ export function beamUnit(e: Elem): { d: number; M: number } {
 }
 
 export interface ElemStiff {
-  /** Жёсткость самого элемента (без угла и рычага). */
+  /** Жёсткость самого элемента (без угла и рычага; с последовательной пружиной, если она есть). */
   c0: number;
   /** Множитель приведения: cos²α или (a/b)². */
   factor: number;
@@ -105,6 +110,7 @@ export function elemStiff(e: Elem): ElemStiff {
   if (e.kind === 'spring') c0 = e.c;
   else if (e.kind === 'rod') c0 = (e.E * e.A) / e.l;
   else c0 = 1 / beamUnit(e).d;
+  if (e.kind !== 'spring' && e.cs > 0) c0 = 1 / (1 / c0 + 1 / e.cs);
   let factor = 1;
   if (e.kind === 'spring') {
     const ca = Math.cos((e.ang * Math.PI) / 180);
@@ -134,6 +140,7 @@ export function validateElem(e: Elem, where: string): string[] {
     if (e.lb < 0 || e.la < 0) er.push(`${where}: плечи рычага не могут быть отрицательными.`);
     if (e.lb > 0 && !(e.la > 0)) er.push(`${where}: задайте плечо пружины a > 0 (или уберите рычаг: b = 0).`);
   } else {
+    if (e.cs < 0) er.push(`${where}: жёсткость последовательной пружины не может быть отрицательной.`);
     pos(e.E, 'модуль упругости E');
     pos(e.l, e.kind === 'beam' ? 'длина пролёта l' : 'длина l');
     if (e.kind === 'rod') pos(e.A, 'площадь A');
