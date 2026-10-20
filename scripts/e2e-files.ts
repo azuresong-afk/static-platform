@@ -653,6 +653,28 @@ async function main() {
   await tab('frames');
   await openText('pe.json', peText, 'ok');
   check((await p.innerText('#psolution')) === peSol, 'файл задачи о вращении Земли открывается без потерь');
+  // Пункт 21: равновесие при вращении, поверхности и кривые, составные задачи, теорема об импульсе.
+  await p.selectOption('#ppreset', 's4126');
+  const ps1 = await p.innerText('#psolution');
+  check((await p.inputValue('#pmode')) === 'spin' && ps1.includes('70,15'), 'Мещерский 41.26: угол отклонения стержня 70,15°', ps1.slice(-300));
+  await p.selectOption('#psask', 'bank');
+  check((await p.inputValue('#psfind')) === 'angle' && (await p.locator('#pspin-d').count()) === 1, 'вираж: «найти» сбрасывается на допустимый вариант');
+  await p.selectOption('#ppreset', 'u3130');
+  check((await p.inputValue('#pmode')) === 'surf' && (await p.innerText('#psolution')).includes('8,458'), 'Мещерский 31.30: v₀ ≥ 8,458 м/с');
+  await p.selectOption('#ppreset', 'g3111');
+  check((await p.inputValue('#pmode')) === 'stages' && (await p.innerText('#psolution')).includes('47,41'), 'Мещерский 31.11: дальность лыжника 47,4 м');
+  await p.selectOption('#ppreset', 'i289');
+  const pi = await p.innerText('#psolution');
+  check((await p.inputValue('#pmode')) === 'impulse' && pi.includes('−509,7') && pi.includes('−4414'), 'Мещерский 28.9: импульс равнодействующей −510 и −4410 кГ·с', pi.slice(-300));
+  await p.fill('#pimpulse-v1', '250');
+  await p.press('#pimpulse-v1', 'Tab');
+  const [dli] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const piText = await (await dli.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(piText).problem.mode === 'impulse' && JSON.parse(piText).problem.impulse.v1 === 250, 'файл задачи о теореме об импульсе');
+  const piSol = await p.innerText('#psolution');
+  await tab('frames');
+  await openText('pi.json', piText, 'ok');
+  check((await p.innerText('#psolution')) === piSol, 'файл задачи о теореме об импульсе открывается без потерь');
   await p.selectOption('#pmode', 'line');
   check((await p.locator('#pask').count()) === 1, 'переключение режима');
   await tab('frames');

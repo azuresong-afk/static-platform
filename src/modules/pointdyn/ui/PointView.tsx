@@ -1,7 +1,8 @@
 /**
  * Экран «Динамика точки»: прямолинейное движение (вторая задача), силы по заданному движению (первая задача),
  * криволинейное движение в плоскости, движение по окружности (реакция связи, отрыв), относительное движение в трубке
- * подвижного тела (давление на стенку), движение вблизи вращающейся Земли; графики, траектория или схема, решение по шагам.
+ * подвижного тела (давление на стенку), движение вблизи вращающейся Земли, равновесие при вращении, поверхности и кривые,
+ * составные задачи, теорема об импульсе; графики, траектория или схема, решение по шагам.
  */
 import { useMemo, useSyncExternalStore } from 'react';
 import type { Chrome } from '../../../app/module';
@@ -15,13 +16,23 @@ import { renderCircle } from '../draw/circle';
 import { renderEarthDyn } from '../draw/earth';
 import { renderFirst, renderPlane } from '../draw/extra';
 import { renderRel } from '../draw/rel';
+import { renderImpulse, renderSpin, renderStages, renderSurf } from '../draw/constrained';
+import { solveSpin } from '../model/spin';
+import { solveSurf } from '../model/surf';
+import { solveStages } from '../model/stages';
+import { solveImpulse } from '../model/impulse';
+import { spinDoc } from '../text/spin';
+import { surfDoc } from '../text/surf';
+import { stagesDoc } from '../text/stages';
+import { impulseDoc } from '../text/impulse';
+import { ImpulsePanel, SpinPanel, StagesPanel, SurfPanel } from './SubPanels';
 import { solveCircle, type CircleProblem } from '../model/circle';
 import { solveEarthDyn, type EarthDyn } from '../model/earth';
 import { solveFirst, type FirstProblem } from '../model/first';
 import { solvePlane, type PlaneProblem } from '../model/plane';
 import { solvePoint, type PointProblem } from '../model/point';
 import { solveRel, type RelProblem } from '../model/rel';
-import { CIRCLE_PRESETS, EARTH_PRESETS, FIRST_PRESETS, PLANE_PRESETS, POINT_PRESETS, REL_PRESETS } from '../presets';
+import { CIRCLE_PRESETS, EARTH_PRESETS, FIRST_PRESETS, IMPULSE_PRESETS, PLANE_PRESETS, POINT_PRESETS, REL_PRESETS, SPIN_PRESETS, STAGE_PRESETS, SURF_PRESETS } from '../presets';
 import { circleDoc } from '../text/circle';
 import { earthDoc } from '../text/earth';
 import { firstDoc, planeDoc } from '../text/extra';
@@ -47,12 +58,32 @@ const MODES: [PointMode, string][] = [
   ['circle', 'движение по окружности'],
   ['rel', 'относительное движение в трубке'],
   ['earth', 'движение вблизи вращающейся Земли'],
+  ['spin', 'равновесие при вращении (вираж, конический маятник)'],
+  ['surf', 'движение по поверхности и кривой'],
+  ['stages', 'составные задачи (несколько этапов)'],
+  ['impulse', 'теорема об импульсе, закон площадей'],
 ];
 
 export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const task = st.problem;
   const out = useMemo(() => {
+    if (task.mode === 'spin') {
+      const r = solveSpin(task.spin);
+      return { fig: renderSpin(task.spin, r), doc: spinDoc(task.spin, r, { explain: st.explain }) };
+    }
+    if (task.mode === 'surf') {
+      const r = solveSurf(task.surf);
+      return { fig: renderSurf(task.surf, r), doc: surfDoc(task.surf, r, { explain: st.explain }) };
+    }
+    if (task.mode === 'stages') {
+      const r = solveStages(task.stages);
+      return { fig: renderStages(task.stages, r), doc: stagesDoc(task.stages, r, { explain: st.explain }) };
+    }
+    if (task.mode === 'impulse') {
+      const r = solveImpulse(task.impulse);
+      return { fig: renderImpulse(task.impulse, r), doc: impulseDoc(task.impulse, r, { explain: st.explain }) };
+    }
     if (task.mode === 'first') {
       const r = solveFirst(task.first);
       return { fig: renderFirst(task.first, r), doc: firstDoc(task.first, r, { explain: st.explain }) };
@@ -97,7 +128,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
         <header className="top">
           <div>
             <h1>Динамика точки</h1>
-            <p className="lede">Обе основные задачи динамики точки: по силам — движение (по прямой и в плоскости, с сопротивлением среды и трением), по закону движения — сила; движение по окружности — натяжение нити, давление на связь, отрыв; относительное движение в трубке вращающегося или движущегося тела — закон движения и давление на стенку; влияние вращения Земли — отклонение падающей точки, давление поезда на рельс, маятник Фуко, g по широте.</p>
+            <p className="lede">Обе основные задачи динамики точки: по силам — движение (по прямой и в плоскости, с сопротивлением среды и трением), по закону движения — сила; движение по окружности — натяжение нити, давление на связь, отрыв; относительное движение в трубке вращающегося или движущегося тела — закон движения и давление на стенку; влияние вращения Земли — отклонение падающей точки, давление поезда на рельс, маятник Фуко, g по широте; равновесие при вращении (вираж, конический маятник, регулятор, тахометр), движение по поверхностям и кривым, составные задачи, теорема об импульсе.</p>
           </div>
           <div className="topright">
             <label className="preset">
@@ -111,6 +142,10 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                     ['Движение по окружности: Мещерский § 26, 31; Яблонский Д.6', CIRCLE_PRESETS],
                     ['Относительное движение: Мещерский § 33; Яблонский Д.4', REL_PRESETS],
                     ['Вращение Земли: Мещерский § 23, 33', EARTH_PRESETS],
+                    ['Равновесие при вращении: Мещерский § 26, 31, 41', SPIN_PRESETS],
+                    ['Поверхности и кривые: Мещерский § 31', SURF_PRESETS],
+                    ['Составные задачи: Мещерский § 31', STAGE_PRESETS],
+                    ['Теорема об импульсе: Мещерский § 28', IMPULSE_PRESETS],
                   ] as [string, Record<string, { title: string }>][]
                 ).map(([label, rec]) => (
                   <optgroup key={label} label={label}>
@@ -135,7 +170,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
         <Notice notice={st.notice} onClose={store.closeNotice} />
         <section className="sheet" aria-label="Графики">
           <div className="bar">
-            <span className="hint">{task.mode === 'line' ? 'Силы «+» — в сторону оси x. Сила трения и сопротивление направлены против скорости.' : task.mode === 'first' ? 'Закон движения — формулы от t: sin, cos, tg, exp, ln, sqrt, sh, ch, π; десятичная запятая.' : task.mode === 'circle' ? 'φ — от нижней точки окружности против часовой стрелки; v₀ «+» — в сторону роста φ.' : task.mode === 'rel' ? 'Ось x — вдоль трубки от точки O; θ — угол трубки с горизонталью; ω > 0 — против часовой стрелки.' : task.mode === 'earth' ? 'Оси места: x — на восток, y — на север, z — вверх; курс — от севера по часовой стрелке.' : 'Ось y — вверх; угол начальной скорости — от оси x против часовой стрелки.'}</span>
+            <span className="hint">{task.mode === 'line' ? 'Силы «+» — в сторону оси x. Сила трения и сопротивление направлены против скорости.' : task.mode === 'first' ? 'Закон движения — формулы от t: sin, cos, tg, exp, ln, sqrt, sh, ch, π; десятичная запятая.' : task.mode === 'circle' ? 'φ — от нижней точки окружности против часовой стрелки; v₀ «+» — в сторону роста φ.' : task.mode === 'rel' ? 'Ось x — вдоль трубки от точки O; θ — угол трубки с горизонталью; ω > 0 — против часовой стрелки.' : task.mode === 'earth' ? 'Оси места: x — на восток, y — на север, z — вверх; курс — от севера по часовой стрелке.' : task.mode === 'spin' ? 'Относительный покой при равномерном вращении: к силам добавлена центробежная сила инерции.' : task.mode === 'surf' ? 'Несвободная точка: реакция — из проекции на нормаль, закон движения — из касательной проекции.' : task.mode === 'stages' ? 'Конец одного этапа — начало следующего.' : task.mode === 'impulse' ? 'm·v₁ − m·v₀ = S — импульс равнодействующей; для центральной силы r²φ̇ = const.' : 'Ось y — вверх; угол начальной скорости — от оси x против часовой стрелки.'}</span>
             <div className="hist">
               <button type="button" title="Отменить (Ctrl+Z)" disabled={!st.canUndo} onClick={store.undo}>
                 <UndoIcon />
@@ -321,6 +356,10 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                 <p className="empty">φ = 0 — нижняя точка, 90° — справа на уровне центра, 180° — верхняя. N — проекция реакции на направление к центру: у нити это натяжение, у внутренней поверхности — давление; у внешней поверхности давление равно −N. При v₀ = 0 в положении неустойчивого равновесия (вершина купола, стержень вверху) движение начинается от ничтожно малого толчка.</p>
               </>
             )}
+            {task.mode === 'spin' && <SpinPanel store={store} p={task.spin} />}
+            {task.mode === 'surf' && <SurfPanel store={store} p={task.surf} />}
+            {task.mode === 'stages' && <StagesPanel store={store} p={task.stages} />}
+            {task.mode === 'impulse' && <ImpulsePanel store={store} p={task.impulse} />}
             {task.mode === 'earth' && (
               <>
                 <label className="field">
@@ -426,7 +465,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
         <section className="pr-sec pr-figs">
           <figure>
             <svg viewBox={out.fig.viewBox} dangerouslySetInnerHTML={{ __html: out.fig.svg }} />
-            <figcaption>{task.mode === 'plane' ? 'Траектория' : task.mode === 'circle' ? 'Схема и реакция связи N(φ)' : task.mode === 'rel' ? 'Схема и графики x(t), N(t)' : task.mode === 'earth' ? 'Схема' : 'Графики'}</figcaption>
+            <figcaption>{task.mode === 'plane' ? 'Траектория' : task.mode === 'circle' ? 'Схема и реакция связи N(φ)' : task.mode === 'rel' ? 'Схема и графики x(t), N(t)' : task.mode === 'earth' || task.mode === 'spin' || task.mode === 'surf' || task.mode === 'stages' || task.mode === 'impulse' ? 'Схема' : 'Графики'}</figcaption>
           </figure>
         </section>
         <section className="pr-sec">
