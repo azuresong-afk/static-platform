@@ -75,6 +75,13 @@ const fallingDisk = (t: string): MechProblem => ({
   drives: [proj('C', '0', "xC'", "xC''"), proj('C', '90', "yC'", "yC''"), omega('CA', "φ'", "φ''")],
   time: { t, from: '0', to: '4', laws: [law('xC', '10t', 'length'), law('yC', '100 − 4,9t^2', 'length'), law('φ', 'πt/2')] },
 });
+
+/**
+ * §15: уравнения плоского движения звеньев по времени. Механизм задаётся законами движения (time); решение в момент t,
+ * график — по времени, таблица x_пол(t), y_пол(t), φ(t) — в решении. Полюс — первая точка звена, угол φ — направление
+ * от первой точки к последней (от оси x против часовой стрелки).
+ */
+const timed = (t: string, laws: MLaw[], to = '6'): NonNullable<MechProblem['time']> => ({ t, from: '0', to, laws });
 const r13 = { r: 10, l: 40, h: 15, w: 2 };
 
 export const MECH_PRESETS = {
@@ -464,6 +471,149 @@ export const MECH_PRESETS = {
     problem: fallingDisk('1'),
     book: { 'vx.A': 10, 'vy.A': -9.49, 'v.A': 13.8, 'ax.A': -0.49, 'ay.A': -9.8, 'a.A': 9.81 },
     note: 'При t = 1 с точка A — справа от центра: v = (10; −9,49), 13,8 м/с; a = (−0,49; −9,8), 9,81 м/с².',
+  },
+  m151: {
+    title: 'Мещерский 15.1: эллипсограф — уравнения движения линейки AB (числа — пример)',
+    problem: {
+      ...ellipso('10', true),
+      bodies: [body('OC', 'O', 'C'), body('AB', 'A', 'C', 'B')],
+      drives: [omega('OC', "φ'", "φ''")],
+      plot: 'ang:AB',
+      time: timed('0,5', [law('φ', '2t')], '0,75'),
+    },
+    book: { 'x.B': 2 * 10 * Math.cos(1), 'y.B': 0, 'x.A': 0, 'y.A': 2 * 10 * Math.sin(1), 'ang.A.B': -1 },
+    note: 'OC = BC = AC = r = 10, ω₀ = 2 с⁻¹, t = 0,5 с; построение точек A и B рассчитано на первую четверть оборота кривошипа (0 < ω₀t < π/2) — по концам промежутка эллипсограф в мёртвом положении. Книга (полюс B): x_B = 2r cos ω₀t, y_B = 0, φ = −ω₀t; полюс A: x_A = 0, y_A = 2r sin ω₀t, угол направления A→B — тот же φ = −ω₀t.',
+  },
+  m152: {
+    title: 'Мещерский 15.2: колесо катится без скольжения — уравнения движения (числа — пример)',
+    problem: {
+      points: [xy('C', 'xC', '0,5'), polar('M', 'C', '0,5', '90 + φ')],
+      bodies: [body('колесо', 'C', 'M')],
+      cons: [{ k: 'roll', b: 'колесо', c: 'C', r: '0,5', ang: '0' }],
+      drives: [proj('C', '0', "xC'", "xC''")],
+      plot: 'ang:колесо',
+      time: timed('0,7', [law('xC', '2t', 'length'), law('φ', '-4t')]),
+    },
+    book: { 'x.C': 2 * 0.7, 'y.C': 0.5, 'ang.C.M': Math.PI / 2 - (2 * 0.7) / 0.5 },
+    note: 'R = 0,5 м, v = 2 м/с, t = 0,7 с. Книга (полюс C): x_C = vt, y_C = R, φ = −vt/R (поворот от начального положения; ось y подвижной системы вертикальна при t = 0, поэтому направление C→M при t = 0 — 90°).',
+  },
+  m153: {
+    title: 'Мещерский 15.3: шестерёнка катится по неподвижной шестерёнке — уравнения движения (числа — пример)',
+    problem: {
+      points: [xy('O', '0', '0'), polar('A', 'O', '40', 'α'), polar('M', 'A', '10', 'φ1')],
+      bodies: [body('OA', 'O', 'A'), body('G', 'O'), body('P', 'A', 'M')],
+      cons: [...fixed('O'), { k: 'gear', b1: 'G', c1: 'O', r1: '30', b2: 'P', c2: 'A', r2: '10', int: false }],
+      drives: [omega('OA', "α'", "α''"), omega('G', '0')],
+      plot: 'ang:P',
+      time: timed('1,2', [law('α', '0,25t^2'), law('φ1', 't^2')]),
+    },
+    book: { 'x.A': 40 * Math.cos(0.25 * 1.44), 'y.A': 40 * Math.sin(0.25 * 1.44), 'ang.A.M': (30 / 10 + 1) * 0.25 * 1.44 },
+    note: 'R = 30, r = 10, ε₀ = 0,5 с⁻², t = 1,2 с: α = ε₀t²/2. Книга (полюс A): x_A = (R + r) cos(ε₀t²/2), y_A = (R + r) sin(ε₀t²/2), φ₁ = (R/r + 1)ε₀t²/2.',
+  },
+  m154: {
+    title: 'Мещерский 15.4: шестерёнка катится внутри неподвижной шестерёнки — уравнения движения (числа — пример)',
+    problem: {
+      points: [xy('O', '0', '0'), polar('A', 'O', '20', 'α'), polar('M', 'A', '10', 'φ1')],
+      bodies: [body('OA', 'O', 'A'), body('G', 'O'), body('P', 'A', 'M')],
+      cons: [...fixed('O'), { k: 'gear', b1: 'G', c1: 'O', r1: '30', b2: 'P', c2: 'A', r2: '10', int: true }],
+      drives: [omega('OA', "α'", "α''"), omega('G', '0')],
+      plot: 'ang:P',
+      time: timed('0,7', [law('α', '2t'), law('φ1', '-4t')]),
+    },
+    book: { 'x.A': 20 * Math.cos(1.4), 'y.A': 20 * Math.sin(1.4), 'ang.A.M': -(30 / 10 - 1) * 1.4 },
+    note: 'R = 30, r = 10, ω₀ = 2 с⁻¹, t = 0,7 с. Книга (полюс A): x_A = (R − r) cos ω₀t, y_A = (R − r) sin ω₀t, φ₁ = −(R/r − 1)ω₀t (шестерёнка вращается против кривошипа).',
+  },
+  m155: {
+    title: 'Мещерский 15.5: шатун паровой машины — уравнения движения (числа — пример)',
+    problem: { ...crank('10', '40', 'φ', "φ'", "φ''"), plot: 'ang:AB', time: timed('0,7', [law('φ', '2t')]) },
+    book: { 'x.A': 10 * Math.cos(1.4), 'y.A': 10 * Math.sin(1.4), 'ang.A.B': -Math.asin((10 / 40) * Math.sin(1.4)) },
+    note: 'r = 10, l = 40, ω₀ = 2 с⁻¹, t = 0,7 с. Книга (полюс A): x = r cos ω₀t, y = r sin ω₀t, φ = −arcsin((r/l) sin ω₀t).',
+  },
+  m157: {
+    title: 'Мещерский 15.7: муфты A и B на пересекающихся направляющих — уравнения движения стержня (числа — пример)',
+    problem: {
+      points: [xy('O', '0', '0'), polar('A', 'O', 'xA', '120'), onLine('B', 'A', '1', 'O', '0')],
+      bodies: [body('AB', 'A', 'B')],
+      cons: [slider('A', '120'), slider('B', '0')],
+      drives: [proj('A', '120', "xA'", "xA''")],
+      plot: 'ang:AB',
+      time: timed('1,5', [law('xA', '0,4t', 'length')]),
+    },
+    book: { 'x.A': -0.4 * 1.5 * Math.cos(Math.PI / 3), 'y.A': 0.4 * 1.5 * Math.sin(Math.PI / 3), 'ang.A.B': -Math.asin(((0.4 * 1.5) / 1) * Math.sin(Math.PI / 3)) },
+    note: 'v_A = 0,4 м/с, l = 1 м, α = 60° (∠BOA = π − α), t = 1,5 с. Книга (полюс A): x_A = −v_A t cos α, y_A = v_A t sin α, φ = −arcsin((v_A t/l) sin α).',
+  },
+  m158: {
+    title: 'Мещерский 15.8: стержень опирается на штифт D — уравнения движения (числа — пример)',
+    problem: {
+      points: [xy('A', 'xA', '0'), xy('D', '10', '4'), toward('B', 'A', '12', 'D')],
+      bodies: [body('AB', 'A', 'B')],
+      cons: [slider('A', '0'), guide('D', 'AB', 'A', 'B')],
+      drives: [proj('A', '0', "xA'", "xA''")],
+      plot: 'ang:AB',
+      time: timed('1,5', [law('xA', '2t', 'length')], '4'),
+    },
+    book: { 'x.A': 3, 'y.A': 0, 'ang.A.B': Math.atan(4 / (10 - 3)), 'x.B': 3 + (12 * (10 - 3)) / Math.hypot(4, 7), 'y.B': (4 * 12) / Math.hypot(4, 7) },
+    note: 'v = 2, H = 4, a = 10, l = 12, t = 1,5 с. Книга (полюс A): x_A = vt, y_A = 0, φ = arctg(H/(a − vt)); x_B = vt + l(a − vt)/√(H² + (a − vt)²), y_B = Hl/√(H² + (a − vt)²).',
+  },
+  m159: {
+    title: 'Мещерский 15.9: стержень через качающуюся муфту O — уравнения движения и траектория точки M (числа — пример)',
+    problem: {
+      points: [xy('O', '0', '0'), xy('O1', '5', '0'), polar('A', 'O1', '5', 'θ'), toward('M', 'A', '10', 'O')],
+      bodies: [body('O1A', 'O1', 'A'), body('AB', 'A', 'M'), body('S', 'O')],
+      cons: [...fixed('O', 'O1'), guide('O', 'AB', 'A', 'M')],
+      drives: [omega('O1A', "θ'", "θ''"), omega('S', '0')],
+      plot: 'ang:AB',
+      time: timed('1,2', [law('θ', '2t')], '3,2'),
+    },
+    book: { 'x.A': 5 * (1 + Math.cos(2.4)), 'y.A': 5 * Math.sin(2.4), 'ang.M.A': 1.2, 'x.M': 10 * (Math.cos(1.2) - 1) * Math.cos(1.2), 'y.M': 10 * (Math.cos(1.2) - 1) * Math.sin(1.2) },
+    note: 'O₁A = a/2 = 5, OO₁ = a/2, a = 10, ω = 2 с⁻¹, t = 1,2 с. Книга (полюс A): x_A = (a/2)(1 + cos ωt), y_A = (a/2) sin ωt, φ = ωt/2 (направление от M к A; программа показывает направление A→M, оно на π больше); точка M (AM = a) — кардиоида ρ = a(cos φ − 1).',
+  },
+  m1510: {
+    title: 'Мещерский 15.10: конхоидограф — уравнения движения линейки и траектория точки M (числа — пример)',
+    problem: {
+      points: [xy('O', '0', '0'), xy('A', 'xA', '4'), toward('M', 'A', '3', 'O')],
+      bodies: [body('AB', 'A', 'M'), body('S', 'O')],
+      cons: [...fixed('O'), slider('A', '0'), guide('O', 'AB', 'A', 'M')],
+      drives: [proj('A', '0', "xA'", "xA''"), omega('S', '0')],
+      plot: 'ang:AB',
+      time: timed('0,5', [law('xA', '5 sin(2t)', 'length')], '3,2'),
+    },
+    book: { 'x.A': 5 * Math.sin(1), 'y.A': 4, 'ang.M.A': Math.atan2(4, 5 * Math.sin(1)) },
+    note: 'a = 4, b = AM = 3, c = 5, ω = 2 с⁻¹, t = 0,5 с. Книга: x_A = c sin ωt, y_A = a, φ = arctg(a/(c sin ωt)) (направление от M к A; программа показывает направление A→M, оно на π больше); точка M: ρ = a/sin φ − b, (x_M² + y_M²)(y_M − a)² = b²y_M².',
+  },
+  m1511: {
+    title: 'Мещерский 15.11: антипараллелограмм на большом звене — уравнения движения звена AB (числа — пример)',
+    problem: {
+      points: [xy('O', '0', '0'), xy('O1', '25', '0'), polar('A', 'O', '10', 'θ'), two('B', 'A', '25', 'O1', '10', -1)],
+      bodies: [body('OA', 'O', 'A'), body('AB', 'A', 'B'), body('O1B', 'O1', 'B')],
+      cons: fixed('O', 'O1'),
+      drives: [omega('OA', "θ'", "θ''")],
+      plot: 'ang:AB',
+      time: timed('0,7', [law('θ', '2t')], '1,5'),
+    },
+    book: {
+      'x.A': 10 * Math.cos(1.4),
+      'y.A': 10 * Math.sin(1.4),
+      'ang.A.B': -2 * Math.atan((10 * Math.sin(1.4)) / (25 - 10 * Math.cos(1.4))),
+    },
+    note: 'OA = O₁B = a = 10, OO₁ = AB = b = 25, ω = 2 с⁻¹, t = 0,7 с; точка B построена как пересечение окружностей на одной стороне от OO₁ — верно для половины оборота кривошипа (0 < ωt < π), поэтому график идёт до t = 1,5 с. Книга (полюс A): x_A = a cos ωt, y_A = a sin ωt, φ = −2 arctg(a sin ωt/(b − a cos ωt)).',
+  },
+  m1512: {
+    title: 'Мещерский 15.12: антипараллелограмм на малом звене — уравнения движения звена AB (числа — пример)',
+    problem: {
+      points: [xy('O', '0', '0'), xy('O1', '10', '0'), polar('A', 'O', '25', 'θ'), two('B', 'A', '10', 'O1', '25', -1)],
+      bodies: [body('OA', 'O', 'A'), body('AB', 'A', 'B'), body('O1B', 'O1', 'B')],
+      cons: fixed('O', 'O1'),
+      drives: [omega('OA', "θ'", "θ''")],
+      plot: 'ang:AB',
+      time: timed('0,7', [law('θ', '2t')], '1,5'),
+    },
+    book: {
+      'x.A': 25 * Math.cos(1.4),
+      'y.A': 25 * Math.sin(1.4),
+      'ang.A.B': -Math.PI - 2 * Math.atan((Math.cos(1.4) - 10 / 25) / Math.sin(1.4)),
+    },
+    note: 'OA = O₁B = a = 25, OO₁ = AB = b = 10 (a > b), ω = 2 с⁻¹, t = 0,7 с; построение B верно для половины оборота кривошипа (0 < ωt < π), график идёт до t = 1,5 с. Книга (полюс A): x_A = a cos ωt, y_A = a sin ωt, φ = 2 arcctg((cos ωt − b/a)/sin ωt) (в программе угол приводится к (−π; π], разность 2π).',
   },
 } satisfies Record<string, MechPreset>;
 
