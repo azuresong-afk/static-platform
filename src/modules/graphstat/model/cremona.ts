@@ -236,7 +236,11 @@ export function cremona(t: Truss, res: TrussResult): Cremona {
     const back: V2 = [-e.out[0], -e.out[1]];
     if (inWedge(w, back)) {
       e.out = back;
-      note = 'В узле ' + nodeName(e.node) + ' линия действия силы идёт внутрь фермы со стороны хвоста стрелки, поэтому она продолжена в сторону острия.';
+      note =
+        (note ? note + ' ' : '') +
+        'В узле ' +
+        nodeName(e.node) +
+        ' линия действия силы идёт внутрь фермы со стороны хвоста стрелки, поэтому она продолжена в сторону острия.';
     } else
       return {
         ...empty,
