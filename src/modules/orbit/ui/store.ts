@@ -3,7 +3,8 @@ import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
 import { BODIES, type OrbitProblem, type PlanetProblem, type RadialProblem, type Unit } from '../model/orbit';
-import { ORB_PRESETS, orbit, planet, radial, type OrbMode, type OrbPresetKey, type OrbState } from '../presets';
+import type { TrajProblem } from '../model/traj';
+import { ORB_PRESETS, orbit, planet, radial, traj, type OrbMode, type OrbPresetKey, type OrbState } from '../presets';
 
 export const ORBIT_MODULE = 'orbit';
 export const PLANET_NUM = ['g', 'R', 'mRatio', 'rRatio', 'H', 'Trot', 'G'] as const;
@@ -12,6 +13,46 @@ export const ORBIT_NUM = ['mu', 'g', 'R', 'm', 'r0', 'v0', 'th0', 'ph0', 'e1', '
 export type OrbitNumKey = (typeof ORBIT_NUM)[number];
 export const RADIAL_NUM = ['mu1', 'g', 'R', 'k2', 'd', 'acc', 'vinf', 'x0', 'v0', 'x1'] as const;
 export type RadialNumKey = (typeof RADIAL_NUM)[number];
+export const TRAJ_NUM = [
+  'mu',
+  'g',
+  'R',
+  'a',
+  'e',
+  'x1',
+  'x2',
+  'r0',
+  'th0',
+  'v0',
+  'p',
+  'c',
+  'T',
+  'Hd',
+  'gam',
+  'a1',
+  'T1',
+  'a2',
+  'T2',
+  'cb',
+  'phi1',
+  'H',
+  'alpha',
+  'Trot',
+  'turns',
+  'm1',
+  'm2',
+  'fG',
+  'Jf',
+  'J0',
+  'Om0',
+  'M0',
+  'kap',
+  'Tc',
+  'u0',
+  'psi',
+] as const;
+export type TrajNumKey = (typeof TRAJ_NUM)[number];
+export type TrajSel = 'kind' | 'unit' | 'muMode' | 'anom' | 'inv' | 'fw';
 export type OrbitSel = 'unit' | 'force' | 'muMode' | 'def' | 'shape' | 'scale' | 'man' | 'tgtKind' | 'tgt';
 export type RadialSel = 'unit' | 'muMode' | 'ask' | 'repel' | 'two' | 'fromInf';
 const UNITS: Unit[] = ['km', 'm', 'cm'];
@@ -25,6 +66,14 @@ const ORBIT_SEL: Record<OrbitSel, readonly string[]> = {
   man: ['none', 'impulse', 'target'],
   tgtKind: ['tang', 'rad'],
   tgt: ['apo', 'peri', 'vinf'],
+};
+const TRAJ_SEL: Record<TrajSel, readonly string[]> = {
+  kind: ['point', 'time', 'mean', 'fall', 'inverse', 'binet', 'track', 'two', 'flywheel'],
+  unit: UNITS,
+  muMode: ['mu', 'planet'],
+  anom: ['nu', 'E', 'M', 't'],
+  inv: ['axes', 'ecc', 'sma', 'mass'],
+  fw: ['stop', 'motor', 'turn'],
 };
 const BODY_KEYS = [...Object.keys(BODIES), 'ratio', 'custom'];
 
@@ -43,7 +92,7 @@ interface Snap {
   preset: OrbStoreState['preset'];
 }
 const copy = <T>(p: T): T => structuredClone(p);
-const DEF: OrbState = { mode: 'orbit', planet: planet({ H: 300 }), orbit: orbit({}), radial: radial({}) };
+const DEF: OrbState = { mode: 'orbit', planet: planet({ H: 300 }), orbit: orbit({}), radial: radial({}), traj: traj({}) };
 
 export function presetState(k: OrbPresetKey, base: OrbState = DEF): OrbState {
   const t = ORB_PRESETS[k].problem;
@@ -51,7 +100,8 @@ export function presetState(k: OrbPresetKey, base: OrbState = DEF): OrbState {
   s.mode = t.mode;
   if (t.mode === 'planet') s.planet = copy(t.planet);
   else if (t.mode === 'orbit') s.orbit = copy(t.orbit);
-  else s.radial = copy(t.radial);
+  else if (t.mode === 'radial') s.radial = copy(t.radial);
+  else s.traj = copy(t.traj);
   return s;
 }
 
@@ -82,14 +132,32 @@ function parseRadial(raw: unknown): RadialProblem | null {
   };
 }
 
+function parseTraj(raw: unknown): TrajProblem | null {
+  if (!isObj(raw) || !TRAJ_NUM.every((k) => isNum(raw[k])) || typeof raw.rphi !== 'string') return null;
+  for (const [k, vals] of Object.entries(TRAJ_SEL)) if (!vals.includes(raw[k] as string)) return null;
+  const sel = Object.fromEntries(Object.keys(TRAJ_SEL).map((k) => [k, raw[k]])) as Pick<TrajProblem, TrajSel>;
+  return { ...nums(raw, TRAJ_NUM), ...sel, rphi: raw.rphi.slice(0, 200) };
+}
+
 export function parseOrb(raw: unknown): { ok: true; problem: OrbState } | { ok: false; errors: string[] } {
-  if (!isObj(raw) || !['planet', 'orbit', 'radial'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
+  if (!isObj(raw) || !['planet', 'orbit', 'radial', 'traj'].includes(raw.mode as string))
+    return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
   const p = parsePlanet(raw.planet),
     o = parseOrbit(raw.orbit),
-    x = parseRadial(raw.radial);
-  const cur = raw.mode === 'planet' ? p : raw.mode === 'orbit' ? o : x;
+    x = parseRadial(raw.radial),
+    k = parseTraj(raw.traj);
+  const cur = raw.mode === 'planet' ? p : raw.mode === 'orbit' ? o : raw.mode === 'radial' ? x : k;
   if (!cur) return { ok: false, errors: ['Данные задачи неполные.'] };
-  return { ok: true, problem: { mode: raw.mode as OrbMode, planet: p ?? copy(DEF.planet), orbit: o ?? copy(DEF.orbit), radial: x ?? copy(DEF.radial) } };
+  return {
+    ok: true,
+    problem: {
+      mode: raw.mode as OrbMode,
+      planet: p ?? copy(DEF.planet),
+      orbit: o ?? copy(DEF.orbit),
+      radial: x ?? copy(DEF.radial),
+      traj: k ?? copy(DEF.traj),
+    },
+  };
 }
 
 export class OrbStore {
@@ -166,6 +234,23 @@ export class OrbStore {
       // Из бесконечности ищется только скорость в точке x₁.
       if (key === 'fromInf' && v === true) p.radial.ask = 'at';
     });
+  };
+  /* формулы Кеплера, Бине, трасса */
+  typeTraj = (key: TrajNumKey, v: number) => {
+    this.touch(`k:${key}`);
+    this.edit((p) => (p.traj[key] = v));
+  };
+  setTraj = <K extends TrajSel>(key: K, v: TrajProblem[K]) => {
+    this.commit();
+    this.edit((p) => {
+      p.traj[key] = v;
+      // «Время полёта» задаёт точки аномалиями, а не временем от перицентра.
+      if (key === 'kind' && v === 'time' && p.traj.anom === 't') p.traj.anom = 'nu';
+    });
+  };
+  typeRphi = (s: string) => {
+    this.touch('k:rphi');
+    this.edit((p) => (p.traj.rphi = s.slice(0, 200)));
   };
   undo = () => {
     const s = this.hist.undo(this.snap());

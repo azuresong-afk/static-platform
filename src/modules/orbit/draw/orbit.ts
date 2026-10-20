@@ -16,16 +16,16 @@ import {
 } from '../model/orbit';
 import { LEN, num } from '../text/solution';
 
-const r1 = (v: number) => Math.round(v * 10) / 10;
-type P2 = [number, number];
-const W = 1000,
+export const r1 = (v: number) => Math.round(v * 10) / 10;
+export type P2 = [number, number];
+export const W = 1000,
   H = 480;
 const rad = (a: number) => (a * Math.PI) / 180;
-const wrap = (out: string[]) => ({ svg: out.join(''), viewBox: `0 0 ${W} ${H}` });
-const sheet = () => [`<rect width="${W}" height="${H}" fill="var(--sheet)"/>`];
-const note = (out: string[], text: string) => out.push(`<text class="tb-note" x="16" y="${H - 14}">${text}</text>`);
+export const wrap = (out: string[]) => ({ svg: out.join(''), viewBox: `0 0 ${W} ${H}` });
+export const sheet = () => [`<rect width="${W}" height="${H}" fill="var(--sheet)"/>`];
+export const note = (out: string[], text: string) => out.push(`<text class="tb-note" x="16" y="${H - 14}">${text}</text>`);
 
-function arrow(a: P2, bb: P2, cls: string) {
+export function arrow(a: P2, bb: P2, cls: string) {
   const dx = bb[0] - a[0],
     dy = bb[1] - a[1],
     L = Math.hypot(dx, dy) || 1,
@@ -33,15 +33,15 @@ function arrow(a: P2, bb: P2, cls: string) {
     uy = dy / L;
   return `<line class="${cls}" x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(bb[0] - ux * 8)}" y2="${r1(bb[1] - uy * 8)}"/><path class="${cls}-f" d="M${r1(bb[0])} ${r1(bb[1])}L${r1(bb[0] - ux * 11 - uy * 4.5)} ${r1(bb[1] - uy * 11 + ux * 4.5)}L${r1(bb[0] - ux * 11 + uy * 4.5)} ${r1(bb[1] - uy * 11 - ux * 4.5)}Z"/>`;
 }
-const label = (x: number, y: number, cls: string, L: string, S = '', anchor = 'start') =>
+export const label = (x: number, y: number, cls: string, L: string, S = '', anchor = 'start') =>
   `<text class="t cv-t ${cls}" x="${r1(x)}" y="${r1(y)}" text-anchor="${anchor}">${L}${S ? `<tspan dy="4" font-size="11">${S}</tspan>` : ''}</text>`;
 /** Список «обозначение — значение» справа от чертежа. */
-function legend(out: string[], x: number, rows: [string, string][]) {
+export function legend(out: string[], x: number, rows: [string, string][]) {
   rows.forEach(([k, v], i) => out.push(`<text class="rt-tick" x="${x}" y="${40 + i * 22}"><tspan font-weight="600">${k}</tspan> ${v}</text>`));
 }
 
 /** Подбор масштаба: точки задачи → область [x0, x0 + w] × [y0, y0 + h], ось y вверх. */
-function fitter(pts: P2[], x0: number, y0: number, w: number, h: number) {
+export function fitter(pts: P2[], x0: number, y0: number, w: number, h: number) {
   const xs = pts.map((p) => p[0]),
     ys = pts.map((p) => p[1]);
   const lo: P2 = [Math.min(...xs), Math.min(...ys)],
@@ -98,7 +98,7 @@ export function renderPlanet(pr: PlanetProblem, r: PlanetResult) {
 /* ---------- орбита ---------- */
 
 /** Точки конического сечения в пределах видимой области. */
-function conic(o: Elements, rView: number): P2[][] {
+export function conic(o: Elements, rView: number): P2[][] {
   const parts: P2[][] = [];
   let cur: P2[] = [];
   const N = 720;
@@ -122,7 +122,7 @@ function conic(o: Elements, rView: number): P2[][] {
   }
   return parts;
 }
-const path = (pts: P2[], P: (p: P2) => P2, closed = false) => `M${pts.map((p) => P(p).map(r1).join(' ')).join('L')}${closed ? 'Z' : ''}`;
+export const path = (pts: P2[], P: (p: P2) => P2, closed = false) => `M${pts.map((p) => P(p).map(r1).join(' ')).join('L')}${closed ? 'Z' : ''}`;
 
 export function renderOrbit(pr: OrbitProblem, r: OrbitResult) {
   const out = sheet();

@@ -34,7 +34,7 @@ export function num(x: number, d = 5): string {
   return `${dec(String(+m.toPrecision(d)))}·10${sup(ex)}`;
 }
 /** Число в основании степени: в скобках, если записано с множителем 10ⁿ или отрицательное. */
-const pw = (x: number, d = 5) => {
+export const pw = (x: number, d = 5) => {
   const t = num(x, d);
   return /·|−/.test(t) ? `(${t})` : t;
 };
@@ -50,7 +50,7 @@ export const LEN: Record<Unit, string> = { km: 'км', m: 'м', cm: 'см' };
 /** Сила m·μ/r²: масса в кг (в граммах для сантиметров). */
 export const FORCE: Record<Unit, string> = { km: 'кН', m: 'Н', cm: 'дин' };
 const rad = (a: number) => (a * Math.PI) / 180;
-const bad = (errors: string[]): Doc => ({
+export const bad = (errors: string[]): Doc => ({
   steps: [
     {
       title: 'Данные',
@@ -61,12 +61,12 @@ const bad = (errors: string[]): Doc => ({
     },
   ],
 });
-const exf =
+export const exf =
   (opts: { explain?: boolean }) =>
   (bl: Block[], ...c: Inline[]) => {
     if (opts.explain) bl.push({ k: 'p', cls: 'explain', c });
   };
-type Line = { num?: boolean; c: Inline[] };
+export type Line = { num?: boolean; c: Inline[] };
 
 /* ---------- небесное тело ---------- */
 

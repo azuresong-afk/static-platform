@@ -733,6 +733,21 @@ async function main() {
   check((await p.innerText('#orbsolution')).includes('v₀ = 10,733'), 'Мещерский 30.27: скорость снаряда до точки равного притяжения');
   await p.selectOption('#orbpreset', 'm5107');
   check((await p.innerText('#orbsolution')).includes('высота 308,23'), 'Мещерский 51.7: высота включения тормозного двигателя');
+  await p.selectOption('#orbpreset', 'm5030t');
+  check(
+    (await p.innerText('#orbsolution')).includes('Δt = 2404,2 с = 40,07 мин') && (await p.locator('#orbsvg path').count()) > 3,
+    'Мещерский 50.30: время полёта от перицентра по уравнению Кеплера',
+  );
+  await p.selectOption('#orbpreset', 'm506');
+  check((await p.innerText('#orbsolution')).includes('β = 63,3729°') && (await p.locator('#orbsvg path').count()) > 4, 'Мещерский 50.6: угол трассы спутника с экватором');
+  await p.selectOption('#orbpreset', 'm5013');
+  check((await p.innerText('#orbsolution')).includes('μ = −a_r·r² = 398000'), 'Мещерский 50.13: формула Бине даёт закон обратных квадратов');
+  await p.fill('#orb-k-rphi', '2 exp(φ)');
+  await p.fill('#orb-k-cb', '0,7071');
+  await p.press('#orb-k-cb', 'Tab');
+  check((await p.innerText('#orbsolution')).includes('a_r = K·r^−3'), 'формула Бине: траектория r = 2e^φ — сила ∝ 1/r³ (Мещерский 28.18)');
+  await p.selectOption('#orbpreset', 'm5110');
+  check((await p.innerText('#orbsolution')).includes('T = 1,6462 с') && (await p.innerText('#orbsolution')).includes('ψ = 0,072878 рад'), 'Мещерский 51.10–51.11: торможение маховиком');
   await p.selectOption('#orbmode', 'planet');
   await p.selectOption('#orbbody', 'mars');
   check((await p.innerText('#orbsolution')).includes('v₁ = 3,535') && (await p.locator('#orbsvg circle').count()) > 0, 'небесное тело: космические скорости Марса');
