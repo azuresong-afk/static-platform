@@ -1405,6 +1405,48 @@ async function main() {
   check((await p.getAttribute('[data-tab="oscillation"]', 'aria-selected')) === 'true' && (await p.innerText('#osolution')) === osSol, 'файл колебаний открывается в своей вкладке без потерь');
   await tab('frames');
 
+  // 33а-2. Удар и колебания, пункт 22: новые возмущения, обратные задачи, резонансная кривая, опыты.
+  await tab('oscillation');
+  await p.selectOption('#opreset', 'm5346');
+  os = await p.innerText('#osolution');
+  check(os.includes('Кратковременная сила') && os.includes('1,414') && os.includes('τ/T₀ = 0,25'), 'Мещерский 53.46–53.47: сила действует T/4 — наибольшее отклонение √2·F/c', os.slice(0, 600));
+  check((await p.locator('#osvg .os-dim').count()) >= 1 && (await p.locator('#ores').count()) === 0, 'на графике — момент выключения силы; резонансной кривой у негармонического возмущения нет');
+  await p.selectOption('#opreset', 'm5337');
+  check((await p.locator('#ores .rt-line').count()) === 2 && (await p.innerText('#osolution')).includes('Резонансная кривая'), 'Мещерский 53.37: резонансная кривая и сдвиг фазы на рисунке');
+  check((await p.innerText('#osolution')).includes('Δ = z₂ − z₁ = 0,1744'), 'половинная ширина Δ = 0,1744', (await p.innerText('#osolution')).slice(-900));
+  await p.selectOption('#opreset', 'm5341');
+  os = await p.innerText('#osolution');
+  check(os.includes('Обратная задача') && os.includes('377,65 т') && os.includes('вторая гармоника'), 'Мещерский 53.41: вес фундамента 377,65 т (с Q), две гармоники', os.slice(0, 700));
+  await p.selectOption('#opreset', 'm5342');
+  check((await p.locator('#oinvroot option').count()) === 2 && (await p.innerText('#osolution')).includes('найдено корней: 2'), 'Мещерский 53.42: два значения J — до и после резонанса');
+  await p.selectOption('#oinvroot', '1');
+  check((await p.innerText('#osolution')).includes('корень № 2'), 'выбран второй корень');
+  await p.selectOption('#opreset', 'm3241');
+  check((await p.innerText('#osolution')).includes('1588'), 'Мещерский 32.41: длина балки 1588 см (15,9 м)', (await p.innerText('#osolution')).slice(0, 500));
+  await p.click('#oinvapply');
+  check(!(await p.isChecked('#oinv')) && (await p.inputValue('#o-e00-l')).replace(/\s/g, '').startsWith('1588'), 'найденная длина подставлена в задачу, обратная задача выключена');
+  await p.selectOption('#opreset', 'm3717');
+  os = await p.innerText('#osolution');
+  check(os.includes('Момент инерции по периодам') && os.includes('0,117'), 'Мещерский 37.17: J = 0,117 кГ·см·с²', os.slice(0, 500));
+  await p.selectOption('#opreset', 'm3283');
+  check((await p.innerText('#osolution')).includes('96,31 км/ч'), 'Мещерский 32.83: критическая скорость вагона 96 км/ч');
+  await p.selectOption('#opreset', 'm321');
+  await p.selectOption('#oexc', 'pulse');
+  await p.locator('#o-H').fill('2');
+  await p.locator('#o-H').blur();
+  await p.locator('#o-tau').fill('0,1');
+  await p.locator('#o-tau').blur();
+  check((await p.innerText('#osolution')).includes('Кратковременная сила'), 'свой импульс силы: поля F и τ');
+  await p.selectOption('#odamp', 'b');
+  await p.locator('#o-b').fill('0,5');
+  await p.locator('#o-b').blur();
+  await p.locator('#o-dla').fill('1');
+  await p.locator('#o-dla').blur();
+  await p.locator('#o-dlb').fill('2');
+  await p.locator('#o-dlb').blur();
+  check((await p.innerText('#osolution')).includes('демпфер на рычаге'), 'демпфер на рычаге приводится к грузу');
+  await tab('frames');
+
   // 33б. Вкладка «Стержневые системы».
   await tab('rods');
   let rd = await p.innerText('#rdsolution');

@@ -49,7 +49,8 @@ function scheme(pr: OscProblem, r: OscResult | null): string {
   };
 
   const drop = pr.init.mode === 'drop';
-  const base = pr.exc.mode === 'base';
+  const base = pr.exc.mode === 'base' || pr.exc.mode === 'support' || pr.exc.mode === 'cam';
+  const baseLab = pr.exc.mode === 'cam' ? 'кулачок ξ(t)' : 'ξ = a sin pt';
   const stages: Elem[][] = pr.el.mode === 'elems' ? pr.el.stages.map((s) => s.items) : [[{ kind: 'spring' } as Elem]];
   const Lc = 170,
     mL = 64,
@@ -69,7 +70,7 @@ function scheme(pr: OscProblem, r: OscResult | null): string {
   out.push(L(s1, s2, 'os-ground'));
   const hatchDir = drop ? 1 : -1;
   for (let w = -wMax; w <= wG + 1e-9; w += 12) out.push(L(T(uSup, w), T(uSup + hatchDir * 10, w - 7), base ? 'os-hatch os-moving' : 'os-hatch'));
-  if (base) out.push(arrow(T(uSup - 22, wMax + 14), T(uSup + 22, wMax + 14), 'os-f') + txt(T(uSup, wMax + 34), 'ξ = a sin pt'));
+  if (base) out.push(arrow(T(uSup - 22, wMax + 14), T(uSup + 22, wMax + 14), 'os-f') + txt(T(uSup, wMax + 34), baseLab));
 
   // Элементы по ступеням.
   const n = stages.length;
@@ -167,11 +168,19 @@ function scheme(pr: OscProblem, r: OscResult | null): string {
   if (pr.orient !== 'h') out.push(arrow(mc, [mc[0], mc[1] + 52], 'os-g') + txt([mc[0] + 8, mc[1] + 50], 'P', 'start'));
   // Возмущение.
   const far = T(uMass0 + (drop ? 0 : mL), 0);
-  if (pr.exc.mode === 'H') {
+  const FLAB: Partial<Record<OscProblem['exc']['mode'], string>> = {
+    H: 'H sin pt',
+    two: 'H₁ sin p₁t + H₂ sin p₂t',
+    ramp: 'F = a·t',
+    exp: 'F₀e^{−βt}',
+    pulse: 'F, 0 ≤ t ≤ τ',
+    ramphold: 'F₀t/τ → F₀',
+  };
+  if (FLAB[pr.exc.mode]) {
     const q = drop ? T(-40, 0) : T(uMass0 + mL + 46, 0);
     out.push(
       arrow(far, q, 'os-f') +
-        txt([q[0] + (pr.orient === 'v' ? 10 : 0), q[1] + (pr.orient === 'v' ? 4 : -10)], 'H sin pt', pr.orient === 'v' ? 'start' : 'middle'),
+        txt([q[0] + (pr.orient === 'v' ? 10 : 0), q[1] + (pr.orient === 'v' ? 4 : -10)], FLAB[pr.exc.mode]!, pr.orient === 'v' ? 'start' : 'middle'),
     );
   } else if (pr.exc.mode === 'rotor') {
     out.push(
@@ -272,6 +281,12 @@ function graph(pr: OscProblem, r: OscResult, x0: number, y0: number, w: number, 
       `<line class="os-tline" x1="${r1(X(a.t))}" y1="${y0}" x2="${r1(X(a.t))}" y2="${y0 + h}"/><circle class="rt-end" cx="${r1(X(a.t))}" cy="${r1(Y(a.x))}" r="5"><title>t = ${fmt(a.t, 4)} с; x = ${fmt(a.x, 4)} ${u}</title></circle>`,
     );
   }
+  // Моменты смены силы.
+  for (const pc of r.pieces.slice(1))
+    if (pc.t0 > 0 && pc.t0 < tHi)
+      out.push(
+        `<line class="os-dim" x1="${r1(X(pc.t0))}" y1="${y0}" x2="${r1(X(pc.t0))}" y2="${y0 + h}"/><text class="rt-tick" x="${r1(X(pc.t0) + 4)}" y="${y0 + 12}">${pr.exc.mode === 'cam' ? '2π/ω' : 'τ'} = ${fmt(pc.t0, 3)} с</text>`,
+      );
   if (r.slack != null && r.slack < r.tEnd)
     out.push(
       `<line class="os-slack" x1="${r1(X(r.slack))}" y1="${y0}" x2="${r1(X(r.slack))}" y2="${y0 + h}"/><text class="rt-tick" x="${r1(X(r.slack) + 4)}" y="${y0 + h - 8}">${pr.init.mode === 'drop' ? 'отрыв груза' : 'трос ослаб'}</text>`,
