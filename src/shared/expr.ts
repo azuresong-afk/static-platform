@@ -376,40 +376,40 @@ const fmtNum = (v: number) => {
   return (Math.abs(r - Math.round(r)) < 1e-12 ? String(Math.round(r)) : String(r)).replace('.', ',').replace('-', '−');
 };
 
-/** Запись формулы: «−0,3π²·sin(πt/2)» и т. п. (π не сворачивается — числа печатаются до 4 знаков). */
-export function printExpr(e: Expr, parent = 0): string {
+/** Запись формулы: «−0,3π²·sin(πt/2)» и т. п. (π не сворачивается — числа печатаются до 4 знаков); nf — свой вывод чисел. */
+export function printExpr(e: Expr, parent = 0, nf: (v: number) => string = fmtNum): string {
+  const P = (x: Expr, p: number) => printExpr(x, p, nf);
   const wrap = (s: string, p: number) => (p < parent ? `(${s})` : s);
   switch (e.k) {
     case 'num':
-      return e.v < 0 ? wrap(fmtNum(e.v), 2) : fmtNum(e.v);
+      return e.v < 0 ? wrap(nf(e.v), 2) : nf(e.v);
     case 't':
       return 't';
     case 'var':
       return e.n;
     case 'neg':
-      return wrap(`−${printExpr(e.a, 3)}`, 2);
+      return wrap(`−${P(e.a, 3)}`, 2);
     case 'add':
-      return wrap(`${printExpr(e.a, 1)} + ${printExpr(e.b, 1)}`, 1);
+      return wrap(`${P(e.a, 1)} + ${P(e.b, 1)}`, 1);
     case 'sub':
-      return wrap(`${printExpr(e.a, 1)} − ${printExpr(e.b, 2)}`, 1);
+      return wrap(`${P(e.a, 1)} − ${P(e.b, 2)}`, 1);
     case 'mul': {
-      const l = printExpr(e.a, 3),
-        r = printExpr(e.b, 3);
+      const l = P(e.a, 3),
+        r = P(e.b, 3);
       // Число перед буквой или функцией — без знака умножения: 2t, 3sin(t).
       const tight = e.a.k === 'num' && (e.b.k === 't' || e.b.k === 'var' || e.b.k === 'fn' || e.b.k === 'pow');
       return wrap(tight ? `${l}${r}` : `${l}·${r}`, 3);
     }
     case 'div':
-      return wrap(`${printExpr(e.a, 3)}/${printExpr(e.b, 4)}`, 3);
+      return wrap(`${P(e.a, 3)}/${P(e.b, 4)}`, 3);
     case 'pow': {
-      const b = e.b.k === 'num' && e.b.v === 2 ? '²' : e.b.k === 'num' && e.b.v === 3 ? '³' : `^${printExpr(e.b, 6)}`;
-      return wrap(`${printExpr(e.a, 6)}${b}`, 5);
+      const b = e.b.k === 'num' && e.b.v === 2 ? '²' : e.b.k === 'num' && e.b.v === 3 ? '³' : `^${P(e.b, 6)}`;
+      return wrap(`${P(e.a, 6)}${b}`, 5);
     }
     case 'fn':
-      return `${e.f}(${printExpr(e.a, 0)})`;
+      return `${e.f}(${printExpr(e.a, 0, nf)})`;
   }
 }
-
 
 /** Входит ли переменная (или t) в формулу. */
 export function usesVar(e: Expr, n: string): boolean {

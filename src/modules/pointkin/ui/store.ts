@@ -6,13 +6,14 @@ import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
 import type { KinMode, KinProblem } from '../model/kin';
+import { MODE_P } from '../model/modes';
 import { DEF_UNI, LIN_KEYS, type LinKey, type LinUni } from '../model/uniform';
 import { KIN_PRESETS, type KinPresetKey } from '../presets';
 
 export const KIN_MODULE = 'pointkin';
 const STR = ['x', 'y', 'z', 's', 'r', 'phi'] as const;
 export type KinStrKey = (typeof STR)[number] | 'th';
-const MODES: KinMode[] = ['coord', 'natural', 'polar', 'cyl', 'sph', 'uni'];
+const MODES: KinMode[] = ['coord', 'natural', 'polar', 'cyl', 'sph', 'tor', 'uni', 'path', 'integ', 'harm', 'shot', 'cam'];
 export type LinNumKey = LinKey | 'rho' | 'tq';
 const NUM = ['rho', 't', 't1', 't2'] as const;
 export type KinNumKey = (typeof NUM)[number];
@@ -47,7 +48,8 @@ export function parseKin(raw: unknown): { ok: true; problem: KinProblem } | { ok
   // Файлы до сферических координат и равнопеременного движения — без полей th и uni.
   const uni = raw.uni == null ? structuredClone(DEF_UNI) : parseUni(raw.uni);
   if (!uni) return { ok: false, errors: ['Данные равнопеременного движения неполные.'] };
-  return { ok: true, problem: { mode: raw.mode as KinMode, ...s, ...n, th: typeof raw.th === 'string' ? raw.th.slice(0, 200) : '', uni } };
+  const p = isObj(raw.p) ? Object.fromEntries(Object.entries(raw.p).filter(([, x]) => typeof x === 'string').map(([k, x]) => [k.slice(0, 20), (x as string).slice(0, 200)])) : undefined;
+  return { ok: true, problem: { mode: raw.mode as KinMode, ...s, ...n, th: typeof raw.th === 'string' ? raw.th.slice(0, 200) : '', uni, ...(p ? { p } : {}) } };
 }
 
 export class KinStore {
@@ -88,7 +90,19 @@ export class KinStore {
   setMode = (m: KinMode) => {
     if (m === this.st.problem.mode) return;
     this.commit();
-    this.edit((p) => (p.mode = m));
+    this.edit((p) => {
+      p.mode = m;
+      if (MODE_P[m]) p.p = { ...MODE_P[m], ...(p.p ?? {}) };
+    });
+  };
+  /** Параметр режима (p): формула, число или выбор из списка. */
+  typeP = (k: string, s: string) => {
+    this.touch(`p:${k}`);
+    this.edit((pr) => (pr.p = { ...(pr.p ?? {}), [k]: s.slice(0, 200) }));
+  };
+  setP = (k: string, s: string) => {
+    this.commit();
+    this.edit((pr) => (pr.p = { ...(pr.p ?? {}), [k]: s }));
   };
   typeStr = (k: KinStrKey, s: string) => {
     this.touch(`s:${k}`);
