@@ -886,7 +886,7 @@ async function main() {
   const moS = await p.innerText('#msolution');
   check(moS.includes('−4,4182') && (await p.locator('#msvg .cv-r').count()) === 1, 'Мещерский 36.8: откат ствола 4,42 м/с', moS.slice(-300));
   await p.selectOption('#mpreset', 'm3616');
-  check((await p.innerText('#msolution')).includes('51,24'), 'Мещерский 36.16: давление на колено трубы 51,2 кГ');
+  check((await p.innerText('#msolution')).includes('51,239'), 'Мещерский 36.16: давление на колено трубы 51,2 кГ');
   await p.selectOption('#mpreset', 'm3618');
   check((await p.innerText('#msolution')).includes('давление на опоры 0'), 'Мещерский 36.18: давление котла на опоры равно нулю');
   await p.selectOption('#mpreset', 'm293');
