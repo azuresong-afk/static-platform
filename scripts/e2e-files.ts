@@ -1378,7 +1378,7 @@ async function main() {
   os = await p.innerText('#osolution');
   check(os.includes('Момент инерции по периодам') && os.includes('0,117'), 'Мещерский 37.17: J = 0,117 кГ·см·с²', os.slice(0, 500));
   await p.selectOption('#opreset', 'm3283');
-  check((await p.innerText('#osolution')).includes('96,2 км/ч'), 'Мещерский 32.83: критическая скорость вагона 96 км/ч');
+  check((await p.innerText('#osolution')).includes('96,31 км/ч'), 'Мещерский 32.83: критическая скорость вагона 96 км/ч');
   await p.selectOption('#opreset', 'm321');
   await p.selectOption('#oexc', 'pulse');
   await p.locator('#o-H').fill('2');
@@ -1387,6 +1387,8 @@ async function main() {
   await p.locator('#o-tau').blur();
   check((await p.innerText('#osolution')).includes('Кратковременная сила'), 'свой импульс силы: поля F и τ');
   await p.selectOption('#odamp', 'b');
+  await p.locator('#o-b').fill('0,5');
+  await p.locator('#o-b').blur();
   await p.locator('#o-dla').fill('1');
   await p.locator('#o-dla').blur();
   await p.locator('#o-dlb').fill('2');
