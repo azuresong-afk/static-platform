@@ -2,20 +2,26 @@
 import { b, sub, v, type AnswerRow, type Block, type Doc, type Inline, type Step } from '../../../shared/doc';
 import { printExpr } from '../../../shared/expr';
 import { fmt } from '../../../shared/format';
-import type { KinProblem, KinResult } from '../model/kin';
+import { torA, type KinProblem, type KinResult } from '../model/kin';
 import { trajEquation, type TrajEq } from '../model/traj';
 
 const f = (x: number) => fmt(x, 4);
 const fp = (x: number) => (x < 0 ? `(${f(x)})` : f(x));
-const D1: Record<string, string> = { x: 'ẋ', y: 'ẏ', z: 'ż', s: 'ṡ', r: 'ṙ', φ: 'φ′', θ: 'θ′' };
-const D2: Record<string, string> = { x: 'ẍ', y: 'ÿ', z: 'z̈', s: 's̈', r: 'r̈', φ: 'φ″', θ: 'θ″' };
+const D1: Record<string, string> = { x: 'ẋ', y: 'ẏ', z: 'ż', s: 'ṡ', r: 'ṙ', φ: 'φ′', θ: 'θ′', ψ: 'ψ′' };
+const D2: Record<string, string> = { x: 'ẍ', y: 'ÿ', z: 'z̈', s: 's̈', r: 'r̈', φ: 'φ″', θ: 'θ″', ψ: 'ψ″' };
 const HOW: Record<KinProblem['mode'], string> = {
   coord: 'координатный',
   natural: 'естественный (закон движения по траектории)',
   polar: 'в полярных координатах',
   cyl: 'в цилиндрических координатах r, φ, z',
   sph: 'в сферических координатах: r, долгота φ, широта θ (угол с плоскостью xy)',
+  tor: 'в тороидальных координатах: r, долгота ψ, угол в сечении φ',
   uni: 'равнопеременное движение',
+  path: 'путь по траектории',
+  integ: 'интегрирование ускорения',
+  harm: 'гармоническое колебание',
+  shot: 'бросок под углом к горизонту',
+  cam: 'кулачок',
 };
 
 /** Шаг «Траектория»: уравнение (исключение t), вид кривой, начальная точка и пределы координат. */
@@ -83,6 +89,17 @@ export function kinDoc(pr: KinProblem, r: KinResult, opts: { explain?: boolean }
       lines.push({ c: [`при t = ${t}: s = ${f(r.pos[0])};  `, v('v'), ' = |ṡ| = ', b(f(r.v))] });
       lines.push({ c: [v('a'), sub('τ'), ' = s̈ = ', b(f(r.at)), ';  ', v('a'), sub('n'), ` = v²/ρ = ${pr.rho > 0 ? `${f(r.v)}²/${f(pr.rho)} = ` : ''}`, b(f(r.an))] });
       lines.push({ c: [v('a'), ' = √(a', sub('τ'), '² + a', sub('n'), `²) = `, b(f(r.a))] });
+    } else if (pr.mode === 'tor') {
+      const c = r.curv!;
+      const deg = (x: number) => f((x * 180) / Math.PI);
+      const aT = f(torA(pr, []));
+      lines.push({ c: [`при t = ${t}: r = ${f(c.q[0])}, ψ = ${f(c.q[1])} рад (${deg(c.q[1])}°), φ = ${f(c.q[2])} рад (${deg(c.q[2])}°);  a = ${aT}`] });
+      lines.push({ c: ['x = (a + r cos φ) cos ψ,  y = (a + r cos φ) sin ψ,  z = r sin φ;  коэффициенты Ляме H', sub('r'), ' = 1, H', sub('ψ'), ' = a + r cos φ, H', sub('φ'), ' = r'] });
+      lines.push({ c: [v('v'), sub('r'), ' = ṙ = ', b(f(c.v[0])), ';  ', v('v'), sub('ψ'), ' = (a + r cos φ)ψ′ = ', b(f(c.v[1])), ';  ', v('v'), sub('φ'), ' = rφ′ = ', b(f(c.v[2])), ';  ', v('v'), ' = ', b(f(r.v))] });
+      lines.push({ c: [v('a'), sub('r'), ' = r̈ − (a + r cos φ)cos φ·ψ′² − rφ′² = ', b(f(c.a[0]))] });
+      lines.push({ c: [v('a'), sub('ψ'), ' = (a + r cos φ)ψ″ + 2(ṙ cos φ − rφ′ sin φ)ψ′ = ', b(f(c.a[1]))] });
+      lines.push({ c: [v('a'), sub('φ'), ' = rφ″ + 2ṙφ′ + (a + r cos φ) sin φ·ψ′² = ', b(f(c.a[2]))] });
+      lines.push({ c: [v('a'), ' = ', b(f(r.a)), ';  ', v('a'), sub('τ'), ` = ${f(r.at)};  `, v('a'), sub('n'), ` = ${f(r.an)}`] });
     } else if (pr.mode === 'cyl' || pr.mode === 'sph') {
       const c = r.curv!;
       const sph = pr.mode === 'sph';

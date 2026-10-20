@@ -9,12 +9,19 @@
  *   x = r cos θ cos φ, y = r cos θ sin φ, z = r sin θ;
  *   v_r = ṙ, v_φ = r φ̇ cos θ, v_θ = r θ̇;
  *   a_r = r̈ − rθ̇² − rφ̇² cos²θ, a_φ = (rφ̈ + 2ṙφ̇) cos θ − 2rφ̇θ̇ sin θ, a_θ = rθ̈ + 2ṙθ̇ + rφ̇² sin θ cos θ.
+ * Тороидальный (Мещерский 12.37–12.39): r(t) — расстояние до окружности радиуса a (оси тора), ψ(t) — долгота,
+ *   φ(t) — угол в сечении (от внешнего экватора); x = (a + r cos φ) cos ψ, y = (a + r cos φ) sin ψ, z = r sin φ;
+ *   коэффициенты Ляме H_r = 1, H_ψ = a + r cos φ, H_φ = r; v_r = ṙ, v_ψ = (a + r cos φ)ψ′, v_φ = rφ′;
+ *   a_r = r̈ − (a + r cos φ)cos φ ψ′² − rφ′², a_ψ = (a + r cos φ)ψ″ + 2(ṙ cos φ − rφ′ sin φ)ψ′,
+ *   a_φ = rφ″ + 2ṙφ′ + (a + r cos φ) sin φ ψ′².
+ * Остальные режимы (путь по траектории, интегрирование ускорения, гармонические колебания, бросок, кулачки) — в
+ * ext.ts и cam.ts; их параметры лежат в p.
  * Производные — символьные (src/shared/expr.ts).
  */
 import { diff, evalExpr, parseExpr, type Expr } from '../../../shared/expr';
 import type { LinUni } from './uniform';
 
-export type KinMode = 'coord' | 'natural' | 'polar' | 'cyl' | 'sph' | 'uni';
+export type KinMode = 'coord' | 'natural' | 'polar' | 'cyl' | 'sph' | 'tor' | 'uni' | 'path' | 'integ' | 'harm' | 'shot' | 'cam';
 export interface KinProblem {
   mode: KinMode;
   x: string;
@@ -29,6 +36,8 @@ export interface KinProblem {
   th?: string;
   /** Равнопеременное движение: из v₀, v, a, t, s известны три. */
   uni?: LinUni;
+  /** Параметры режимов path, integ, harm, shot, cam, tor (поле a): строки — числа или формулы. */
+  p?: Record<string, string>;
   t: number;
   /** Отрезок времени для траектории на чертеже. */
   t1: number;
@@ -59,6 +68,16 @@ export interface KinResult {
 }
 
 const clean = (v: number) => (Math.abs(v) < 1e-12 ? 0 : v);
+/** Параметр a тороидальных координат (p.a). */
+export function torA(pr: KinProblem, errors: string[]): number {
+  const raw = (pr.p?.a ?? '').trim();
+  const e = parseExpr(raw === '' ? '0' : raw);
+  if (!e.ok) {
+    errors.push(`a: ${e.error}.`);
+    return 0;
+  }
+  return evalExpr(e.e, 0);
+}
 const ZERO: Expr = { k: 'num', v: 0 };
 
 export function solveKin(pr: KinProblem): KinResult {
@@ -70,10 +89,11 @@ export function solveKin(pr: KinProblem): KinResult {
         ? (['s'] as const)
         : pr.mode === 'cyl'
           ? (['r', 'phi', 'z'] as const)
-          : pr.mode === 'sph'
+          : pr.mode === 'sph' || pr.mode === 'tor'
             ? (['r', 'phi', 'th'] as const)
             : (['r', 'phi'] as const);
-  const label = (n: string) => (n === 'phi' ? 'φ' : n === 'th' ? 'θ' : n);
+  const tor = pr.mode === 'tor';
+  const label = (n: string) => (n === 'phi' ? (tor ? 'ψ' : 'φ') : n === 'th' ? (tor ? 'φ' : 'θ') : n);
   const f = names.map((n) => {
     const p = parseExpr(pr[n] ?? '');
     if (!p.ok) errors.push(`${label(n)}(t): ${p.error}.`);
@@ -126,7 +146,7 @@ export function solveKin(pr: KinProblem): KinResult {
     an = v > 1e-12 ? cr / v : Math.hypot(ar, aphi);
     rho = cr > 1e-12 ? v ** 3 / cr : null;
   } else {
-    if (pr.mode === 'cyl' || pr.mode === 'sph') {
+    if (pr.mode === 'cyl' || pr.mode === 'sph' || pr.mode === 'tor') {
       const [q, qd, qdd] = (['e', 'd1', 'd2'] as const).map((k) => [0, 1, 2].map((i) => val(i, k))) as [number[], number[], number[]];
       const [r, ph, w] = q,
         [rd, phd, wd] = qd,
@@ -142,6 +162,19 @@ export function solveKin(pr: KinProblem): KinResult {
         cv = [rd, r * phd, wd];
         ca = [rdd - r * phd * phd, r * phdd + 2 * rd * phd, wdd];
         pos = [r * cp, r * sp, w];
+      } else if (pr.mode === 'tor') {
+        // r, ψ (= ph), φ (= w); a — расстояние от оси тора до центра сечения.
+        const aT = torA(pr, errors);
+        const cf = Math.cos(w),
+          sf = Math.sin(w);
+        const H = aT + r * cf,
+          Hd = rd * cf - r * sf * wd;
+        er = [cf * cp, cf * sp, sf];
+        ep = [-sp, cp, 0];
+        e3 = [-sf * cp, -sf * sp, cf];
+        cv = [rd, H * phd, r * wd];
+        ca = [rdd - H * cf * phd * phd - r * wd * wd, H * phdd + 2 * Hd * phd, r * wdd + 2 * rd * wd + H * sf * phd * phd];
+        pos = [H * cp, H * sp, r * sf];
       } else {
         const ct = Math.cos(w),
           st = Math.sin(w);
@@ -167,6 +200,7 @@ export function solveKin(pr: KinProblem): KinResult {
     an = v > 1e-12 ? cr / v : 0;
     rho = cr > 1e-12 * Math.max(1, v ** 3) ? v ** 3 / cr : null;
   }
+  if (errors.length) return { ...empty, errors };
   const a = Math.hypot(at, an);
   if (![...pos, ...vel, ...acc, v, a].every(Number.isFinite)) return { ...empty, errors: [`В момент t = ${t} формулы не определены.`] };
   const angles = (w: [number, number, number], m: number): [number, number, number] | null => (pr.mode === 'natural' || m < 1e-12 ? null : (w.map((c) => (Math.acos(Math.max(-1, Math.min(1, c / m))) * 180) / Math.PI) as [number, number, number]));
@@ -203,6 +237,14 @@ export function cartesian(pr: KinProblem, r: KinResult, t: number): [number, num
       ph = e(1);
     return [rr * Math.cos(ph), rr * Math.sin(ph), pr.mode === 'cyl' ? e(2) : 0];
   }
+  if (pr.mode === 'tor') {
+    const rr = e(0),
+      ps = e(1),
+      fi = e(2),
+      aT = torA(pr, []);
+    const H = aT + rr * Math.cos(fi);
+    return [H * Math.cos(ps), H * Math.sin(ps), rr * Math.sin(fi)];
+  }
   if (pr.mode === 'sph') {
     const rr = e(0),
       ph = e(1),
@@ -214,7 +256,7 @@ export function cartesian(pr: KinProblem, r: KinResult, t: number): [number, num
 
 /** Точки траектории на отрезке (в плоскости xy; для естественного способа — не строится). */
 export function trajectory(pr: KinProblem, r: KinResult, n = 600): [number, number][] {
-  if (!r.ok || pr.mode === 'natural' || pr.mode === 'uni') return [];
+  if (!r.ok || !['coord', 'polar', 'cyl', 'sph', 'tor'].includes(pr.mode)) return [];
   const [ta, tb] = trajInterval(pr);
   const out: [number, number][] = [];
   for (let i = 0; i <= n; i++) {
