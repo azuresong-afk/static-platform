@@ -137,19 +137,19 @@ async function main() {
   // 7а. Вкладки разделов и файлы разных версий и разделов.
   check((await p.getAttribute('[data-tab="frames"]', 'aria-selected')) === 'true', 'активна вкладка «Балки и рамы»');
   check((await p.locator('[data-block]').count()) === 5 && (await p.locator('[data-course="theor"] [data-block]').count()) === 4, 'навигация: четыре блока Мещерского и сопромат Антонова');
-  check((await p.getAttribute('[data-block="statics"]', 'aria-current')) === 'true' && (await p.locator('.tabs [role="tab"]').count()) === 5, 'блок «Статика» активен, в нём пять разделов');
+  check((await p.getAttribute('[data-block="statics"]', 'aria-current')) === 'true' && (await p.locator('.tabs [role="tab"]').count()) === 6, 'блок «Статика» активен, в нём шесть разделов');
   const seen: string[] = [];
   for (const b of NAV_BLOCKS) {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 36 && seen.length === 36, 'тридцать шесть разделов, каждый — в одном блоке', seen.join(' '));
+  check(new Set(seen).size === 38 && seen.length === 38, 'тридцать восемь разделов, каждый — в одном блоке', seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 39, 'готово тридцать девять пунктов');
+  check((await p.locator('.rm-done').count()) === 41, 'готово сорок один пункт');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -1400,7 +1400,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 38, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === 40, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });
@@ -1434,6 +1434,75 @@ async function main() {
   check(trep.svgs === 1 && trep.text.includes('Метод вырезания узлов'), 'отчёт по ферме');
   await p.emulateMedia({ media: 'screen' });
   if (out) await p.screenshot({ path: pathResolve(out, 'truss.png'), fullPage: true });
+
+  // 16. Вкладки «Графическая статика» и «Центроиды» (пункт 19).
+  await tab('graphstat');
+  let gsT = await p.innerText('#gsolution');
+  check(gsT.includes('Обозначения Боу') && gsT.includes('Многоугольник внешних сил') && gsT.includes('1,299') && gsT.includes('−3,5'), 'Мещерский 5.7: диаграмма Кремоны — области, многоугольник внешних сил, усилия', gsT.slice(0, 200));
+  check((await p.locator('#gsvg2 .tb-ten').count()) === 3 && (await p.locator('#gsvg2 .tb-comp').count()) === 4 && (await p.locator('#gsvg .gs-face').count()) === 7, 'на диаграмме растянутые и сжатые стержни, на ферме — семь областей');
+  check(gsT.includes('совпадают с решением фермы'), 'усилия по диаграмме сверены с решением фермы');
+  await p.selectOption('#gpreset', 'm54');
+  gsT = await p.innerText('#gsolution');
+  check(gsT.includes('Верёвочный многоугольник') && gsT.includes('2,167') && gsT.includes('1,81') && (await p.locator('#gsvg .gs-fun').count()) === 1 && (await p.locator('#gsvg2 .gs-pole').count()) === 1, 'Мещерский 5.4: верёвочный многоугольник — R_A = 2,17 т, R_B = 1,81 т, полюс на силовом многоугольнике', gsT.slice(-300));
+  await p.locator('#gbloads .trow:nth-child(1) input').nth(1).fill('3');
+  await p.locator('#gbloads .trow:nth-child(1) input').nth(1).blur();
+  check((await p.innerText('#gsolution')).includes('проверка уравнениями равновесия'), 'груз изменён — построение пересчитано и сверено');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.inputValue('#gbloads .trow:nth-child(1) input >> nth=1')) === '2', 'отмена возвращает груз');
+  await p.selectOption('#gpreset', 'm516');
+  gsT = await p.innerText('#gsolution');
+  check(gsT.includes('Ответ книги: натяжение цепи в средней точке C — 20') && (await p.locator('#gsvg .gs-parab').count()) === 1, 'Мещерский 5.16: цепной мост — натяжение 20 т', gsT.slice(-200));
+  await p.selectOption('#gpreset', 'm55');
+  gsT = await p.innerText('#gsolution');
+  check(gsT.includes('−16,3') && gsT.includes('18,97'), 'Мещерский 5.5: кран — усилия по диаграмме', gsT.slice(0, 200));
+  const [dlGs] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const gfText = await (await dlGs.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(gfText).module === 'graphstat' && JSON.parse(gfText).kind === 'truss' && JSON.parse(gfText).truss.bars.length === 5, 'файл графической статики');
+  const gfSol = await p.innerText('#gsolution');
+  await tab('frames');
+  await openText('graphstat.json', gfText, 'ok');
+  check((await p.getAttribute('[data-tab="graphstat"]', 'aria-selected')) === 'true' && (await p.innerText('#gsolution')) === gfSol, 'файл графической статики открывается в своей вкладке без потерь');
+  await p.emulateMedia({ media: 'print' });
+  const grep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
+  check(grep.svgs === 2 && grep.text.includes('Построение по узлам'), 'отчёт по графической статике');
+  await p.emulateMedia({ media: 'screen' });
+  if (out) await p.screenshot({ path: pathResolve(out, 'graphstat.png'), fullPage: true });
+
+  await tab('centrodes');
+  await p.selectOption('#cpreset', 'm176');
+  let ceS = await p.innerText('#csolution');
+  check(ceS.includes('Неподвижная центроида') && ceS.includes('гипербола с фокусами A и B') && ceS.includes('наибольшая невязка уравнения книги'), 'Мещерский 17.6: антипараллелограмм — гиперболы из ответа книги', ceS.slice(0, 200));
+  check((await p.locator('#csvg .ce-fixed').count()) >= 2 && (await p.locator('#csvg .ce-moving').count()) >= 2 && (await p.locator('#csvg2 .ce-moving').count()) >= 2, 'на чертежах — обе центроиды');
+  const phi0 = await p.textContent('#cphival');
+  await p.$eval('#cphi', (el) => {
+    const i = el as HTMLInputElement;
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    set.call(i, '60');
+    i.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  check((await p.textContent('#cphival')) !== phi0 && (await p.locator('#csvg .ce-ic').count()) === 1, 'ползунок меняет положение, мгновенный центр на чертеже');
+  await p.locator('#cv-b').fill('6');
+  await p.locator('#cv-b').blur();
+  check((await p.innerText('#csolution')).includes('наибольшая невязка уравнения книги'), 'размер изменён — центроиды пересчитаны');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.inputValue('#cv-b')) === '5', 'отмена возвращает размер');
+  await p.selectOption('#cpreset', 'm1711');
+  ceS = await p.innerText('#csolution');
+  check(ceS.includes('x² = a(2y − a)') && ceS.includes('ξ² = a(2η − a)'), 'Мещерский 17.11: параболы из ответа книги', ceS.slice(-300));
+  await p.selectOption('#cpreset', 'm1710');
+  check((await p.innerText('#csolution')).includes('η² = aξ'), 'Мещерский 17.10: подвижная центроида η² = aξ');
+  const [dlCe] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const ceText = await (await dlCe.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(ceText).module === 'centrodes' && JSON.parse(ceText).preset === 'm1710', 'файл центроид');
+  const ceSol = await p.innerText('#csolution');
+  await tab('frames');
+  await openText('centrodes.json', ceText, 'ok');
+  check((await p.getAttribute('[data-tab="centrodes"]', 'aria-selected')) === 'true' && (await p.innerText('#csolution')) === ceSol, 'файл центроид открывается в своей вкладке без потерь');
+  await p.emulateMedia({ media: 'print' });
+  const ceRep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
+  check(ceRep.svgs === 2 && ceRep.text.includes('Подвижная центроида'), 'отчёт по центроидам');
+  await p.emulateMedia({ media: 'screen' });
+  if (out) await p.screenshot({ path: pathResolve(out, 'centrodes.png'), fullPage: true });
 
   await browser.close();
   await new Promise<void>((r) => server.httpServer.close(() => r()));
