@@ -46,6 +46,11 @@ export interface Solution {
   cases?: CaseTry[];
   /** Трение в шарнирах: число итераций метода Ньютона (система нелинейна: M_тр = ρ·√(X² + Y²)). */
   pinIters?: number;
+  /**
+   * Почему не рассчитывается (status = unsupported): lp — трение в шарнире вместе со связями-неравенствами;
+   * load — с трением в шарнире уравнений больше, чем неизвестных: нагрузка, при которой тело проворачивается, не искомая.
+   */
+  unsupported?: 'lp' | 'load';
 }
 
 /** Один случай перебора: работают связи work, остальные односторонние (off) не работают. */
@@ -68,7 +73,7 @@ export function solve(m: Model): Solution {
   if (!m.supports.length && !n) return { ...out, status: 'nosupport' };
   if (n === 0) return { ...out, status: 'nosupport' };
   // Момент трения в шарнире M_тр = ρ·√(X² + Y²) нелинеен — в расчёт с неравенствами (линейное программирование) не входит.
-  if (m.pinFr.length && isFrictionModel(m)) return { ...out, status: 'unsupported' };
+  if (m.pinFr.length && isFrictionModel(m)) return { ...out, status: 'unsupported', unsupported: 'lp' };
   if (isFrictionModel(m)) {
     const fr = solveFriction(m);
     return { ...out, status: fr.feasible && !fr.tooMany ? 'friction' : 'noequilibrium', friction: fr };
@@ -140,7 +145,8 @@ export function solve(m: Model): Solution {
 /**
  * Трение в шарнирах: к линейным уравнениям равновесия добавляются нелинейные M_тр = ρ·√(X² + Y²) — по одному
  * на шарнир. Независимых уравнений равновесия должно быть на столько меньше неизвестных, сколько шарниров с трением.
- * Начальное приближение — решение без трения (M_тр = 0), затем метод Ньютона.
+ * Начальное приближение — из линейного уравнения M_тр = ρ·(c·X + s·Y) (давление на ось — против суммы известных
+ * сил), затем метод Ньютона.
  */
 function solvePinFriction(m: Model, out: Solution): Solution {
   const keys = m.unknowns.map((u) => u.key),
@@ -156,7 +162,8 @@ function solvePinFriction(m: Model, out: Solution): Solution {
     }
   }
   if (rows.length + k < n) return { ...out, status: rows.length === eqCount(m) ? 'indeterminate' : 'mechanism' };
-  if (rows.length + k > n) return { ...out, status: 'noequilibrium', badEq: eqs[eqs.length - 1] };
+  // Уравнений больше, чем неизвестных: тело проворачивается лишь при особой нагрузке — её нужно сделать искомой.
+  if (rows.length + k > n) return { ...out, status: 'unsupported', unsupported: 'load' };
   const b = eqs.map((e) => -e.cst);
   const idx = (kk: string) => keys.indexOf(kk);
   const scale = Math.max(1, ...b.map(Math.abs));

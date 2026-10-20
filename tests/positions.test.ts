@@ -177,6 +177,17 @@ describe('трение в шарнирах', () => {
     expect(docText(a.doc)).toContain('Трение в шарнире вместе с трением на опорах');
   });
 
+  it('без искомой нагрузки — сообщение: отметить искомую', () => {
+    const p = POSITION_PROBLEMS.find((x) => x.id.startsWith('4.61'))!;
+    const s = p.build();
+    for (const it of s.items) if (it.type === 'force') it.unknown = false;
+    const a = analyze(s);
+    expect(a.solution).toMatchObject({ status: 'unsupported', unsupported: 'load' });
+    const t = docText(a.doc);
+    expect(t).toContain('Отметьте искомую нагрузку');
+    expect(t).not.toContain('NaN');
+  });
+
   it('текст: момент трения, радиус круга трения', () => {
     const p = POSITION_PROBLEMS.find((x) => x.id.startsWith('4.73'))!;
     const t = docText(analyze(p.build(), { explain: true }).doc);
