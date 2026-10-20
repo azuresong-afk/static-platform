@@ -14,6 +14,7 @@ export const STATUS: Record<Status, [string, 'b-ok' | 'b-warn' | 'b-bad', 'st-ok
   noequilibrium: ['равновесие невозможно', 'b-bad', 'st-bad'],
   nosupport: ['нет опор', 'b-bad', 'st-bad'],
   friction: ['равновесие с трением', 'b-ok', 'st-ok'],
+  unsupported: ['не рассчитывается', 'b-warn', 'st-warn'],
 };
 
 export const STATUS_TONE: Record<Status, 'ok' | 'warn' | 'bad'> = {
@@ -23,6 +24,7 @@ export const STATUS_TONE: Record<Status, 'ok' | 'warn' | 'bad'> = {
   noequilibrium: 'bad',
   nosupport: 'bad',
   friction: 'ok',
+  unsupported: 'warn',
 };
 
 export function forceDirText(it: Pick<ForceItem, 'alpha' | 'ref' | 'rot'> & { angleName?: string }): string {

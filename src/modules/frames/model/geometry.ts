@@ -33,7 +33,7 @@ const r12 = (v: number) => Math.round(v * 1e12) / 1e12 + 0;
  * Координаты узлов обходом дерева участков от корня (узла, в который не входит ни один участок и который не поставлен
  * от другого тела). Затем — отдельные тела: их начальная точка смещена от точки уже построенного тела (Node.place).
  */
-export function geom(s: Pick<Structure, 'nodes' | 'segs'>): Geom {
+export function geom(s: Pick<Structure, 'nodes' | 'segs'> & { search?: unknown }): Geom {
   const inc = new Set(s.segs.map((q) => q.b));
   const root = (s.nodes.find((n) => !inc.has(n.id) && !n.place) || s.nodes[0]).id;
   const kids: Record<string, Seg[]> = {};
@@ -91,7 +91,8 @@ export function geom(s: Pick<Structure, 'nodes' | 'segs'>): Geom {
   });
   // Рамы из участков по осям — с точностью до миллиметра, как в прототипе; с наклонными и с отдельными телами
   // (их место задаётся смещением, у тел-точек — любыми координатами) — без огрубления.
-  const rr = inclined || nb > 0 ? r12 : r3;
+  // При поиске положения равновесия — тоже без огрубления: иначе корень найдётся лишь с точностью до миллиметра.
+  const rr = inclined || nb > 0 || s.search ? r12 : r3;
   Object.keys(pos).forEach((k) => (pos[k] = [rr(pos[k][0] - mx), rr(pos[k][1] - my)]));
   const name: Record<string, string> = {};
   order.forEach((id, i) => (name[id] = ptName(i)));
@@ -277,6 +278,7 @@ export function resolve(s: Structure): Resolved {
     return it;
   });
   const structure: Structure = { nodes: s.nodes, segs: s.segs, items: norm };
+  if (s.search) structure.search = s.search;
   // Связи — только между существующими точками; касание — между разными точками.
   if (s.links)
     structure.links = s.links.filter((l) => l.a in g.pos && l.b in g.pos && (l.type === 'thread' ? (l.via ?? []).every((id) => id in g.pos) : l.a !== l.b));

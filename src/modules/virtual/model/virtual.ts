@@ -57,7 +57,7 @@ export interface Release {
 
 export type VirtualResult =
   | { ok: true; releases: Release[]; parts: number; partNames: string[][] }
-  | { ok: false; why: 'status' | 'baddist' | 'empty' | 'friction' | 'bodies' };
+  | { ok: false; why: 'status' | 'baddist' | 'empty' | 'friction' | 'pinfr' | 'bodies' };
 
 const EPS = 1e-9;
 
@@ -107,6 +107,7 @@ export function virtualWork(s: Structure, a: Analysis): VirtualResult {
   if (hasBodies(s)) return { ok: false, why: 'bodies' };
   if (m.badDists.length) return { ok: false, why: 'baddist' };
   if (sol.status === 'friction') return { ok: false, why: 'friction' };
+  if (m.pinFr.length) return { ok: false, why: 'pinfr' };
   if (sol.status !== 'ok') return { ok: false, why: 'status' };
   const P = m.parts.count;
   const A = m.unknowns.map((u) => rowOf(u, P));

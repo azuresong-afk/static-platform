@@ -26,7 +26,8 @@ import { resolve } from '../model/geometry';
 import { createIdGen, type IdGen } from '../../../shared/ids';
 import { loadPreset, PRESET_TITLES, type PresetKey } from '../model/presets';
 import { parseProject, projectFileName, remapIds, serializeProject } from '../model/project';
-import type { Item, ItemType, Link, RefDir, SegDir, Structure } from '../model/types';
+import type { Item, ItemType, Link, RefDir, Search, SearchBind, SegDir, Structure } from '../model/types';
+import { searchFields } from '../model/search';
 import type { View } from '../draw/drawing';
 import { clamp } from '../../../shared/format';
 import { History } from '../../../shared/history';
@@ -50,6 +51,8 @@ export interface AppState {
   /** Название проекта: готовая задача, имя открытого файла или «Своя схема». */
   title: string;
   explain: boolean;
+  /** Поиск положения равновесия: какой корень (границу) показать; −1 — первый подходящий. */
+  pick: number;
 }
 
 export const WSTEPS = 5;
@@ -60,6 +63,7 @@ interface Snap {
   segs: Structure['segs'];
   items: Structure['items'];
   links?: Structure['links'];
+  search?: Structure['search'];
   nt: string[];
   preset: PresetValue;
   title: string;
@@ -88,6 +92,7 @@ export class Store {
       notice: null,
       title: PRESET_TITLES[preset],
       explain: opts.explain ?? true,
+      pick: -1,
     };
   }
 
@@ -112,7 +117,16 @@ export class Store {
   /* ---------- история ---------- */
   private snap(): string {
     const { s, nt, preset, title } = this.st;
-    const o: Snap = { nodes: s.nodes, segs: s.segs, items: s.items, ...(s.links ? { links: s.links } : {}), nt, preset, title };
+    const o: Snap = {
+      nodes: s.nodes,
+      segs: s.segs,
+      items: s.items,
+      ...(s.links ? { links: s.links } : {}),
+      ...(s.search ? { search: s.search } : {}),
+      nt,
+      preset,
+      title,
+    };
     return JSON.stringify(o);
   }
   /** Запомнить текущее состояние перед изменением; схема становится «своей». */
@@ -128,7 +142,12 @@ export class Store {
   endSession = (key: string) => this.hist.endSession(key);
   private restore(str: string) {
     const o = JSON.parse(str) as Snap;
-    this.set({ s: { nodes: o.nodes, segs: o.segs, items: o.items, ...(o.links ? { links: o.links } : {}) }, nt: o.nt, preset: o.preset, title: o.title });
+    this.set({
+      s: { nodes: o.nodes, segs: o.segs, items: o.items, ...(o.links ? { links: o.links } : {}), ...(o.search ? { search: o.search } : {}) },
+      nt: o.nt,
+      preset: o.preset,
+      title: o.title,
+    });
   }
   undo = () => {
     const prev = this.hist.undo(this.snap());
@@ -150,13 +169,13 @@ export class Store {
   loadPreset = (k: PresetKey) => {
     this.commit();
     const wiz = k === 'blank' ? { on: true, step: 1 } : { on: false, step: this.st.wiz.step };
-    this.set({ s: loadPreset(k, this.ids), nt: [], preset: k, title: PRESET_TITLES[k], sel: null, wiz });
+    this.set({ s: loadPreset(k, this.ids), nt: [], preset: k, title: PRESET_TITLES[k], sel: null, wiz, pick: -1 });
   };
 
   /** Загрузить готовую схему другого раздела (например, задачу вкладки «Изгиб»). Отменяется одним шагом. */
   loadStructure = (structure: Structure, title: string) => {
     this.commit();
-    this.set({ s: structure, nt: [], preset: 'custom', title, sel: null, wiz: { on: false, step: this.st.wiz.step } });
+    this.set({ s: structure, nt: [], preset: 'custom', title, sel: null, wiz: { on: false, step: this.st.wiz.step }, pick: -1 });
   };
 
   /* ---------- файлы проекта ---------- */
@@ -175,7 +194,7 @@ export class Store {
     }
     this.commit();
     const p = r.project;
-    this.set({ s: remapIds(p.structure, this.ids), nt: p.notTarget, preset: 'custom', title: p.title, sel: null, wiz: { on: false, step: 1 } });
+    this.set({ s: remapIds(p.structure, this.ids), nt: p.notTarget, preset: 'custom', title: p.title, sel: null, wiz: { on: false, step: 1 }, pick: -1 });
     this.notify(`Открыт проект «${p.title}».`, 'ok');
     return true;
   };
@@ -331,6 +350,54 @@ export class Store {
     if (!target) nt.push(key);
     this.set({ nt });
   };
+
+  /* ---------- поиск положения равновесия ---------- */
+  /** Включить поиск (параметр — угол от 0 до 90°, без формул) или выключить. */
+  setSearchOn = (on: boolean) => {
+    if (!!this.st.s.search === on) return;
+    this.commit();
+    const { search: _, ...rest } = this.st.s;
+    this.set({ s: on ? { ...rest, search: { name: 'φ', unit: 'deg', min: 0, max: 90, bind: [] } } : rest, pick: -1 });
+  };
+  private patchSearch(patch: Partial<Search>) {
+    if (!this.st.s.search) return;
+    this.set({ s: { ...this.st.s, search: { ...this.st.s.search, ...patch } }, pick: -1 });
+  }
+  /** Поле поиска (обозначение, границы промежутка): правки поля — одна запись истории. */
+  typeSearch = (patch: Partial<Search>) => {
+    this.touch('search:' + Object.keys(patch).join());
+    this.patchSearch(patch);
+  };
+  /** Единица параметра (список) — отдельная запись истории. */
+  setSearch = (patch: Partial<Search>) => {
+    this.commit();
+    this.patchSearch(patch);
+  };
+  /** Добавить формулу: первое поле, ещё не заданное формулой. */
+  addBind = () => {
+    const sr = this.st.s.search;
+    if (!sr) return;
+    const free = searchFields(this.st.s).find((f) => !sr.bind.some((b) => b.ref === f.ref && b.field === f.field));
+    if (!free) return this.flash('Все поля уже заданы формулами.');
+    this.commit();
+    this.patchSearch({ bind: [...sr.bind, { ref: free.ref, field: free.field, expr: sr.name }] });
+  };
+  /** Поле формулы выбрано из списка — отдельная запись истории; текст формулы — одна запись на правку поля. */
+  setBind = (i: number, patch: Partial<SearchBind>, typing = false) => {
+    const sr = this.st.s.search;
+    if (!sr || !sr.bind[i]) return;
+    if (typing) this.touch('bind:' + i);
+    else this.commit();
+    this.patchSearch({ bind: sr.bind.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
+  };
+  removeBind = (i: number) => {
+    const sr = this.st.s.search;
+    if (!sr) return;
+    this.commit();
+    this.patchSearch({ bind: sr.bind.filter((_, j) => j !== i) });
+  };
+  /** Какой корень показать на чертеже и в решении. */
+  setPick = (pick: number) => this.set({ pick });
 
   /* ---------- мастер ---------- */
   setStep = (n: number) => this.set({ wiz: { on: true, step: clamp(n, 1, WSTEPS) } });

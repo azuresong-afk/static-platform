@@ -149,7 +149,7 @@ async function main() {
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 41, 'готово сорок один пункт');
+  check((await p.locator('.rm-done').count()) === 42, 'готово сорок два пункта');
   check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -943,6 +943,35 @@ async function main() {
   await openText('hm.json', hmText, 'ok');
   check((await p.getAttribute('[data-tab="hamilton"]', 'aria-selected')) === 'true' && (await p.innerText('#hmsolution')) === hmSol, 'файл открывается в своей вкладке без потерь');
   await tab('frames');
+
+  // Поиск положения равновесия («Балки и рамы», пункт 17): неизвестен угол, а не нагрузка; трение в шарнире.
+  await p.selectOption('#preset', 'tb:2.49');
+  const psS = await p.innerText('#solution');
+  check(
+    psS.includes('Ищем положение равновесия') && psS.includes('28,96°') && psS.includes('331,04°') && psS.includes('устойчивое'),
+    'Мещерский 2.49: кольцо на окружности — три положения равновесия, устойчивость',
+    psS.slice(0, 400),
+  );
+  check((await p.locator('#searchRoots [data-root]').count()) === 3 && (await p.getAttribute('[data-root="0"]', 'aria-pressed')) === 'true', 'корни — кнопками, выбран первый');
+  await p.click('[data-root="1"]');
+  check((await p.innerText('#solution')).includes('Ниже — расчёт в положении φ = 180°'), 'выбор корня: решение в другом положении');
+  const [dlps] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const psText = await (await dlps.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(psText).structure.search?.bind.length === 4, 'в файле — параметр и формулы полей');
+  await p.selectOption('#preset', 'simple');
+  await openText('position.json', psText, 'ok');
+  check((await p.innerText('#solution')) === psS, 'поиск положения сохраняется и открывается без потерь');
+  await p.fill('[data-bindexpr="3"]', 'φ');
+  await p.locator('[data-bindexpr="3"]').blur();
+  check((await p.innerText('#solution')) !== psS, 'формула поля меняет решение');
+  await p.click('#undo');
+  check((await p.innerText('#solution')) === psS, 'отмена возвращает формулу');
+  await p.selectOption('#preset', 'tb:2.61');
+  check((await p.innerText('#solution')).includes('Равновесие возможно при 0° ≤ α ≤ 38,66°'), 'Мещерский 2.61: с трением — промежуток равновесия, угол откоса 38,66°');
+  await p.selectOption('#preset', 'tb:4.61');
+  const pf = await p.innerText('#solution');
+  check(pf.includes('Учитываем трение в шарнире') && pf.includes('= 39 кН'), 'Мещерский 4.61: трение в подшипнике вала, Q = 39', pf.slice(-400));
+  if (out) await p.screenshot({ path: pathResolve(out, 'position.png'), fullPage: true });
 
   // Вкладка «Реакции при плоском движении».
   await tab('planebody');

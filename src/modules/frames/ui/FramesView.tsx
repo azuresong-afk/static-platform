@@ -18,8 +18,9 @@ import { Wizard } from './Wizard';
 export function FramesView({ chrome }: { chrome: Chrome }) {
   const [st, store] = useStore();
   const nt = useMemo(() => new Set(st.nt), [st.nt]);
-  const a = useMemo(() => analyze(st.s, { notTarget: nt, explain: st.explain }), [st.s, nt, st.explain]);
-  const drawing = useMemo(() => renderDrawing(st.s, a.model, a.solution, { view: st.view, sel: st.sel }), [st.s, a, st.view, st.sel]);
+  const a = useMemo(() => analyze(st.s, { notTarget: nt, explain: st.explain, pick: st.pick }), [st.s, nt, st.explain, st.pick]);
+  // При поиске положения чертёж — в найденном положении равновесия.
+  const drawing = useMemo(() => renderDrawing(a.structure, a.model, a.solution, { view: st.view, sel: st.sel }), [a, st.view, st.sel]);
   // Задача Мещерского загружается как своя схема с названием задачи — список показывает её по названию.
   const presetValue = st.preset !== 'custom' ? st.preset : (BOOK_TASKS.find((t) => t.title === st.title)?.key ?? 'custom');
 
@@ -79,11 +80,11 @@ export function FramesView({ chrome }: { chrome: Chrome }) {
         </section>
 
         <div className="cols">
-          <Configurator model={a.model} />
+          <Configurator model={a.model} search={a.search} pick={a.pick} />
           <SolutionPanel doc={a.doc} />
         </div>
       </div>
-      <PrintReport s={st.s} a={a} notTarget={nt} title={st.title} />
+      <PrintReport s={a.structure} a={a} notTarget={nt} title={st.title} />
     </>
   );
 }
