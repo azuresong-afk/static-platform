@@ -87,6 +87,17 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   const explain = (...c: Inline[]): Block => ({ k: 'p', cls: 'explain', c });
 
   if (sol.friction) return frictionDoc(m, sol, opts);
+  if (sol.status === 'unsupported') {
+    step('Трение в шарнире', [
+      {
+        k: 'p',
+        c: [
+          'Трение в шарнире вместе с трением на опорах или в касаниях (или с односторонними связями) не рассчитывается: момент трения M_тр = ρR нелинейно зависит от реакции шарнира и в расчёт с неравенствами не входит. Уберите трение в шарнире или трение (одностороннюю связь) на других связях.',
+        ],
+      },
+    ]);
+    return { steps };
+  }
   if (sol.status === 'nosupport') {
     step('Опоры', [
       { k: 'p', c: ['Добавьте хотя бы одну опору или отметьте искомую нагрузку — без связей конструкция ничем не удерживается.'] },
@@ -401,6 +412,9 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
   const nEq = eqCount(m),
     nHinge = m.unknowns.filter((u) => u.hinge).length;
   const nOff = m.offLinks.length;
+  // Трение в шарнире: момент трения — ещё одна неизвестная, к уравнениям равновесия добавляется M_тр = ρR.
+  const nFr = m.pinFr.length;
+  const frEq = (all: number) => (nFr ? [`, и ${nFr === 1 ? 'ещё одно уравнение даёт' : `ещё ${nFr} уравнения дают`} трение в шарнире (M_тр = ρR, ниже) — всего `, b(String(all + nFr))] : []);
   const det: Block[] = [
     comp && bodies
       ? {
@@ -410,6 +424,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
             b(String(sol.n + nOff)),
             ` (из них сил в связях между телами и частями: ${nHinge + m.links.reduce((a, l) => a + l.list.length, 0) + nOff}). Для каждого из ${NP} тел можно составить три независимых уравнения равновесия${Object.keys(m.parts.points).length ? ', для тела-точки — два' : ''}, всего `,
             b(String(nEq)),
+            ...frEq(nEq),
             '.',
           ],
         }
@@ -421,10 +436,11 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
             b(String(sol.n)),
             ` (из них взаимных ${m.parts.hinges.some((h) => m.parts.slides[h] != null) ? 'сил и моментов в соединениях частей' : 'сил в шарнирах'}: ${nHinge}). Для каждой из ${NP} частей можно составить три независимых уравнения равновесия, всего `,
             b(String(nEq)),
+            ...frEq(nEq),
             '.',
           ],
         }
-      : { k: 'p', c: ['Неизвестных: ', b(String(sol.n)), '. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия.'] },
+      : { k: 'p', c: ['Неизвестных: ', b(String(sol.n)), '. Для плоской произвольной системы сил можно составить три независимых уравнения равновесия', ...frEq(3), '.'] },
     { k: 'badge', tone: STATUS_TONE[sol.status], text: `Система ${st[0]}` },
   ];
   if (sol.status === 'indeterminate')
@@ -503,7 +519,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
     if (ex)
       eqs.push(
         explain(
-          `Ни в одном из неиспользованных уравнений не осталось ровно одного неизвестного, поэтому берём ${J.eqs.length} независимых уравнения и решаем систему относительно `,
+          `Ни в одном из неиспользованных уравнений не осталось ровно одного неизвестного, поэтому берём ${J.eqs.length} независимых уравнения${m.pinFr.length ? ` и ${m.pinFr.length === 1 ? 'уравнение' : 'уравнения'} трения в шарнире (выше)` : ''} и решаем систему относительно `,
           ...symList(J.keys.map((k) => m.byKey[k])),
           '.',
         ),
@@ -617,6 +633,7 @@ export function solutionDoc(m: Model, sol: Solution, opts: SolutionOptions = {})
       const own = u.link.kind === 'hinge' || u.key !== m.links[u.link.index].list[0].key;
       note = linkNote(m, m.links[u.link.index], u.key, val) + (own && note ? '; ' + note : '');
     }
+    if (m.pinFr.some((q) => q.M === u.key)) note = 'момент трения в шарнире' + (note ? '; ' + note : '');
     if (aux) note = (note ? note + '; ' : '') + 'промежуточная';
     rows.push({ kind: aux ? 'aux' : 'main', val: [sym(u), ` = ${fmt(val)} ${unitOf(u)}`], note });
     if (u.L === 'Y' && (u.support === 'pin' || u.support === 'fixed')) {

@@ -63,11 +63,11 @@ describe('навигация и реестр задач', () => {
   it('каждая задача загружается без ошибок', () => {
     for (const m of modules) for (const t of m.tasks!) expect(() => m.loadTask!(t.key), `${m.id}: ${t.title}`).not.toThrow();
   });
-  it('задачи Мещерского для «Балок и рам» — все 50 из задачника (14 — контакт тел), с ответом', () => {
+  it('задачи Мещерского для «Балок и рам» — все 71 из задачника (14 — контакт тел, 21 — положение равновесия), с ответом', () => {
     const fr = modules.find((m) => m.id === 'frames')!;
     const book = fr.tasks!.filter((t) => t.key.startsWith('tb:'));
-    expect(book).toHaveLength(50);
-    expect(new Set(book.map((t) => t.key)).size).toBe(50);
+    expect(book).toHaveLength(71);
+    expect(new Set(book.map((t) => t.key)).size).toBe(71);
     fr.loadTask!('tb:3.7');
     expect(fr.store.projectTitle()).toBe('Мещерский 3.7: балка на двух опорах, конец оттянут тросом через блок');
     fr.loadTask!('tb:3.35');

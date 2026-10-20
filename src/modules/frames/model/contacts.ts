@@ -19,7 +19,7 @@ type ItemSpec = DistributiveOmit<Item, 'id'>;
 type LinkSpec = DistributiveOmit<Link, 'id'>;
 
 /** Построитель схемы из нескольких тел по координатам. */
-class Scheme {
+export class Scheme {
   readonly s: Structure = { nodes: [], segs: [], items: [], links: [] };
   private origin: { id: string; p: P } | null = null;
   constructor(private ids: IdGen) {}
@@ -41,11 +41,19 @@ class Scheme {
       this.s.segs.push(seg(this.ids.seg(), ids[i], ids[j], pts[i], pts[j]));
     return ids;
   }
-  item(it: ItemSpec) {
-    this.s.items.push({ ...it, id: this.ids.item() } as Item);
+  item(it: ItemSpec): string {
+    const id = this.ids.item();
+    this.s.items.push({ ...it, id } as Item);
+    return id;
   }
-  link(l: LinkSpec) {
-    this.s.links!.push({ ...l, id: this.ids.item() } as Link);
+  link(l: LinkSpec): string {
+    const id = this.ids.item();
+    this.s.links!.push({ ...l, id } as Link);
+    return id;
+  }
+  /** Участки тела по порядку (для формул поиска положения). */
+  segsOf(nodes: string[]): string[] {
+    return this.s.segs.filter((q) => nodes.includes(q.a) && nodes.includes(q.b)).map((q) => q.id);
   }
 }
 
@@ -57,7 +65,7 @@ function seg(id: string, a: string, b: string, A: P, B: P): Seg {
   return { id, a, b, dir: 'a', len: Math.hypot(dx, dy), ang: normAng((Math.atan2(dy, dx) * 180) / Math.PI) };
 }
 
-const scheme = (ids: IdGen | undefined, f: (b: Scheme) => void): Structure => {
+export const scheme = (ids: IdGen | undefined, f: (b: Scheme) => void): Structure => {
   const b = new Scheme((ids ?? createIdGen()) as IdGen);
   f(b);
   return b.s;
