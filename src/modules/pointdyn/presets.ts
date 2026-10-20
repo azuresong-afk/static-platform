@@ -2,6 +2,7 @@
 import { G } from '../rotation/model/rotation';
 import type { CircleProblem } from './model/circle';
 import type { RelProblem } from './model/rel';
+import type { EarthDyn } from './model/earth';
 import type { FirstProblem } from './model/first';
 import type { PlaneProblem } from './model/plane';
 import type { PointProblem } from './model/point';
@@ -433,3 +434,73 @@ export const REL_PRESETS = {
   },
 } satisfies Record<string, RelPreset>;
 export type RelPresetKey = keyof typeof REL_PRESETS;
+
+/* ---------- движение вблизи вращающейся Земли (§33) ---------- */
+
+export interface EarthPreset {
+  title: string;
+  problem: EarthDyn;
+  /**
+   * Ответ: N — давление на рельс (FH), dev — отклонение (в сторону, на востоке — devE), dh — разность уровней,
+   * n — g₀/(ω²R), wMul — во сколько раз увеличить ω, tH — время поворота плоскости маятника, ч, ThalfH — на 180°, ч.
+   */
+  book: Record<string, number>;
+  relTol: number;
+  note: string;
+}
+/** Сутки 24 ч: ω = 2π/86 400 с⁻¹ — с ним сходятся ответы книги (звёздные сутки: 2π/86 164). */
+export const OMEGA_DAY = (2 * Math.PI) / 86400;
+const earth = (o: Partial<EarthDyn>): EarthDyn => ({ byWeight: false, m: 1, g: G, lat: 60, omega: OMEGA_DAY, R: 6370e3, ask: 'fall', h: 0, vE: 0, vN: 0, vh: 0, v: 0, k: 0, L: 0, b: 0, psi: 90, ...o });
+
+export const EARTH_PRESETS = {
+  d334: {
+    title: 'Мещерский 33.4: боковое давление поезда на рельсы из-за вращения Земли',
+    problem: earth({ ask: 'line', byWeight: true, m: 2000e3, v: 15, k: 0 }),
+    book: { N: 384 },
+    relTol: 0.005,
+    note: 'Поезд весом P = 2000 т (2·10⁶ кГ) идёт по меридиану на север со скоростью 15 м/с, широта 60°. Книга: 384 кГ на правый, восточный рельс; при движении на юг (курс 180°) — столько же на правый, западный. Расчёт: N = 2(P/g)ωv sin φ = 385,2 кГ — на 0,3 % больше книжного.',
+  },
+  d335: {
+    title: 'Мещерский 33.5: отклонение на восток свободно падающей точки',
+    problem: earth({ ask: 'fall', h: 500 }),
+    book: { devE: 0.12 },
+    relTol: 0.03,
+    note: 'Падение из покоя с высоты 500 м, широта 60°, без сопротивления воздуха. Книга: на 12 см (расчёт 12,2 см; приближённо x = ⅓ωgT³cos φ).',
+  },
+  d2352: {
+    title: 'Мещерский 23.52: у какого берега река, текущая на север, выше и насколько',
+    problem: earth({ ask: 'line', v: 5 / 3.6, k: 0, b: 1000 }),
+    book: { dh: 0.01782 },
+    relTol: 0.002,
+    note: 'Река шириной 1 км течёт с юга на север со скоростью 5 км/ч, широта 60°. Поверхность воды перпендикулярна сумме g и −a_c: tg β = 2ωv sin φ/g. Книга: вода выше у правого (восточного) берега на 1,782 см (расчёт 1,783 см).',
+  },
+  d3315: {
+    title: 'Мещерский 33.15: зависимость ускорения силы тяжести от широты',
+    problem: earth({ ask: 'g', lat: 45 }),
+    book: { n: 289 },
+    relTol: 0.01,
+    note: 'R = 6370 км, g₀ = 9,81 м/с² — на полюсе. Книга: g(φ) = g₀(1 − cos²φ/289), член с ω⁴ отброшен. Расчёт при ω = 2π/86 400: n = g₀/(ω²R) = 291,2 — на 0,8 % больше книжного; 289 получается при звёздных сутках (ω = 2π/86 164: n = 289,6).',
+  },
+  d3316: {
+    title: 'Мещерский 33.16: во сколько раз увеличить вращение Земли, чтобы на экваторе исчез вес',
+    problem: earth({ ask: 'g', lat: 0 }),
+    book: { wMul: 17 },
+    relTol: 0.01,
+    note: 'R = 6370 км. На экваторе вес исчезает, когда ω²R = g₀: ω′/ω = √(g₀/(ω²R)). Книга: в 17 раз (расчёт 17,06).',
+  },
+  d3317: {
+    title: 'Мещерский 33.17: отклонение артиллерийского снаряда вследствие вращения Земли',
+    problem: earth({ ask: 'line', v: 900, k: 0, L: 18000 }),
+    book: { dev: 22.7 },
+    relTol: 0.005,
+    note: 'Настильная траектория — горизонтальная прямая; горизонтальная скорость 900 м/с, дальность 18 км, широта 60°. Книга: вправо на 22,7 м, независимо от направления стрельбы (горизонтальная составляющая 2ωv sin φ от курса не зависит).',
+  },
+  d3318: {
+    title: 'Мещерский 33.18: маятник Фуко — когда плоскость качаний совпадёт с плоскостью запад — восток',
+    problem: earth({ ask: 'pend', psi: 90 }),
+    book: { tH: 13.86 * 0.5, ThalfH: 13.86 },
+    relTol: 0.002,
+    note: 'Начальная плоскость — север — юг, широта 60°; поворот на 90°. Книга: T = 13,86(0,5 + k) ч, k = 0, 1, 2, … — плоскость (прямая) повторяется через каждые 180°.',
+  },
+} satisfies Record<string, EarthPreset>;
+export type EarthPresetKey = keyof typeof EARTH_PRESETS;

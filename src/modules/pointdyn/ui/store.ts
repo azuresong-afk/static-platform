@@ -1,23 +1,27 @@
 /**
  * Состояние вкладки «Динамика точки»: пять режимов — прямолинейное движение (вторая задача),
  * силы по заданному движению (первая задача), криволинейное движение в плоскости, движение по окружности
- * (реакция связи, отрыв) и относительное движение в трубке подвижного тела; история отмены, файл проекта.
+ * (реакция связи, отрыв), относительное движение в трубке подвижного тела и движение вблизи вращающейся Земли;
+ * история отмены, файл проекта.
  */
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
 import type { CircleProblem } from '../model/circle';
+import type { EarthDyn } from '../model/earth';
 import type { FirstProblem } from '../model/first';
 import type { PlaneProblem } from '../model/plane';
 import type { PointProblem } from '../model/point';
 import type { RelProblem } from '../model/rel';
 import {
   CIRCLE_PRESETS,
+  EARTH_PRESETS,
   FIRST_PRESETS,
   PLANE_PRESETS,
   POINT_PRESETS,
   REL_PRESETS,
   type CirclePresetKey,
+  type EarthPresetKey,
   type FirstPresetKey,
   type PlanePresetKey,
   type PointPresetKey,
@@ -37,8 +41,11 @@ const LINKS: CircleProblem['link'][] = ['thread', 'inner', 'outer', 'rod'];
 export const REL_NUM = ['m', 'g', 'omega', 'r', 'd', 'h', 'theta', 'c', 'l0', 'f', 'x0', 'v0', 't1', 'x1'] as const;
 export type RelNumKey = (typeof REL_NUM)[number];
 const FRAMES: RelProblem['frame'][] = ['vert', 'horz', 'trans'];
+export const EARTH_NUM = ['m', 'g', 'lat', 'omega', 'R', 'h', 'vE', 'vN', 'vh', 'v', 'k', 'L', 'b', 'psi'] as const;
+export type EarthNumKey = (typeof EARTH_NUM)[number];
+const ASKS: EarthDyn['ask'][] = ['fall', 'line', 'pend', 'g'];
 
-export type PointMode = 'line' | 'first' | 'plane' | 'circle' | 'rel';
+export type PointMode = 'line' | 'first' | 'plane' | 'circle' | 'rel' | 'earth';
 export interface PointTask {
   mode: PointMode;
   line: PointProblem;
@@ -46,8 +53,9 @@ export interface PointTask {
   plane: PlaneProblem;
   circle: CircleProblem;
   rel: RelProblem;
+  earth: EarthDyn;
 }
-export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey | CirclePresetKey | RelPresetKey;
+export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey | CirclePresetKey | RelPresetKey | EarthPresetKey;
 
 export interface PointState {
   problem: PointTask;
@@ -70,13 +78,15 @@ const DEF_FIRST = FIRST_PRESETS.f2615.problem as FirstProblem;
 const DEF_PLANE = PLANE_PRESETS.p2744.problem as PlaneProblem;
 const DEF_CIRCLE = CIRCLE_PRESETS.c311.problem as CircleProblem;
 const DEF_REL = REL_PRESETS.yd4.problem as RelProblem;
+const DEF_EARTH = EARTH_PRESETS.d335.problem as EarthDyn;
 
 /** Задача по ключу готовой задачи: режим и данные этого режима. */
 export function presetTask(k: AnyPresetKey, base?: PointTask): { task: PointTask; title: string } {
-  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL) };
+  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL), earth: copy(DEF_EARTH) };
   if (k in POINT_PRESETS) return { task: { ...b, mode: 'line', line: copy(POINT_PRESETS[k as PointPresetKey].problem as PointProblem) }, title: POINT_PRESETS[k as PointPresetKey].title };
   if (k in FIRST_PRESETS) return { task: { ...b, mode: 'first', first: copy(FIRST_PRESETS[k as FirstPresetKey].problem as FirstProblem) }, title: FIRST_PRESETS[k as FirstPresetKey].title };
   if (k in CIRCLE_PRESETS) return { task: { ...b, mode: 'circle', circle: copy(CIRCLE_PRESETS[k as CirclePresetKey].problem as CircleProblem) }, title: CIRCLE_PRESETS[k as CirclePresetKey].title };
+  if (k in EARTH_PRESETS) return { task: { ...b, mode: 'earth', earth: copy(EARTH_PRESETS[k as EarthPresetKey].problem as EarthDyn) }, title: EARTH_PRESETS[k as EarthPresetKey].title };
   if (k in REL_PRESETS) return { task: { ...b, mode: 'rel', rel: copy(REL_PRESETS[k as RelPresetKey].problem as RelProblem) }, title: REL_PRESETS[k as RelPresetKey].title };
   return { task: { ...b, mode: 'plane', plane: copy(PLANE_PRESETS[k as PlanePresetKey].problem as PlaneProblem) }, title: PLANE_PRESETS[k as PlanePresetKey].title };
 }
@@ -127,22 +137,29 @@ function parseRel(raw: unknown): RelProblem | null {
   };
 }
 
+function parseEarth(raw: unknown): EarthDyn | null {
+  if (!isObj(raw) || !EARTH_NUM.every((k) => isNum(raw[k])) || !ASKS.includes(raw.ask as EarthDyn['ask'])) return null;
+  const nums = Object.fromEntries(EARTH_NUM.map((k) => [k, raw[k]])) as Record<EarthNumKey, number>;
+  return { ...nums, byWeight: raw.byWeight === true, ask: raw.ask as EarthDyn['ask'] };
+}
+
 export function parsePoint(raw: unknown): { ok: true; problem: PointTask } | { ok: false; errors: string[] } {
   // Файл первой версии раздела — только прямолинейное движение.
   const old = parseLine(raw);
-  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL) } };
-  if (!isObj(raw) || !['line', 'first', 'plane', 'circle', 'rel'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
+  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL), earth: copy(DEF_EARTH) } };
+  if (!isObj(raw) || !['line', 'first', 'plane', 'circle', 'rel', 'earth'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
   const line = parseLine(raw.line),
     first = parseFirst(raw.first),
     plane = parsePlane(raw.plane),
     circle = parseCircle(raw.circle),
-    rel = parseRel(raw.rel);
-  const need = { line, first, plane, circle, rel }[raw.mode as PointMode];
+    rel = parseRel(raw.rel),
+    earth = parseEarth(raw.earth);
+  const need = { line, first, plane, circle, rel, earth }[raw.mode as PointMode];
   if (!need) return { ok: false, errors: ['Данные задачи неполные.'] };
-  // Файлы до режимов «движение по окружности» и «относительное движение» — без полей circle, rel.
+  // Файлы до режимов «движение по окружности», «относительное движение», «вращение Земли» — без полей circle, rel, earth.
   return {
     ok: true,
-    problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE), circle: circle ?? copy(DEF_CIRCLE), rel: rel ?? copy(DEF_REL) },
+    problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE), circle: circle ?? copy(DEF_CIRCLE), rel: rel ?? copy(DEF_REL), earth: earth ?? copy(DEF_EARTH) },
   };
 }
 
@@ -285,6 +302,15 @@ export class PointStore {
   setRelAsk = (ask: RelProblem['ask']) => {
     this.commit();
     this.edit((p) => (p.rel.ask = ask));
+  };
+  /* движение вблизи вращающейся Земли */
+  typeEarth = (key: EarthNumKey, v: number) => {
+    this.touch(`e:${key}`);
+    this.edit((p) => (p.earth[key] = v));
+  };
+  setEarthAsk = (ask: EarthDyn['ask']) => {
+    this.commit();
+    this.edit((p) => (p.earth.ask = ask));
   };
   undo = () => {
     const s = this.hist.undo(this.snap());

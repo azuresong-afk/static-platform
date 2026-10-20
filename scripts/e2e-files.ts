@@ -639,6 +639,20 @@ async function main() {
   await tab('frames');
   await openText('pr.json', prText, 'ok');
   check((await p.innerText('#psolution')) === prSol, 'файл относительного движения открывается без потерь');
+  await p.selectOption('#ppreset', 'd334');
+  const pe = await p.innerText('#psolution');
+  check((await p.inputValue('#pmode')) === 'earth' && pe.includes('385,2') && pe.includes('на восток'), 'Мещерский 33.4: давление поезда 385 кГ на восточный рельс', pe.slice(-300));
+  await p.selectOption('#ppreset', 'd335');
+  check((await p.innerText('#psolution')).includes('0,1224') && (await p.locator('#pe-h').count()) === 1, 'Мещерский 33.5: отклонение падающей точки на восток 12 см');
+  await p.selectOption('#peask', 'pend');
+  check((await p.innerText('#psolution')).includes('6,928'), 'маятник Фуко: поворот на 90° за 6,93 ч');
+  const [dle] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const peText = await (await dle.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(peText).problem.mode === 'earth' && JSON.parse(peText).problem.earth.ask === 'pend', 'файл задачи о вращении Земли');
+  const peSol = await p.innerText('#psolution');
+  await tab('frames');
+  await openText('pe.json', peText, 'ok');
+  check((await p.innerText('#psolution')) === peSol, 'файл задачи о вращении Земли открывается без потерь');
   await p.selectOption('#pmode', 'line');
   check((await p.locator('#pask').count()) === 1, 'переключение режима');
   await tab('frames');
@@ -1107,6 +1121,21 @@ async function main() {
   await tab('frames');
   await openText('rl.json', rlText, 'ok');
   check((await p.getAttribute('[data-tab="relative"]', 'aria-selected')) === 'true' && (await p.innerText('#rsolution')) === rlSol, 'файл сложного движения открывается в своей вкладке без потерь');
+  await p.selectOption('#rpreset', 'e2352');
+  check((await p.inputValue('#rmode')) === 'earth' && (await p.innerText('#rsolution')).includes('1,749·10⁻⁴'), 'Мещерский 23.52: кориолисово ускорение воды 1,75·10⁻⁴ м/с²');
+  await p.selectOption('#rpreset', 't226');
+  const rlTriS = await p.innerText('#rsolution');
+  check((await p.inputValue('#rmode')) === 'tri' && rlTriS.includes('0,7071') && rlTriS.includes('180°'), 'Мещерский 22.6: ветер с севера, скорость a√2/2', rlTriS.slice(-300));
+  await p.check('#rt-e2-qm');
+  check((await p.innerText('#rsolution')).includes('четыре'), 'лишнее неизвестное — сообщение');
+  await p.uncheck('#rt-e2-qm');
+  const [dlt] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const rlTriText = await (await dlt.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(rlTriText).mode === 'tri' && JSON.parse(rlTriText).tri.two === true, 'файл треугольника скоростей');
+  const rlTriSol = await p.innerText('#rsolution');
+  await tab('frames');
+  await openText('rt.json', rlTriText, 'ok');
+  check((await p.inputValue('#rmode')) === 'tri' && (await p.innerText('#rsolution')) === rlTriSol, 'файл треугольника скоростей открывается без потерь');
   await tab('frames');
 
   // 29. Вкладка «Сосуды».
