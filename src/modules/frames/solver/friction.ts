@@ -204,3 +204,34 @@ function minLambda(m: Model, keys: string[], rows: number[][], b: number[]): num
   }
   return hi;
 }
+
+/** Возможно ли равновесие (без поиска границ нагрузки и запаса по трению) — для поиска положения равновесия. */
+export function frictionFeasible(m: Model): boolean {
+  const keys = m.unknowns.map((u) => u.key);
+  const eqs: Eq[] = [],
+    rows: number[][] = [];
+  for (const e of m.cands) {
+    const r = keys.map((k) => e.coeffs[k] || 0);
+    if (rankOf([...rows, r]) > rows.length) {
+      rows.push(r);
+      eqs.push(e);
+    }
+  }
+  const b = eqs.map((e) => -e.cst);
+  const { G, h } = constraints(m, keys, 1);
+  const r = linprog(
+    keys.map(() => 0),
+    rows,
+    b,
+    G,
+    h,
+  );
+  if (r.status !== 'optimal') return false;
+  // Строгая проверка: неравенства — с относительным допуском (у границы симплекс-метод допускает малые нарушения).
+  const S = Math.max(1, ...b.map(Math.abs), ...r.x.map(Math.abs));
+  if (G.some((g, i) => g.reduce((s, c, j) => s + c * r.x[j], 0) - h[i] > 1e-10 * S)) return false;
+  const vals = Object.fromEntries(keys.map((k, i) => [k, r.x[i]]));
+  return m.cands
+    .filter((e) => !eqs.includes(e))
+    .every((e) => Math.abs(e.cst + Object.entries(e.coeffs).reduce((s, [k, c]) => s + c * (vals[k] ?? 0), 0)) < 1e-6 * Math.max(1, Math.abs(e.cst)));
+}

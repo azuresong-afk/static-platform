@@ -6,7 +6,7 @@ import { OPPLOAD, REFS, loadAngle } from '../model/constants';
 import { dirOf, type RefAxis } from '../../../shared/format';
 import { normAng } from '../model/constants';
 import { distGeom, pathNodes, partsOf, resolve, roman, type Geom, type Parts, type PointItem, type Pt } from '../model/geometry';
-import type { DistItem, ForceItem, Link, LoadDir, MomentItem, Structure, SupportItem, SupportType } from '../model/types';
+import type { DistItem, ForceItem, Link, LoadDir, MomentItem, PinItem, Structure, SupportItem, SupportType } from '../model/types';
 import { makeEq, type Eq } from './equations';
 
 /** Обозначение: буква и индекс (X с индексом A, F с индексом 2…). */
@@ -181,9 +181,21 @@ export interface Model {
   offLinks: Link[];
   /** Имена точек каждой части. */
   partNames: string[][];
+  /** Шарниры с трением (предельное состояние): момент трения связан с давлением на ось. */
+  pinFr: PinFr[];
   /** Габарит, м. */
   w: number;
   h: number;
+}
+
+/** Шарнир с трением: ключи реакций X, Y и момента трения M; ρ — радиус круга трения, M = ρ·√(X² + Y²). */
+export interface PinFr {
+  M: string;
+  X: string;
+  Y: string;
+  rho: number;
+  it: PinItem;
+  P: string;
 }
 
 export interface ModelOptions {
@@ -213,7 +225,8 @@ export function buildModel(s: Structure, opts: ModelOptions = {}): Model {
     badDists: BadDist[] = [],
     unkLoads: Unknown[] = [],
     labels: Record<string, ItemLabel> = {},
-    used = new Set<string>();
+    used = new Set<string>(),
+    pinFr: PinFr[] = [];
   const mkKey = (k: string) => {
     let kk = k;
     while (used.has(kk)) kk += "'";
@@ -250,6 +263,13 @@ export function buildModel(s: Structure, opts: ModelOptions = {}): Model {
         add('Y', { kind: 'f', dx: 0, dy: 1, angle: 90 });
       }
       if (it.type === 'fixed') add('M', { kind: 'm', s: 1 });
+      if (it.type === 'pin' && it.fr) {
+        // Момент трения в шарнире: направлен против проворачивания тела, величина M_тр = ρ·√(X² + Y²) ≥ 0.
+        add('Mтр', { kind: 'm', s: it.fr.rot === 'ccw' ? -1 : 1 });
+        const f = Math.max(0, +it.fr.f || 0),
+          r = Math.max(0, +it.fr.r || 0);
+        pinFr.push({ M: list[2].key, X: list[0].key, Y: list[1].key, rho: it.fr.circle ? (r * f) / Math.sqrt(1 + f * f) : f * r, it, P });
+      }
       if (it.type === 'roller' || it.type === 'rod') {
         const angle = it.angle as number;
         const named = it.angleName && (it.type === 'rod' || it.side === 'tilt') ? { angleName: it.angleName, userAngle: angle } : {};
@@ -545,7 +565,7 @@ export function buildModel(s: Structure, opts: ModelOptions = {}): Model {
   const partNames = Array.from({ length: parts.count }, (_, p) => g.order.filter((id) => parts.nodeParts[id].includes(p)).map((id) => g.name[id]));
   const w = Math.max(...pts.map((p) => p.x)),
     h = Math.max(...pts.map((p) => p.y));
-  return { g, pts, unknowns, knowns, supports, dists, badDists, unkLoads, labels, byKey, cands, parts, partNames, w, h, links, linkActs, badLinks, offLinks };
+  return { g, pts, unknowns, knowns, supports, dists, badDists, unkLoads, labels, byKey, cands, parts, partNames, w, h, links, linkActs, badLinks, offLinks, pinFr };
 }
 
 /** Сумма независимых уравнений равновесия всех частей. */

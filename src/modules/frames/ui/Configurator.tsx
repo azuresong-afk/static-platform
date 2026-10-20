@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react';
 import { DGL, LOADDIR, QUADS, REFS, SIDES, normAng, quadOf, segAngle, type Quad } from '../model/constants';
 import { fmt, parseNum } from '../../../shared/format';
 import { distGeom, type Geom } from '../model/geometry';
-import type { Dir, Item, ItemType, LoadDir } from '../model/types';
+import type { Dir, Item, ItemType, LoadDir, SearchUnit } from '../model/types';
+import { searchFields, searchNameOK } from '../model/search';
+import type { SearchResult } from '../solver/search';
+import { paramText } from '../text/search';
 import type { Model } from '../solver/model';
 import { forceCalcText, itemTitle, sizeText } from '../text/labels';
 import { InlineView } from '../../../shared/ui/DocView';
@@ -476,6 +479,47 @@ function Bodies({ model }: { model: Model }) {
   );
 }
 
+/** Трение в шарнире: флажок, коэффициент, радиус цапфы, куда проворачивается тело, модель круга трения. */
+function PinFriction({ it }: { it: Item & { type: 'pin' } }) {
+  const [, store] = useStore();
+  const fr = it.fr;
+  const set = (patch: Partial<NonNullable<typeof fr>>) => store.setItemField(it.id, 'fr', { ...fr!, ...patch });
+  const type = (patch: Partial<NonNullable<typeof fr>>) => store.typeItemField(it.id, 'fr', { ...fr!, ...patch } as unknown as number);
+  return (
+    <>
+      <label className="chk wide" data-port-only="">
+        <input type="checkbox" data-id={it.id} data-f="fr" checked={!!fr} onChange={(e) => store.setItemField(it.id, 'fr', e.target.checked ? { f: 0.1, r: 0.05, rot: 'ccw' } : undefined)} /> Трение в шарнире (тело проворачивается: предельное равновесие или равномерное вращение)
+      </label>
+      {fr && (
+        <>
+          <label className="field" data-port-only="">
+            <span>Коэффициент трения f</span>
+            <NumField value={fr.f} data={{ 'data-id': it.id, 'data-f': 'fr.f' }} onValue={(v) => (v < 0 ? false : type({ f: v }))} onBlur={() => store.endSession('item:' + it.id + ':fr')} />
+          </label>
+          <label className="field" data-port-only="">
+            <span>Радиус цапфы r</span>
+            <NumField value={fr.r} unit="м" data={{ 'data-id': it.id, 'data-f': 'fr.r' }} onValue={(v) => (v < 0 ? false : type({ r: v }))} onBlur={() => store.endSession('item:' + it.id + ':fr')} />
+          </label>
+          <label className="field" data-port-only="">
+            <span>Тело проворачивается</span>
+            <select data-id={it.id} data-f="fr.rot" value={fr.rot} onChange={(e) => set({ rot: e.target.value as 'cw' | 'ccw' })}>
+              <option value="ccw">против часовой</option>
+              <option value="cw">по часовой</option>
+            </select>
+          </label>
+          <label className="field" data-port-only="">
+            <span>Радиус круга трения</span>
+            <select data-id={it.id} data-f="fr.circle" value={fr.circle ? '1' : ''} onChange={(e) => set({ circle: e.target.value ? true : undefined })}>
+              <option value="">ρ = f·r (приработанный подшипник)</option>
+              <option value="1">ρ = r·f/√(1 + f²) (касание по линии)</option>
+            </select>
+          </label>
+        </>
+      )}
+    </>
+  );
+}
+
 /** Каток на наклонном участке: реакция перпендикулярно участку — в одну или другую сторону. */
 function NormalButtons({ it, model }: { it: Item & { type: 'roller' | 'rough' }; model: Model }) {
   const [, store] = useStore();
@@ -604,11 +648,19 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
   const P = it.type !== 'dist' ? <NodeSelect it={it} f="at" label="Точка" g={g} /> : null;
   switch (it.type) {
     case 'fixed':
+      fields = (
+        <>
+          {P}
+          <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(false)} />
+        </>
+      );
+      break;
     case 'pin':
       fields = (
         <>
           {P}
           <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(false)} />
+          <PinFriction it={it} />
         </>
       );
       break;
@@ -775,6 +827,95 @@ function ItemCard({ it, model }: { it: Item; model: Model }) {
   );
 }
 
+/** Поиск положения равновесия: параметр, промежуток, поля-формулы и найденные корни. */
+function SearchPanel({ search, pick }: { search?: SearchResult; pick?: number | null }) {
+  const [st, store] = useStore();
+  const sr = st.s.search;
+  const fields = searchFields(st.s);
+  const end = (k: string) => () => store.endSession(k);
+  return (
+    <div data-port-only="" id="searchpanel">
+      <div className="sub">Положение равновесия</div>
+      <label className="chk">
+        <input type="checkbox" id="searchOn" checked={!!sr} onChange={(e) => store.setSearchOn(e.target.checked)} /> Искать положение: неизвестен угол или размер, а не нагрузка
+      </label>
+      {sr && (
+        <>
+          <div className="fields">
+            <label className="field">
+              <span>Обозначение параметра</span>
+              <div className="inp">
+                <input
+                  type="text"
+                  id="searchName"
+                  value={sr.name}
+                  className={searchNameOK(sr.name) ? undefined : 'bad'}
+                  onChange={(e) => store.typeSearch({ name: e.target.value.trim() })}
+                  onBlur={end('search:name')}
+                />
+              </div>
+            </label>
+            <label className="field">
+              <span>Единица</span>
+              <select id="searchUnit" value={sr.unit} onChange={(e) => store.setSearch({ unit: e.target.value as SearchUnit })}>
+                <option value="deg">угол, °</option>
+                <option value="m">длина, м</option>
+                <option value="">без единицы</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Искать от</span>
+              <NumField value={sr.min} data={{ id: 'searchMin' }} onValue={(v) => store.typeSearch({ min: v })} onBlur={end('search:min')} />
+            </label>
+            <label className="field">
+              <span>до</span>
+              <NumField value={sr.max} data={{ id: 'searchMax' }} onValue={(v) => store.typeSearch({ max: v })} onBlur={end('search:max')} />
+            </label>
+          </div>
+          {sr.bind.map((b, i) => (
+            <div className="bodyrow" key={i} data-bind={i}>
+              <select aria-label="Поле" data-bindfield={i} value={b.ref + ':' + b.field} onChange={(e) => {
+                const [ref, field] = e.target.value.split(':');
+                store.setBind(i, { ref, field });
+              }}>
+                {!fields.some((f) => f.ref === b.ref && f.field === b.field) && <option value={b.ref + ':' + b.field}>(поля нет в схеме)</option>}
+                {fields.map((f) => (
+                  <option key={f.ref + ':' + f.field} value={f.ref + ':' + f.field}>
+                    {f.label}{f.unit ? `, ${f.unit}` : ''}
+                  </option>
+                ))}
+              </select>
+              <span>=</span>
+              <div className="inp">
+                <input type="text" aria-label="Формула" data-bindexpr={i} value={b.expr} onChange={(e) => store.setBind(i, { expr: e.target.value }, true)} onBlur={end('bind:' + i)} />
+              </div>
+              <button type="button" className="del" data-delbind={i} title="Убрать формулу" onClick={() => store.removeBind(i)}>
+                ×
+              </button>
+            </div>
+          ))}
+          <button type="button" className="addbtn" id="addBind" onClick={store.addBind}>
+            Задать поле формулой
+          </button>
+          <p className="hint">
+            Поля схемы (длины, углы, смещения тел, нагрузки) задаются формулами от параметра {sr.name}: например, «2 sin {sr.name}», «90 − {sr.name}/2». Тригонометрия — в градусах: sin 30 = 0,5, arccos 0,5 = 60.
+          </p>
+          {search && search.points.length > 0 && (
+            <div className="targets" id="searchRoots">
+              {search.points.map((pt, i) => (
+                <button key={i} type="button" className="chip" data-root={i} aria-pressed={i === pick ? 'true' : 'false'} onClick={() => store.setPick(i)}>
+                  <span className="v">{sr.name}</span> = {paramText(pt.p, sr.unit)}
+                  {pt.kind === 'root' && !pt.ok ? ' ✗' : pt.stable === true ? ' устойч.' : pt.stable === false ? ' неустойч.' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function Targets({ model }: { model: Model }) {
   const [st, store] = useStore();
   if (!model.unknowns.length) return <div className="targets"><span className="empty">Искомые появятся, когда вы добавите опоры или отметите неизвестную нагрузку.</span></div>;
@@ -790,7 +931,7 @@ function Targets({ model }: { model: Model }) {
   );
 }
 
-export function Configurator({ model }: { model: Model }) {
+export function Configurator({ model, search, pick }: { model: Model; search?: SearchResult; pick?: number | null }) {
   const [st] = useStore();
   const show1 = useStepVisible([1]),
     show2 = useStepVisible([2]),
@@ -852,6 +993,7 @@ export function Configurator({ model }: { model: Model }) {
       <div hidden={!show4}>
         <div className="sub">Что найти</div>
         <Targets model={model} />
+        <SearchPanel search={search} pick={pick} />
       </div>
     </section>
   );

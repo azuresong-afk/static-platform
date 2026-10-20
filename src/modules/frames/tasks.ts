@@ -10,6 +10,7 @@ import { PRESET_TITLES, presetStructure, type PresetKey } from './model/presets'
 import { TEXTBOOK, TEXTBOOK_COMPOSITE, TEXTBOOK_FRICTION, TEXTBOOK_INCLINED, type FrictionProblem, type TextbookProblem } from './model/textbook';
 import type { Structure } from './model/types';
 import { CONTACT_PROBLEMS } from './model/contacts';
+import { POSITION_PROBLEMS } from './model/positions';
 
 export interface BookTask extends TaskEntry {
   build: (ids?: IdGen) => Structure;
@@ -109,14 +110,23 @@ export const CONTACT_BOOK: BookTask[] = CONTACT_PROBLEMS.map((p) => ({
   answer: [p.answer, ...Object.values(p.discrepancy ?? {}).map((d) => `Расхождение: ${d.why}`)].join(' '),
 }));
 
+/** Поиск положения равновесия и трение в шарнирах (Мещерский §2, §4). */
+export const POSITION_BOOK: BookTask[] = POSITION_PROBLEMS.map((p) => ({
+  key: 'tb:' + numOf(p.id),
+  title: `Мещерский ${numOf(p.id)}: ${lc(p.title)}`,
+  build: (ids?: IdGen) => p.build(ids),
+  answer: [p.answer, ...Object.values(p.discrepancy ?? {}).map((d) => `Расхождение: ${d.why}`)].join(' '),
+}));
+
 /** Задачи из книг с ответом (загружаются с пояснением). */
-export const BOOK_TASKS: BookTask[] = [...FRAMES_BOOK, ...YAB_FRAMES, ...CONTACT_BOOK];
+export const BOOK_TASKS: BookTask[] = [...FRAMES_BOOK, ...YAB_FRAMES, ...CONTACT_BOOK, ...POSITION_BOOK];
 
 /** Все задачи вкладки: задачи Мещерского и примеры прототипа (ключи прототипа — как были). */
 export const FRAMES_TASKS: TaskEntry[] = [
   ...FRAMES_BOOK.map(({ key, title }) => ({ key, title })),
   ...YAB_FRAMES.map(({ key, title }) => ({ key, title })),
   ...CONTACT_BOOK.map(({ key, title }) => ({ key, title })),
+  ...POSITION_BOOK.map(({ key, title }) => ({ key, title })),
   ...(Object.keys(PRESET_TITLES) as PresetKey[]).map((k) => ({ key: k, title: PRESET_TITLES[k] })),
 ];
 

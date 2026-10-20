@@ -16,7 +16,7 @@ import { isNum, isObj, isStr, readEnvelope, writeEnvelope } from '../../../share
 import { axisDir, normAng } from './constants';
 import { geomOK } from './geometry';
 import type { IdGen } from '../../../shared/ids';
-import type { Dir, Item, Link, Node, Seg, Structure } from './types';
+import type { Dir, Item, Link, Node, PinFriction, Search, Seg, Structure } from './types';
 
 export { projectFileName } from '../../../shared/projectFile';
 
@@ -36,6 +36,7 @@ export function serializeProject(p: Project, now = new Date()): string {
     segs: p.structure.segs.map(({ id, a, b, dir, len, ang }) => (dir === 'a' ? { id, a, b, dir, len, ang } : { id, a, b, dir, len })),
     items: p.structure.items.map(cleanItem),
     ...(p.structure.links?.length ? { links: p.structure.links.map(cleanLink) } : {}),
+    ...(p.structure.search ? { search: cleanSearch(p.structure.search) } : {}),
   };
   return writeEnvelope(FRAMES_MODULE, p.title, { structure, notTarget: [...p.notTarget] }, now);
 }
@@ -55,6 +56,9 @@ const cleanLink = (l: Link): Link =>
       ? { id: l.id, type: 'hinge', a: l.a, b: l.b }
       : { id: l.id, type: 'thread', a: l.a, b: l.b, ...(l.via?.length ? { via: [...l.via] } : {}) };
 
+/** Поиск положения равновесия: параметр, промежуток и формулы. */
+const cleanSearch = (sr: Search): Search => ({ name: sr.name, unit: sr.unit, min: sr.min, max: sr.max, bind: sr.bind.map(({ ref, field, expr }) => ({ ref, field, expr })) });
+
 /** Только поля, которые относятся к типу элемента (производные вроде x, y не сохраняются). */
 function cleanItem(it: Item): Item {
   const pick = <K extends string>(...keys: K[]) => {
@@ -64,8 +68,12 @@ function cleanItem(it: Item): Item {
   };
   switch (it.type) {
     case 'fixed':
-    case 'pin':
       return pick('at', 'side');
+    case 'pin': {
+      const r = pick('at', 'side') as Item & { fr?: PinFriction };
+      if (it.fr) r.fr = { f: it.fr.f, r: it.fr.r, rot: it.fr.rot, ...(it.fr.circle ? { circle: true } : {}) };
+      return r;
+    }
     case 'roller':
       return pick('at', 'side', 'angle', 'angleName', 'oneSided');
     case 'rough':
@@ -193,8 +201,15 @@ export function parseProject(text: string): ParseResult {
     let ok = true;
     switch (type) {
       case 'fixed':
+        ok = node('at') && oneOf('side', SIDES, 'опорная поверхность');
+        break;
       case 'pin':
         ok = node('at') && oneOf('side', SIDES, 'опорная поверхность');
+        if (ok && it.fr !== undefined) {
+          const fr = it.fr;
+          if (!(isObj(fr) && isNum(fr.f) && fr.f >= 0 && isNum(fr.r) && fr.r >= 0 && ROTS.includes(fr.rot as string) && (fr.circle === undefined || typeof fr.circle === 'boolean')))
+            ok = !bad('трение в шарнире задаётся коэффициентом f ≥ 0, радиусом r ≥ 0 и направлением rot (cw, ccw).');
+        }
         break;
       case 'roller':
         ok = node('at') && oneOf('side', [...SIDES, 'tilt'], 'опорная поверхность') && (it.side !== 'tilt' || num('angle', 'угол'));
@@ -246,6 +261,15 @@ export function parseProject(text: string): ParseResult {
 
   const structure: Structure = { nodes, segs, items };
   if (links.length) structure.links = links;
+  if (st.search !== undefined) {
+    const sr = st.search;
+    const refs = new Set([...nodeIds, ...segIds, ...itemIds, ...links.map((l) => l.id)]);
+    if (!isObj(sr) || !isStr(sr.name) || !isNum(sr.min) || !isNum(sr.max) || !['deg', 'm', ''].includes(sr.unit as string) || !Array.isArray(sr.bind))
+      errors.push('Поиск положения (search) задаётся обозначением name, единицей unit (deg, m или пусто), границами min, max и списком формул bind.');
+    else if (!sr.bind.every((b) => isObj(b) && isStr(b.ref) && refs.has(b.ref) && isStr(b.field) && isStr(b.expr)))
+      errors.push('Поиск положения: каждая формула — ссылка ref на элемент схемы, поле field и текст формулы expr.');
+    else structure.search = cleanSearch(sr as unknown as Search);
+  }
   if (!errors.length) {
     const bodies = nodes.filter((n) => n.place).length + 1;
     if (segs.length !== nodes.length - bodies)
@@ -280,5 +304,10 @@ export function remapIds(s: Structure, ids: IdGen): Structure {
   );
   const r: Structure = { nodes: s.nodes.map((n) => cleanNode(n, nm.get(n.id)!, n.place ? nm.get(n.place.from) : undefined)), segs, items };
   if (links?.length) r.links = links;
+  if (s.search) {
+    // Ссылки формул — на новые идентификаторы точек, участков, элементов и связей.
+    const map = new Map<string, string>([...nm, ...s.segs.map((q, i): [string, string] => [q.id, segs[i].id]), ...s.items.map((it, i): [string, string] => [it.id, items[i].id]), ...(s.links ?? []).map((l, i): [string, string] => [l.id, links![i].id])]);
+    r.search = { ...s.search, bind: s.search.bind.map((b) => ({ ...b, ref: map.get(b.ref) ?? b.ref })) };
+  }
   return r;
 }
