@@ -888,3 +888,28 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .gy-cone{fill:none;stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:6 4}
 .gy-frame{fill:none;stroke:var(--ink-2);stroke-width:2.4}
 .gy-spring{fill:none;stroke:var(--ink-2);stroke-width:1.6}
+
+/* Графическая статика */
+.gs-line{stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:7 5;fill:none}
+.gs-fun{stroke:var(--react);stroke-width:2.6;fill:none;stroke-linejoin:round}
+.gs-close{stroke:var(--warn);stroke-width:1.8;stroke-dasharray:8 5;fill:none}
+.gs-ray{stroke:var(--ink-3);stroke-width:1.1;fill:none}
+.gs-parab{stroke:var(--ink-3);stroke-width:1.4;stroke-dasharray:3 5;fill:none}
+.gs-pt{fill:var(--ink)}
+.gs-pole{fill:var(--warn)}
+.gs-face{font-family:"PT Serif",Georgia,serif;font-style:italic;font-weight:700;font-size:18px}
+.gs-out{fill:var(--ink-2)}
+.gs-in{fill:var(--react)}
+
+/* Центроиды */
+.ce-axis{stroke:var(--ink-3);stroke-width:1.1}
+.ce-axt{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:15px;fill:var(--ink-3)}
+.ce-fixed{stroke:var(--react);stroke-width:2.6;fill:none;stroke-linejoin:round}
+.ce-moving{stroke:var(--load);stroke-width:2.6;fill:none;stroke-linejoin:round}
+.ce-body{stroke:var(--ink);stroke-width:3.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.ce-disc{stroke-width:2.2;fill:color-mix(in srgb,var(--ink) 6%,transparent)}
+.ce-pt{fill:var(--ink)}
+.ce-ic{fill:var(--warn);stroke:var(--sheet);stroke-width:1.5}
+.ce-lf{fill:var(--react)}
+.ce-lm{fill:var(--load)}
+.ce-phi input[type="range"]{width:100%;accent-color:var(--react)}

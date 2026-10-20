@@ -29,13 +29,13 @@ export const NAV: NavCourse[] = [
     title: 'Теоретическая механика',
     book: 'Мещерский',
     blocks: [
-      { id: 'statics', title: 'Статика', short: 'Статика', refs: 'Мещерский, §1–9', tabs: ['converging', 'frames', 'truss', 'spacebody', 'centroid'] },
+      { id: 'statics', title: 'Статика', short: 'Статика', refs: 'Мещерский, §1–9', tabs: ['converging', 'frames', 'truss', 'graphstat', 'spacebody', 'centroid'] },
       {
         id: 'kinematics',
         title: 'Кинематика',
         short: 'Кинематика',
         refs: 'Мещерский, §10–25',
-        tabs: ['pointkin', 'gears', 'mechanism', 'fixedpoint', 'relative'],
+        tabs: ['pointkin', 'gears', 'mechanism', 'centrodes', 'fixedpoint', 'relative'],
       },
       {
         id: 'dynamics',
