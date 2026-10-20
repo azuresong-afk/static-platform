@@ -9,12 +9,11 @@ import { LawField } from '../../../shared/ui/LawField';
 import { Notice } from '../../../shared/ui/Notice';
 import { Num } from '../../../shared/ui/Num';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
-import { renderKin, renderUni } from '../draw/kin';
-import { solveKin, type KinMode } from '../model/kin';
-import { DEF_UNI, LIN_KEYS, solveLin } from '../model/uniform';
+import { ExtFields } from './ExtFields';
+import type { KinMode } from '../model/kin';
+import { DEF_UNI, LIN_KEYS } from '../model/uniform';
+import { solveAny } from './solve';
 import { KIN_PRESETS, type KinPresetKey } from '../presets';
-import { kinDoc } from '../text/solution';
-import { uniDoc } from '../text/uniform';
 import type { KinNumKey, KinStore, KinStrKey } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
@@ -27,21 +26,21 @@ const MODES: [KinMode, string][] = [
   ['polar', 'полярные координаты: r(t), φ(t)'],
   ['cyl', 'цилиндрические координаты: r(t), φ(t), z(t)'],
   ['sph', 'сферические координаты: r(t), φ(t), θ(t)'],
+  ['tor', 'тороидальные координаты: r(t), ψ(t), φ(t)'],
   ['uni', 'равнопеременное движение: три величины из пяти'],
+  ['path', 'путь и закон движения по траектории s(t)'],
+  ['integ', 'закон движения по заданному ускорению'],
+  ['harm', 'гармонические колебания: центр, амплитуда, частота, фаза'],
+  ['shot', 'бросок под углом к горизонту'],
+  ['cam', 'кулачки: контур и закон движения толкателя'],
 ];
+const EXT: KinMode[] = ['path', 'integ', 'harm', 'shot', 'cam'];
 
 export function KinView({ chrome, store }: { chrome: Chrome; store: KinStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const u = pr.uni ?? DEF_UNI;
-  const { fig, doc } = useMemo(() => {
-    if (pr.mode === 'uni') {
-      const lr = solveLin(u);
-      return { fig: renderUni(lr), doc: uniDoc(u, lr, { explain: st.explain }) };
-    }
-    const r = solveKin(pr);
-    return { fig: renderKin(pr, r), doc: kinDoc(pr, r, { explain: st.explain }) };
-  }, [pr, u, st.explain]);
+  const { fig, doc } = useMemo(() => solveAny(pr, st.explain), [pr, st.explain]);
   const L = (k: KinStrKey, label: string) => <LawField key={k} id={`k-${k}`} label={label} value={pr[k] ?? ''} onType={(s) => store.typeStr(k, s)} onEnd={() => store.endSession(`s:${k}`)} />;
   const N = (k: KinNumKey, label: string, neg = true) => <Num key={k} id={`k-${k}`} label={label} value={pr[k]} neg={neg} zero onType={(v) => store.typeNum(k, v)} onEnd={() => store.endSession(`n:${k}`)} />;
 
@@ -52,7 +51,7 @@ export function KinView({ chrome, store }: { chrome: Chrome; store: KinStore }) 
         <header className="top">
           <div>
             <h1>Кинематика точки</h1>
-            <p className="lede">Скорость и ускорение точки при координатном, естественном способах и в полярных, цилиндрических и сферических координатах: касательное и нормальное ускорения, радиус кривизны, траектория и её уравнение; равнопеременное движение — найти неизвестное.</p>
+            <p className="lede">Скорость и ускорение точки при координатном, естественном способах и в полярных, цилиндрических, сферических и тороидальных координатах: касательное и нормальное ускорения, радиус кривизны, траектория и её уравнение; равнопеременное движение; путь и закон движения по траектории, интегрирование ускорения, гармонические колебания, бросок под углом к горизонту, кулачки.</p>
           </div>
           <div className="topright">
             <label className="preset">
@@ -83,7 +82,7 @@ export function KinView({ chrome, store }: { chrome: Chrome; store: KinStore }) 
             </div>
           </div>
           <div className="canvas">
-            <svg id="ksvg" className="sketch" viewBox={fig.viewBox} role="img" aria-label="Траектория, скорость и ускорение" dangerouslySetInnerHTML={{ __html: fig.svg }} />
+            <svg id="ksvg" className="sketch" viewBox={fig.viewBox} role="img" aria-label="Траектория, скорость и ускорение, графики" dangerouslySetInnerHTML={{ __html: fig.svg }} />
           </div>
         </section>
         <div className="cols">
@@ -128,6 +127,8 @@ export function KinView({ chrome, store }: { chrome: Chrome; store: KinStore }) 
                   <Num id="ku-tq" label="ещё состояние в момент t′, с (0 — нет)" value={u.tq} zero onType={(x) => store.typeUni('tq', x)} onEnd={() => store.endSession('u:tq')} />
                 </div>
               </>
+            ) : EXT.includes(pr.mode) || pr.mode === 'tor' ? (
+              <ExtFields pr={pr} store={store} />
             ) : (
               <>
                 <div className="cgpar cg0">
@@ -168,7 +169,7 @@ export function KinView({ chrome, store }: { chrome: Chrome; store: KinStore }) 
         <section className="pr-sec pr-figs">
           <figure>
             <svg viewBox={fig.viewBox} dangerouslySetInnerHTML={{ __html: fig.svg }} />
-            <figcaption>{pr.mode === 'uni' ? 'Путь и скорость' : 'Траектория'}</figcaption>
+            <figcaption>{pr.mode === 'uni' ? 'Путь и скорость' : EXT.includes(pr.mode) ? 'График' : 'Траектория'}</figcaption>
           </figure>
         </section>
         <section className="pr-sec">

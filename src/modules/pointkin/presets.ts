@@ -1,6 +1,7 @@
 /** Готовые задачи: Мещерский §10–12 (траектория, скорость и ускорение точки), Яблонский К.1, К.2. */
 import type { KinProblem } from './model/kin';
 import { DEF_UNI, type LinUni } from './model/uniform';
+import { MODE_P } from './model/modes';
 
 export interface KinPreset {
   title: string;
@@ -8,9 +9,15 @@ export interface KinPreset {
   /**
    * Ответ: v, a, at, an, rho, alphaV, alphaA (углы с осью x, °); vr, vphi, v3, ar, aphi, a3 — проекции на оси
    * цилиндрической или сферической системы; у равнопеременного движения — v0, v, a, t, s (м, с), aStart, aEnd, aMid,
-   * vMid, sMid.
+   * vMid, sMid. Режимы path: s, sigma (расстояние и путь); integ: x, v, a в момент t; harm: a0, a, k, T, f, eps; shot: H, L,
+   * T, alphaBest, Lmax, tg1, tg2; cam: rMin, rMax, stroke, h, w, T; tor — как у цилиндрических координат.
    */
   book?: Record<string, number>;
+  /** Контур кулака: пары (φ, r) из ответа книги; закон движения толкателя: пары (t, x). */
+  bookR?: [number, number][];
+  bookX?: [number, number][];
+  /** Закон движения по траектории в замкнутом виде (path) или формулы интегрирования (integ) — как их печатает решение. */
+  closed?: string;
   /** Уравнения траектории (как в решении). */
   traj?: string[];
   relTol?: number;
@@ -33,10 +40,22 @@ const kin = (o: Partial<KinProblem>): KinProblem => ({
   uni: structuredClone(DEF_UNI),
   ...o,
 });
+/** Режимы с параметрами p: недостающие параметры берутся из значений по умолчанию режима. */
+const ext = (mode: KinProblem['mode'], p: Record<string, string>, o: Partial<KinProblem> = {}): KinProblem => kin({ mode, p: { ...MODE_P[mode], ...p }, ...o });
 const uni = (o: Partial<LinUni>): KinProblem => kin({ mode: 'uni', uni: { v0: 0, v: 0, a: 0, t: 0, s: 0, known: [], kmh: false, rho: 0, tq: 0, ...o } });
 // Сферические координаты 11.17, 12.35: R = 2, k = 1, t = 1 (θ = kt/2 = 0,5).
 const s17 = { R: 2, k: 1, th: 0.5 };
 const g25 = { al: 3, be: 4, g: 9.81, t: 0.2 };
+
+const BLANK_SEGS = { a1: '', b1: '', f1: '', a2: '', b2: '', f2: '', a3: '', b3: '', f3: '', a4: '', b4: '', f4: '' };
+const camRot = (p: Record<string, string>, o: Partial<KinProblem> = {}) => ext('cam', { ...BLANK_SEGS, kind: 'rot', ...p }, o);
+const camTrans = (p: Record<string, string>, o: Partial<KinProblem> = {}) => ext('cam', { ...BLANK_SEGS, kind: 'trans', ...p }, o);
+// Бросок 10.15–10.18: v₀ = 50 м/с, g = 9,81 м/с².
+const sh = { v0: 50, g: 9.81 };
+// Тороидальные координаты 12.39: a = 5, R = 2, ω = 3, k = 4, t = 0,3 (φ = kt = 1,2).
+const tz = { a: 5, R: 2, w: 3, k: 4, t: 0.3 };
+const tzc = Math.cos(tz.k * tz.t),
+  tzs = Math.sin(tz.k * tz.t);
 
 export const KIN_PRESETS = {
   k1228: {
@@ -191,6 +210,214 @@ export const KIN_PRESETS = {
     problem: uni({ v0: 0.05, t: 2, s: 1.54, known: ['v0', 't', 's'], tq: 1 }),
     book: { a: 0.72, vMid: 0.77 },
     note: 'x₀ = 14 см, v₀ = 5 см/с, x₂ = 168 см при t₂ = 2 с (в метрах: v₀ = 0,05, путь 1,54). Книга: x = 36t² + 5t + 14 см, т. е. c₂ = a/2 = 36 см/с²; при t₁ = 1 с v = 77 см/с, a = 72 см/с².',
+  },
+
+  p101a: {
+    title: 'Мещерский 10.1 (1): s = 5 − 4t + t², 0 ≤ t ≤ 5 — расстояние и путь',
+    problem: ext('path', { src: 's' }, { s: '5 − 4t + t^2', t1: 0, t2: 5 }),
+    book: { s: 10, sigma: 13 },
+    note: 'ṡ = 2t − 4 = 0 при t = 2 (s = 1): сначала точка идёт назад на 4 см, затем вперёд до s = 10, путь σ = 4 + 9 = 13 см.',
+  },
+  p101b: {
+    title: 'Мещерский 10.1 (2): s = 1 + 2t − t², 0 ≤ t ≤ 2,5 — расстояние и путь',
+    problem: ext('path', { src: 's' }, { s: '1 + 2t − t^2', t1: 0, t2: 2.5 }),
+    book: { s: -0.25, sigma: 3.25 },
+    note: 'Остановка при t = 1 (s = 2); в конце s = −0,25 см, путь σ = 1 + 2,25 = 3,25 см.',
+  },
+  p101c: {
+    title: 'Мещерский 10.1 (3): s = 4 sin 10t, π/20 ≤ t ≤ 3π/10 — расстояние и путь',
+    problem: ext('path', { src: 's' }, { s: '4 sin(10t)', t1: Math.PI / 20, t2: (3 * Math.PI) / 10 }),
+    book: { s: 0, sigma: 20 },
+    note: 'Начало в максимуме s = 4; две остановки внутри промежутка, путь — пять четвертей полного колебания: 5·4 = 20 см, s = 0.',
+  },
+  p104a: {
+    title: 'Мещерский 10.4 (1): x = 3t², y = 4t² — траектория и закон движения по ней',
+    problem: ext('path', { src: 'xyz' }, { x: '3t^2', y: '4t^2', t1: 0, t2: 2 }),
+    closed: 's = 5t²',
+    traj: ['4x − 3y = 0'],
+    note: 'v = 10t, s = 5t² (полупрямая 4x − 3y = 0).',
+  },
+  p104b: {
+    title: 'Мещерский 10.4 (2): x = 3 sin t, y = 3 cos t — закон движения по окружности',
+    problem: ext('path', { src: 'xyz' }, { x: '3 sin t', y: '3 cos t', t1: 0, t2: 2 }),
+    closed: 's = 3t',
+    traj: ['x² + y² − 9 = 0'],
+    note: 'Окружность x² + y² = 9, v = 3 = const, s = 3t.',
+  },
+  p104c: {
+    title: 'Мещерский 10.4 (3): x = a cos²t, y = a sin²t — путь за четверть периода',
+    problem: ext('path', { src: 'xyz' }, { x: '2cos(t)^2', y: '2sin(t)^2', t1: 0, t2: Math.PI / 2 }),
+    book: { sigma: 2 * Math.SQRT2 },
+    note: 'a = 2. Отрезок прямой x + y − a = 0. Книга: s = a√2 sin²t — координата вдоль отрезка (в обе стороны); программа считает длину пройденной дуги σ, она совпадает с s(t) только до первого поворота (t ≤ π/2): σ(π/2) = a√2.',
+  },
+  p104d: {
+    title: 'Мещерский 10.4 (4): x = 5 cos 5t², y = 5 sin 5t² — закон движения по окружности',
+    problem: ext('path', { src: 'xyz' }, { x: '5cos(5t^2)', y: '5sin(5t^2)', t1: 0, t2: 1 }),
+    closed: 's = 25t²',
+    traj: ['x² + y² − 25 = 0'],
+    note: 'v = 50t, s = 25t² (окружность радиуса 5).',
+  },
+  p107: {
+    title: 'Мещерский 10.7: электрон в магнитном поле — винтовая линия и закон движения по ней',
+    problem: ext('path', { src: 'xyz' }, { x: '2 sin(3t)', y: '2 cos(3t)', z: '4t', t1: 0, t2: 2 }),
+    closed: 's = 7,2111t',
+    book: { sigma: Math.sqrt(2 * 2 * 3 * 3 + 4 * 4) * 2 },
+    note: 'a = 2, k = 3, v = 4: s = √(a²k² + v²)·t = √52·t, шаг винта h = 2πv/k.',
+  },
+  p1020: {
+    title: 'Мещерский 10.20: x = 2a cos²(kt/2), y = a sin kt — закон движения по окружности',
+    problem: ext('path', { src: 'xyz' }, { x: '6cos(t/2)^2', y: '3 sin(t)', t1: 0, t2: 2 }),
+    closed: 's = 3t',
+    note: 'a = 3, k = 1: окружность (x − a)² + y² = a², v = ak, s = akt.',
+  },
+  i127: {
+    title: 'Мещерский 12.7: ползун — закон движения по ускорению a = −π² sin(πt/2)',
+    problem: ext('integ', { src: 'a', f: '−pi^2 sin(pi t/2)', t0: '0', x0: '0', v0: '2π' }, { t: 1 }),
+    book: { x: 4, v: 0, a: -(Math.PI ** 2) },
+    closed: 'x = 4sin',
+    note: 'v₀ = 2π м/с, x₀ = 0: v = 2π cos(πt/2), x = 4 sin(πt/2) м. При t = 1: x = 4, v = 0, a = −π².',
+  },
+  h108a: {
+    title: 'Мещерский 10.8 (1): x = −7 cos 12t — параметры колебания',
+    problem: ext('harm', { src: 'law' }, { x: '−7cos(12t)' }),
+    book: { a0: 0, a: 7, k: 12, T: Math.PI / 6, f: 6 / Math.PI, eps: -Math.PI / 2 },
+  },
+  h108b: {
+    title: 'Мещерский 10.8 (2): x = 4 sin(πt/20) − 3 cos(πt/20) — параметры колебания',
+    problem: ext('harm', { src: 'law' }, { x: '4 sin(pi t/20) − 3cos(pi t/20)' }),
+    book: { a0: 0, a: 5, k: Math.PI / 20, T: 40, f: 0.025, eps: -Math.atan(3 / 4) },
+  },
+  h108c: {
+    title: 'Мещерский 10.8 (3): x = 2 − 4 sin 140t — параметры колебания',
+    problem: ext('harm', { src: 'law' }, { x: '2 − 4sin(140t)' }),
+    book: { a0: 2, a: 4, k: 140, T: Math.PI / 70, f: 70 / Math.PI, eps: Math.PI },
+  },
+  h108d: {
+    title: 'Мещерский 10.8 (4): x = 6 sin² 18t — параметры колебания',
+    problem: ext('harm', { src: 'law' }, { x: '6 sin(18t)^2' }),
+    book: { a0: 3, a: 3, k: 36, T: Math.PI / 18, f: 18 / Math.PI, eps: -Math.PI / 2 },
+    note: 'x = 3 − 3 cos 36t = 3 + 3 sin(36t − π/2).',
+  },
+  h108e: {
+    title: 'Мещерский 10.8 (5): x = 1 − 4 cos²(πt/60) — параметры колебания',
+    problem: ext('harm', { src: 'law' }, { x: '1 − 4cos(pi t/60)^2' }),
+    book: { a0: -1, a: 2, k: Math.PI / 30, T: 60, f: 1 / 60 },
+    note: 'x = −1 − 2 cos(πt/30) = −1 + 2 sin(πt/30 − π/2): ε = −π/2 (x(0) = −3). В таблице книги — ε = π/2: при этом x(0) = +1, т. е. другое колебание; считаем опечаткой (знак потерян).',
+  },
+  h109: {
+    title: 'Мещерский 10.9: груз на канате x = a sin(kt + 3π/2) — амплитуда и частота по периоду и x₀',
+    problem: ext('harm', { src: 'par', T: '0,4', eps: '3π/2', x0: '−4', a0: '0' }),
+    book: { a: 4, k: 5 * Math.PI },
+    note: 'T = 0,4 с, x₀ = −4 см: k = 2π/T = 5π, a = x₀/sin(3π/2) = 4 см. Фаза 3π/2 приводится к −π/2.',
+  },
+  h211: {
+    title: 'Мещерский 21.1: сложение колебаний x₁ = 2 cos(πt + π/2), x₂ = 3 cos(πt + π)',
+    problem: ext('harm', { src: 'law' }, { x: '2cos(pi t + pi/2) + 3cos(pi t + pi)' }),
+    book: { a0: 0, a: Math.sqrt(13), k: Math.PI, T: 2 },
+    note: 'Амплитуда √13 — как в книге. Фаза: x = −2 sin πt − 3 cos πt = √13 cos(πt + 146°19′), x(0) = −3. В книге α = arctg(2/3) = 33°40′, т. е. x(0) = +3 — знак не сходится с напечатанным условием (ответ книги отвечает x₂ = 3 cos πt).',
+  },
+  s1015: {
+    title: 'Мещерский 10.15: снаряд — траектория, высота, дальность и время полёта (v₀ = 50 м/с, α = 30°)',
+    problem: ext('shot', { v0: '50', al: '30', g: '9,81', h0: '0', xt: '', yt: '' }),
+    book: {
+      H: (sh.v0 ** 2 * Math.sin(Math.PI / 6) ** 2) / (2 * sh.g),
+      L: (sh.v0 ** 2 * Math.sin(Math.PI / 3)) / sh.g,
+      T: (2 * sh.v0 * Math.sin(Math.PI / 6)) / sh.g,
+    },
+    note: 'H = v₀² sin²α/(2g), L = v₀² sin 2α/g, T = 2v₀ sin α/g.',
+  },
+  s1016: {
+    title: 'Мещерский 10.16: наибольшая дальность полёта — α = 45° (v₀ = 50 м/с)',
+    problem: ext('shot', { v0: '50', al: '45', g: '9,81', h0: '0', xt: '', yt: '' }),
+    book: { alphaBest: 45, Lmax: sh.v0 ** 2 / sh.g, H: sh.v0 ** 2 / (4 * sh.g), T: Math.SQRT2 * (sh.v0 / sh.g), L: sh.v0 ** 2 / sh.g },
+    note: 'L_max = v₀²/g, H = v₀²/(4g), T = √2·v₀/g.',
+  },
+  s1017: {
+    title: 'Мещерский 10.17: угол бросания, при котором снаряд попадёт в точку (200; 20) (v₀ = 50 м/с)',
+    problem: ext('shot', { v0: '50', al: '30', g: '9,81', h0: '0', xt: '200', yt: '20' }),
+    book: {
+      tg1: (sh.v0 ** 2 - Math.sqrt(sh.v0 ** 4 - sh.g * (sh.g * 200 ** 2 + 2 * 20 * sh.v0 ** 2))) / (sh.g * 200),
+      tg2: (sh.v0 ** 2 + Math.sqrt(sh.v0 ** 4 - sh.g * (sh.g * 200 ** 2 + 2 * 20 * sh.v0 ** 2))) / (sh.g * 200),
+    },
+    note: 'tg α = [v₀² ± √(v₀⁴ − g(gx² + 2yv₀²))]/(gx): два угла — настильная и навесная траектории.',
+  },
+  s1018: {
+    title: 'Мещерский 10.18: парабола безопасности (v₀ = 50 м/с)',
+    problem: ext('shot', { v0: '50', al: '30', g: '9,81', h0: '0', xt: '', yt: '' }),
+    note: 'y = v₀²/(2g) − gx²/(2v₀²): огибающая траекторий при всех углах бросания; точки вне параболы недостижимы.',
+  },
+  t1239: {
+    title: 'Мещерский 12.38–12.39: винтовая линия на торе — проекции скорости и ускорения в тороидальных координатах',
+    problem: kin({ mode: 'tor', r: '2', phi: '3t', th: '4t', t: tz.t, t1: 0, t2: 6.3, p: { a: '5' } }),
+    book: {
+      vr: 0,
+      vphi: (tz.a + tz.R * tzc) * tz.w,
+      v3: tz.R * tz.k,
+      ar: -((tz.a + tz.R * tzc) * tzc * tz.w ** 2 + tz.R * tz.k ** 2),
+      aphi: -2 * tz.R * tz.w * tz.k * tzs,
+      a3: tz.w ** 2 * (tz.a + tz.R * tzc) * tzs,
+    },
+    note: 'r = R, ψ = ωt, φ = kt при a = 5, R = 2, ω = 3, k = 4, t = 0,3: v_r = 0, v_ψ = (a + R cos φ)ω, v_φ = Rk; a_r = −[(a + R cos φ)cos φ·ω² + Rk²], a_ψ = −2Rωk sin φ, a_φ = ω²(a + R cos φ) sin φ.',
+  },
+  c1415: {
+    title: 'Мещерский 14.15: кулак с возвратно-поступательным толкателем — контур по закону движения',
+    problem: camRot({ in: 'law', T: '8', a1: '0', b1: '4', f1: '30 + 5t', a2: '4', b2: '8', f2: '30 + 5(8 − t)' }, { t: 2 }),
+    book: { rMin: 30, rMax: 50, stroke: 20 },
+    bookR: [
+      [0, 30],
+      [Math.PI / 2, 40],
+      [Math.PI, 50],
+      [(3 * Math.PI) / 2, 40],
+    ],
+    note: 'Книга: r = 30 + 20φ/π при 0 ≤ φ ≤ π и r = 30 + 20(2π − φ)/π при π ≤ φ ≤ 2π.',
+  },
+  c1416: {
+    title: 'Мещерский 14.16: кулак r = 20 + 15φ/π, 20 об/мин — закон движения толкателя',
+    problem: camRot({ in: 'profile', rpm: '20', a1: '0', b1: '2π', f1: '20 + 15 phi/pi' }, { t: 1.5 }),
+    book: { T: 3, rMin: 20, rMax: 50 },
+    bookX: [
+      [0, 20],
+      [1.5, 35],
+      [3 - 1e-9, 50],
+    ],
+    note: 'Книга: x = 20 + 10t за оборот (3 с), затем движение повторяется (скачок — внезапный возврат толкателя).',
+  },
+  c1417: {
+    title: 'Мещерский 14.17: кулак — подъём, выстой, возврат по трети оборота; ход 20, наименьший радиус 70, 20 об/мин',
+    problem: camRot({ in: 'law', T: '3', a1: '0', b1: '1', f1: '70 + 20t', a2: '1', b2: '2', f2: '90', a3: '2', b3: '3', f3: '90 − 20(t − 2)' }, { t: 0.5 }),
+    book: { rMin: 70, rMax: 90, stroke: 20 },
+    bookR: [
+      [0, 70],
+      [Math.PI / 3, 80],
+      [(2 * Math.PI) / 3, 90],
+      [Math.PI, 90],
+      [(5 * Math.PI) / 3, 80],
+    ],
+    note: 'Книга: первая треть — спираль Архимеда r = 30φ/π + 70, вторая — окружность r = 90, последняя — снова спираль (возврат): r = 130 − 30φ/π.',
+  },
+  c1418: {
+    title: 'Мещерский 14.18: круговой кулак r = 30 см движется со скоростью 5 см/с — опускание толкателя за 3 с',
+    problem: camTrans({ r: '30', u0: '0', vc: '5', wc: '0', find: 'h' }, { t: 3 }),
+    book: { h: 4.02 },
+    note: 'u = vt = 15, h = r − √(r² − u²) = 30 − √675 = 4,019 см (в книге 4,020).',
+  },
+  c1419: {
+    title: 'Мещерский 14.19: круговой кулак r = 10 см — ускорение, при котором толкатель опустился на 4 см за 4 с',
+    problem: camTrans({ r: '10', u0: '0', vc: '0', find: 'w', hg: '4' }, { t: 4 }),
+    book: { w: 1 },
+    note: 'u = √(r² − (r − h)²) = 8, w = 2u/t² = 1 см/с².',
+  },
+  k105: {
+    title: 'Мещерский 10.5: траектория груза мостового крана — прямая',
+    problem: kin({ x: 't', y: '1,5t', z: '0,5t', t: 1, t1: 0, t2: 4 }),
+    traj: ['3x − 2y = 0', 'x − 2z = 0', 'y − 3z = 0'],
+    note: 'x = t, y = 1,5t (тележка), z = 0,5t (подъём). Книга: y = 1,5x, z = 0,5x.',
+  },
+  k217: {
+    title: 'Мещерский 21.7: трамвай — траектория центра тяжести кузова на рессорах',
+    problem: kin({ x: '5t', y: '1,5 + 0,008 sin(4πt)', t: 0.1, t1: 0, t2: 1 }),
+    traj: [],
+    note: 'v = 18 км/ч = 5 м/с, a = 0,8 см, T = 0,5 с (k = 4π). Книга: y = 1,5 + 0,008 sin 0,8πx.',
   },
 } satisfies Record<string, KinPreset>;
 
