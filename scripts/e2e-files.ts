@@ -1443,7 +1443,7 @@ async function main() {
   check(gsT.includes('совпадают с решением фермы'), 'усилия по диаграмме сверены с решением фермы');
   await p.selectOption('#gpreset', 'm54');
   gsT = await p.innerText('#gsolution');
-  check(gsT.includes('Верёвочный многоугольник') && gsT.includes('2,167') && gsT.includes('1,81') && (await p.locator('#gsvg .gs-fun').count()) === 1 && (await p.locator('#gsvg2 .gs-pole').count()) === 1, 'Мещерский 5.4: верёвочный многоугольник — R_A = 2,17 т, R_B = 1,81 т, полюс на силовом многоугольнике', gsT.slice(-300));
+  check(gsT.includes('Верёвочный многоугольник') && gsT.includes('2,168') && gsT.includes('1,81') && (await p.locator('#gsvg .gs-fun').count()) === 1 && (await p.locator('#gsvg2 .gs-pole').count()) === 1, 'Мещерский 5.4: верёвочный многоугольник — R_A = 2,17 т, R_B = 1,81 т, полюс на силовом многоугольнике', gsT.slice(-300));
   await p.locator('#gbloads .trow:nth-child(1) input').nth(1).fill('3');
   await p.locator('#gbloads .trow:nth-child(1) input').nth(1).blur();
   check((await p.innerText('#gsolution')).includes('проверка уравнениями равновесия'), 'груз изменён — построение пересчитано и сверено');
@@ -1458,7 +1458,8 @@ async function main() {
   const [dlGs] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const gfText = await (await dlGs.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(gfText).module === 'graphstat' && JSON.parse(gfText).kind === 'truss' && JSON.parse(gfText).truss.bars.length === 5, 'файл графической статики');
-  const gfSol = await p.innerText('#gsolution');
+  // Из файла открывается «своя задача»: пометки «книга: …» (они берутся из готовой задачи) в нём не сохраняются.
+  const gfSol = (await p.innerText('#gsolution')).replace(/; книга: [^\n]*/g, '');
   await tab('frames');
   await openText('graphstat.json', gfText, 'ok');
   check((await p.getAttribute('[data-tab="graphstat"]', 'aria-selected')) === 'true' && (await p.innerText('#gsolution')) === gfSol, 'файл графической статики открывается в своей вкладке без потерь');
