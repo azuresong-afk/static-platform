@@ -8,9 +8,14 @@ import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { renderOsc } from '../draw/osc';
+import { renderResonance } from '../draw/resonance';
 import { BEAM_SCHEMES, type BeamScheme, type ElemKind } from '../model/elastic';
+import { INV_TARGET, INV_UNKNOWN, solveExperiment, solveInverse, type InvKind, type InvTarget, type InvUnknown } from '../model/inverse';
+import { resonanceOf } from '../model/resonance';
+import { expStep, invStep } from '../text/inverse';
 import {
   FORCE_LABEL,
+  HARMONIC,
   LEN_LABEL,
   singleElem,
   solveOsc,
@@ -48,8 +53,22 @@ const DAMP: [DampMode, string][] = [
 const EXC: [ForceMode, string][] = [
   ['none', 'нет'],
   ['H', 'сила H sin(pt + δ)'],
+  ['two', 'две гармоники: H₁ sin(p₁t + δ₁) + H₂ sin(p₂t + δ₂)'],
   ['rotor', 'неуравновешенный ротор: H = m₀ e p²'],
   ['base', 'точка крепления движется: ξ = a sin(pt + δ)'],
+  ['support', 'основание движется (виброграф, сейсмограф, торсиограф): x — относительно основания'],
+  ['ramp', 'сила растёт со временем: F = a·t'],
+  ['exp', 'сила убывает: F = F₀e^{−βt}'],
+  ['pulse', 'постоянная сила F действует время τ'],
+  ['ramphold', 'сила растёт до F₀ за время τ и остаётся постоянной'],
+  ['cam', 'кулачок: ξ = a(1 − cos ωt) на одном обороте, дальше ξ = 0'],
+];
+const INV_KINDS: [InvKind, string][] = [
+  ['param', 'найти параметр системы по измеренной величине'],
+  ['jref', 'момент инерции по периодам: эталонный диск (37.17)'],
+  ['jadd', 'момент инерции по периодам: диск добавлен к телу (37.18)'],
+  ['g2', 'ускорение g по двум опытам (32.47)'],
+  ['bifilar', 'бифилярный подвес (37.19)'],
 ];
 const INIT: [InitMode, string][] = [
   ['eq', 'смещение x₀ от положения равновесия'],
@@ -63,13 +82,23 @@ const KINDS: [ElemKind, string][] = [
   ['beam', 'балка (изгиб)'],
 ];
 
+const fmtRoot = (x: number) => String(Number(x.toPrecision(6)));
+
 export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
+  const iv = st.inv;
   const out = useMemo(() => {
-    const r = solveOsc(pr);
-    return { fig: renderOsc(pr, r.ok ? r : null), doc: oscDoc(pr, r, { explain: st.explain }) };
-  }, [pr, st.explain]);
+    // Обратная задача: найденное значение подставляется в копию задачи, по ней и строятся схема, график и решение.
+    const invRes = iv.on && iv.kind === 'param' ? solveInverse(pr, iv) : null;
+    const eff = invRes?.ok ? invRes.problem! : pr;
+    const r = solveOsc(eff);
+    const doc = oscDoc(eff, r, { explain: st.explain });
+    if (invRes) doc.steps.unshift(invStep(pr, iv, invRes));
+    else if (iv.on) doc.steps = [expStep(pr, iv, solveExperiment(pr, iv))];
+    const rs = r.ok && HARMONIC.includes(eff.exc.mode) ? resonanceOf(r, eff.exc.mode as 'H' | 'rotor' | 'base' | 'support' | 'two') : null;
+    return { fig: renderOsc(eff, r.ok ? r : null), doc, invRes, res: rs ? renderResonance(rs) : null };
+  }, [pr, iv, st.explain]);
   const end = (k: string) => () => store.endSession(k);
   const U = unitsOf(pr);
   const el = pr.el;
@@ -84,8 +113,8 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
           <div>
             <h1>Удар и колебания</h1>
             <p className="lede">
-              Груз на упругом элементе: свободные, затухающие и вынужденные колебания, резонанс, сухое трение; удар падающего груза и коэффициент динамичности.
-              Упругий элемент — пружины, стержни, балки в любом сочетании.
+              Груз на упругом элементе: свободные, затухающие и вынужденные колебания, резонанс, сухое трение; удар падающего груза и коэффициент динамичности;
+              силы общего вида, движение основания, обратные задачи и резонансная кривая. Упругий элемент — пружины, стержни, балки в любом сочетании.
             </p>
           </div>
           <div className="topright">
@@ -127,6 +156,23 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
             />
           </div>
         </section>
+        {out.res && (
+          <section className="sheet" aria-label="Резонансная кривая">
+            <div className="bar">
+              <span className="hint">Резонансная кривая: амплитуда вынужденных колебаний и сдвиг фазы в зависимости от частоты возмущения.</span>
+            </div>
+            <div className="canvas">
+              <svg
+                id="ores"
+                className="sketch"
+                viewBox={out.res.viewBox}
+                role="img"
+                aria-label="Резонансная кривая"
+                dangerouslySetInnerHTML={{ __html: out.res.svg }}
+              />
+            </div>
+          </section>
+        )}
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
             <h2>Единицы</h2>
@@ -234,7 +280,11 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
                       </button>
                     </div>
                     {s.items.map((e, j) => {
-                      const N = (k: 'c' | 'ang' | 'la' | 'lb' | 'E' | 'l' | 'A' | 'J' | 'a', label: string, opts: { neg?: boolean; zero?: boolean } = {}) => (
+                      const N = (
+                        k: 'c' | 'ang' | 'la' | 'lb' | 'E' | 'l' | 'A' | 'J' | 'a' | 'cs',
+                        label: string,
+                        opts: { neg?: boolean; zero?: boolean } = {},
+                      ) => (
                         <Num
                           key={k}
                           id={`o-e${i}${j}-${k}`}
@@ -284,12 +334,18 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
                               N('la', 'рычаг: плечо a', { zero: true }),
                               N('lb', 'плечо груза b', { zero: true }),
                             ]}
-                            {e.kind === 'rod' && [N('E', `E, ${U.s}`), N('A', `A, ${U.L}²`), N('l', `l, ${U.L}`)]}
+                            {e.kind === 'rod' && [
+                              N('E', `E, ${U.s}`),
+                              N('A', `A, ${U.L}²`),
+                              N('l', `l, ${U.L}`),
+                              N('cs', `пружина последовательно, ${U.c} (0 — нет)`, { zero: true }),
+                            ]}
                             {e.kind === 'beam' && [
                               N('E', `E, ${U.s}`),
                               N('J', `J, ${U.L}⁴`),
                               N('l', `пролёт l, ${U.L}`),
                               ...(e.scheme === 'ss-a' || e.scheme === 'overhang' ? [N('a', `a, ${U.L}`)] : []),
+                              N('cs', `пружина под опорой, ${U.c} (0 — нет)`, { zero: true }),
                             ]}
                           </div>
                         </div>
@@ -353,7 +409,18 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
             {pr.damp.mode !== 'none' && (
               <div className="cgpar cg0">
                 {pr.damp.mode === 'b' && (
-                  <Num id="o-b" label={`b, ${U.b}`} value={pr.damp.b} zero onType={(v) => store.typeDamp('b', v)} onEnd={end('damp:b')} />
+                  <>
+                    <Num id="o-b" label={`b, ${U.b}`} value={pr.damp.b} zero onType={(v) => store.typeDamp('b', v)} onEnd={end('damp:b')} />
+                    <Num id="o-dla" label="рычаг демпфера: плечо a" value={pr.damp.la} zero onType={(v) => store.typeDamp('la', v)} onEnd={end('damp:la')} />
+                    <Num
+                      id="o-dlb"
+                      label="плечо груза b (0 — без рычага)"
+                      value={pr.damp.lb}
+                      zero
+                      onType={(v) => store.typeDamp('lb', v)}
+                      onEnd={end('damp:lb')}
+                    />
+                  </>
                 )}
                 {pr.damp.mode === 'n' && <Num id="o-n" label="n, с⁻¹" value={pr.damp.n} zero onType={(v) => store.typeDamp('n', v)} onEnd={end('damp:n')} />}
                 {pr.damp.mode === 'ratio' && (
@@ -386,7 +453,35 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
             </label>
             {pr.exc.mode !== 'none' && (
               <div className="cgpar cg0">
-                {pr.exc.mode === 'H' && <Num id="o-H" label={`H, ${U.F}`} value={pr.exc.H} neg onType={(v) => store.typeExc('H', v)} onEnd={end('exc:H')} />}
+                {(pr.exc.mode === 'H' || pr.exc.mode === 'two') && (
+                  <Num
+                    id="o-H"
+                    label={pr.exc.mode === 'two' ? `H₁, ${U.F}` : `H, ${U.F}`}
+                    value={pr.exc.H}
+                    neg
+                    onType={(v) => store.typeExc('H', v)}
+                    onEnd={end('exc:H')}
+                  />
+                )}
+                {pr.exc.mode === 'ramp' && (
+                  <Num id="o-H" label={`a, ${U.F}/с`} value={pr.exc.H} neg onType={(v) => store.typeExc('H', v)} onEnd={end('exc:H')} />
+                )}
+                {(pr.exc.mode === 'exp' || pr.exc.mode === 'pulse' || pr.exc.mode === 'ramphold') && (
+                  <Num
+                    id="o-H"
+                    label={`${pr.exc.mode === 'pulse' ? 'F' : 'F₀'}, ${U.F}`}
+                    value={pr.exc.H}
+                    neg
+                    onType={(v) => store.typeExc('H', v)}
+                    onEnd={end('exc:H')}
+                  />
+                )}
+                {pr.exc.mode === 'exp' && (
+                  <Num id="o-beta" label="β, с⁻¹" value={pr.exc.beta} zero onType={(v) => store.typeExc('beta', v)} onEnd={end('exc:beta')} />
+                )}
+                {(pr.exc.mode === 'pulse' || pr.exc.mode === 'ramphold') && (
+                  <Num id="o-tau" label="τ, с" value={pr.exc.tau} onType={(v) => store.typeExc('tau', v)} onEnd={end('exc:tau')} />
+                )}
                 {pr.exc.mode === 'rotor' && (
                   <>
                     <Num
@@ -399,12 +494,68 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
                     <Num id="o-e" label={`эксцентриситет e, ${U.L}`} value={pr.exc.e} onType={(v) => store.typeExc('e', v)} onEnd={end('exc:e')} />
                   </>
                 )}
-                {pr.exc.mode === 'base' && <Num id="o-a" label={`a, ${U.L}`} value={pr.exc.a} neg onType={(v) => store.typeExc('a', v)} onEnd={end('exc:a')} />}
-                <Num id="o-p" label="p, с⁻¹" value={pr.exc.p} onType={(v) => store.typeExc('p', v)} onEnd={end('exc:p')} />
-                <Num id="o-delta" label="δ, °" value={pr.exc.delta} neg zero onType={(v) => store.typeExc('delta', v)} onEnd={end('exc:delta')} />
+                {(pr.exc.mode === 'base' || pr.exc.mode === 'support' || pr.exc.mode === 'cam') && (
+                  <Num id="o-a" label={`a, ${U.L}`} value={pr.exc.a} neg onType={(v) => store.typeExc('a', v)} onEnd={end('exc:a')} />
+                )}
+                {pr.exc.mode === 'support' && (
+                  <Num
+                    id="o-mc"
+                    label={`${pr.byWeight ? 'вес' : 'масса'} в переносном движении, ${W} (0 — весь груз)`}
+                    value={pr.exc.mc}
+                    zero
+                    onType={(v) => store.typeExc('mc', v)}
+                    onEnd={end('exc:mc')}
+                  />
+                )}
+                {pr.exc.mode === 'cam' && (
+                  <Num
+                    id="o-c1"
+                    label={`c₁ пружины кулачка, ${U.c} (входит в c)`}
+                    value={pr.exc.c1}
+                    onType={(v) => store.typeExc('c1', v)}
+                    onEnd={end('exc:c1')}
+                  />
+                )}
+                {(HARMONIC.includes(pr.exc.mode) || pr.exc.mode === 'cam') && (
+                  <Num
+                    id="o-p"
+                    label={pr.exc.mode === 'cam' ? 'ω кулачка, с⁻¹' : pr.exc.mode === 'two' ? 'p₁, с⁻¹' : 'p, с⁻¹'}
+                    value={pr.exc.p}
+                    onType={(v) => store.typeExc('p', v)}
+                    onEnd={end('exc:p')}
+                  />
+                )}
+                {HARMONIC.includes(pr.exc.mode) && (
+                  <Num
+                    id="o-delta"
+                    label={pr.exc.mode === 'two' ? 'δ₁, °' : 'δ, °'}
+                    value={pr.exc.delta}
+                    neg
+                    zero
+                    onType={(v) => store.typeExc('delta', v)}
+                    onEnd={end('exc:delta')}
+                  />
+                )}
+                {pr.exc.mode === 'two' && (
+                  <>
+                    <Num id="o-H2" label={`H₂, ${U.F}`} value={pr.exc.H2} neg onType={(v) => store.typeExc('H2', v)} onEnd={end('exc:H2')} />
+                    <Num id="o-p2" label="p₂, с⁻¹" value={pr.exc.p2} onType={(v) => store.typeExc('p2', v)} onEnd={end('exc:p2')} />
+                    <Num id="o-delta2" label="δ₂, °" value={pr.exc.delta2} neg zero onType={(v) => store.typeExc('delta2', v)} onEnd={end('exc:delta2')} />
+                  </>
+                )}
+                {HARMONIC.includes(pr.exc.mode) && (
+                  <Num
+                    id="o-L"
+                    label={`длина между толчками L, ${U.L} (0 — не нужна)`}
+                    value={pr.exc.L}
+                    zero
+                    onType={(v) => store.typeExc('L', v)}
+                    onEnd={end('exc:L')}
+                  />
+                )}
               </div>
             )}
-            {pr.exc.mode !== 'none' && <p className="empty">Частота в оборотах: p = πn/30 (n — об/мин).</p>}
+            {(HARMONIC.includes(pr.exc.mode) || pr.exc.mode === 'cam') && <p className="empty">Частота в оборотах: p = πn/30 (n — об/мин).</p>}
 
             <h2>Начальные условия</h2>
             <label className="field">
@@ -457,6 +608,127 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
               />
               <Num id="o-t" label="момент t, с" value={pr.t} zero onType={(v) => store.typeTop('t', v)} onEnd={end('top:t')} />
             </div>
+
+            <h2>Обратная задача</h2>
+            <label className="toggle">
+              <input type="checkbox" id="oinv" checked={iv.on} onChange={(ev) => store.setInvOn(ev.target.checked)} />
+              Найти неизвестное по опыту или измерению
+            </label>
+            {iv.on && (
+              <>
+                <label className="field">
+                  <span>Что решаем</span>
+                  <select id="oinvkind" value={iv.kind} onChange={(ev) => store.setInvKind(ev.target.value as InvKind)}>
+                    {INV_KINDS.map(([k, t]) => (
+                      <option key={k} value={k}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {iv.kind === 'param' && (
+                  <>
+                    <label className="field">
+                      <span>Неизвестно</span>
+                      <select id="oinvunk" value={iv.unknown} onChange={(ev) => store.setInvUnknown(ev.target.value as InvUnknown)}>
+                        {(Object.keys(INV_UNKNOWN) as InvUnknown[]).map((k) => (
+                          <option key={k} value={k}>
+                            {INV_UNKNOWN[k]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Измерено</span>
+                      <select id="oinvtgt" value={iv.target} onChange={(ev) => store.setInvTarget(ev.target.value as InvTarget)}>
+                        {(Object.keys(INV_TARGET) as InvTarget[]).map((k) => (
+                          <option key={k} value={k}>
+                            {INV_TARGET[k]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="cgpar cg0">
+                      <Num
+                        id="o-invv"
+                        label="значение измеренной величины"
+                        value={iv.value}
+                        neg
+                        onType={(v) => store.typeInvValue(v)}
+                        onEnd={end('inv:value')}
+                      />
+                    </div>
+                    {out.invRes?.ok && out.invRes.roots.length > 1 && (
+                      <label className="field">
+                        <span>Корень</span>
+                        <select id="oinvroot" value={out.invRes.pick} onChange={(ev) => store.setInvPick(Number(ev.target.value))}>
+                          {out.invRes.roots.map((x, i) => (
+                            <option key={i} value={i}>
+                              {i + 1}: {fmtRoot(x)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {out.invRes?.ok && (
+                      <div className="segbtns">
+                        <button type="button" id="oinvapply" onClick={() => store.applyInv(out.invRes!.problem!)}>
+                          Подставить найденное в задачу
+                        </button>
+                      </div>
+                    )}
+                    <p className="empty">
+                      Решение ниже и график построены с найденным значением; при нескольких корнях (например, амплитуда до и после резонанса) выберите нужный.
+                    </p>
+                  </>
+                )}
+                {iv.kind !== 'param' && (
+                  <div className="cgpar cg0">
+                    {(
+                      {
+                        jref: [
+                          ['P', `вес диска P, ${U.F}`],
+                          ['r', `радиус диска r, ${U.L}`],
+                          ['Tr', 'период с диском, с'],
+                          ['T1', 'период тела, с'],
+                        ],
+                        jadd: [
+                          ['P', `вес диска P, ${U.F}`],
+                          ['r', `радиус диска r, ${U.L}`],
+                          ['T1', 'период тела без диска, с'],
+                          ['T2', 'период с диском, с'],
+                        ],
+                        g2: [
+                          ['d1', `удлинение 1-го груза δ₁, ${U.L}`],
+                          ['d2', `удлинение 2-го груза δ₂, ${U.L}`],
+                          ['T1', 'период 1-го груза, с'],
+                          ['T2', 'период 2-го груза, с'],
+                          ['P1', `вес 1-го груза, ${U.F} (0 — не нужен)`],
+                          ['P2', `вес 2-го груза, ${U.F} (0 — не нужен)`],
+                        ],
+                        bifilar: [
+                          ['P', `вес стержня P, ${U.F}`],
+                          ['a', `полудлина стержня a, ${U.L}`],
+                          ['b', `полурасстояние между нитями b, ${U.L}`],
+                          ['l', `длина нитей l, ${U.L}`],
+                          ['Tm', 'измеренный период, с (0 — нет)'],
+                        ],
+                      } as Record<string, [keyof typeof iv.exp, string][]>
+                    )[iv.kind].map(([k, label]) => (
+                      <Num
+                        key={k}
+                        id={`o-x-${k}`}
+                        label={label}
+                        value={iv.exp[k]}
+                        zero={k === 'P1' || k === 'P2' || k === 'Tm'}
+                        onType={(v) => store.typeInvExp(k, v)}
+                        onEnd={end(`inv:exp:${k}`)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </section>
           <section className="panel" aria-label="Решение">
             <div className="sol-head">

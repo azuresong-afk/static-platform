@@ -10,7 +10,7 @@ const tol = (v: number) => {
   return 2 * Math.pow(10, -d);
 };
 
-function values(r: OscResult): Record<string, number> {
+function values(r: OscResult, len: 'm' | 'cm' | 'mm' = 'cm'): Record<string, number> {
   const f = r.forced;
   const sw = r.dry?.swings ?? [];
   const out: Record<string, number> = {
@@ -43,6 +43,8 @@ function values(r: OscResult): Record<string, number> {
     half: sw[1]?.dur ?? NaN,
     D0: r.dry?.D0 ?? NaN,
     xEnd: r.dry?.stop.x ?? NaN,
+    ratio: r.trans?.ratio ?? NaN,
+    vCritKmh: r.rail ? r.rail.vCrit * { m: 1, cm: 0.01, mm: 0.001 }[len] * 3.6 : NaN,
   };
   sw.forEach((s, i) => (out['s' + (i + 1)] = Math.abs(s.x2 - s.x1)));
   return out;
@@ -53,7 +55,7 @@ describe('ответы Мещерского', () => {
     it(p.title, () => {
       const r = solveOsc(p.problem);
       expect(r.ok, key + r.errors.join()).toBe(true);
-      const got = values(r);
+      const got = values(r, p.problem.len);
       // Книга округляет корни и коэффициенты (32.67), берёт k ≈ 10 с⁻¹ в 32.56, в 32.64 — опечатка в частоте: там допуск шире.
       const wide: Record<string, number> = {
         'm3267:r1': 0.15,

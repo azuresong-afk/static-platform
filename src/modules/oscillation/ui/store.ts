@@ -2,6 +2,7 @@
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
+import { INV_BASE, INV_TARGET, INV_UNKNOWN, type Inverse, type InvExp, type InvKind, type InvTarget, type InvUnknown } from '../model/inverse';
 import { BEAM_SCHEMES, newElem, type BeamScheme, type Elem, type ElemKind, type Stage } from '../model/elastic';
 import type { DampMode, ForceMode, ForceUnit, InitMode, LenUnit, OscProblem, Orient, StiffMode } from '../model/osc';
 import { OSC_BASE, OSC_PRESETS, type OscPresetKey } from '../presets';
@@ -12,13 +13,14 @@ const MAX_STAGES = 4,
 
 export type TopNum = 'm' | 'alpha' | 'Q' | 't' | 'gms';
 export type ElNum = 'c' | 'dst' | 'T0' | 'mEl' | 'W' | 'sAllow';
-export type DampNum = 'b' | 'n' | 'q' | 'N' | 'T1' | 'f' | 'f0';
-export type ExcNum = 'H' | 'm0' | 'e' | 'a' | 'p' | 'delta';
+export type DampNum = 'b' | 'n' | 'q' | 'N' | 'T1' | 'f' | 'f0' | 'la' | 'lb';
+export type ExcNum = 'H' | 'm0' | 'e' | 'a' | 'p' | 'delta' | 'mc' | 'H2' | 'p2' | 'delta2' | 'beta' | 'tau' | 'c1' | 'L';
 export type InitNum = 'x0' | 'lambda0' | 'Fprev' | 'h' | 'v0';
-export type ElemNum = 'c' | 'ang' | 'la' | 'lb' | 'E' | 'l' | 'A' | 'J' | 'a';
+export type ElemNum = 'c' | 'ang' | 'la' | 'lb' | 'E' | 'l' | 'A' | 'J' | 'a' | 'cs';
 
 export interface OscState {
   problem: OscProblem;
+  inv: Inverse;
   title: string;
   preset: OscPresetKey | 'custom';
   canUndo: boolean;
@@ -28,10 +30,33 @@ export interface OscState {
 }
 interface Snap {
   problem: OscProblem;
+  inv: Inverse;
   title: string;
   preset: OscState['preset'];
 }
 const copy = (p: OscProblem): OscProblem => structuredClone(p);
+const copyInv = (i: Inverse): Inverse => structuredClone(i);
+const presetInv = (k: OscPresetKey): Inverse => {
+  const o = (OSC_PRESETS[k] as { inv?: Partial<Omit<Inverse, 'exp'>> & { exp?: Partial<InvExp> } }).inv;
+  return o ? { ...copyInv(INV_BASE), ...o, exp: { ...INV_BASE.exp, ...(o.exp ?? {}) }, on: true } : copyInv(INV_BASE);
+};
+
+export function parseInv(raw: unknown, e: string[]): Inverse {
+  const b = INV_BASE;
+  if (!isObj(raw)) return copyInv(b);
+  const ex = isObj(raw.exp) ? raw.exp : {};
+  const out: Inverse = {
+    on: raw.on === true,
+    kind: pick<InvKind>(raw.kind, ['param', 'jref', 'jadd', 'g2', 'bifilar'], b.kind),
+    unknown: pick<InvUnknown>(raw.unknown, Object.keys(INV_UNKNOWN) as InvUnknown[], b.unknown),
+    target: pick<InvTarget>(raw.target, Object.keys(INV_TARGET) as InvTarget[], b.target),
+    value: num(raw, 'value', b.value, e, 'Обратная задача'),
+    pick: num(raw, 'pick', 0, e, 'Обратная задача'),
+    exp: { ...b.exp },
+  };
+  for (const k of Object.keys(b.exp) as (keyof InvExp)[]) out.exp[k] = num(ex, k, b.exp[k], e, 'Обратная задача');
+  return out;
+}
 
 const pick = <T extends string>(v: unknown, allowed: readonly T[], def: T): T => (allowed.includes(v as T) ? (v as T) : def);
 const num = (o: Record<string, unknown>, k: string, def: number, e: string[], where: string): number => {
@@ -59,7 +84,7 @@ function parseElem(raw: unknown, e: string[], where: string): Elem {
       'ss-mid',
     ),
   };
-  for (const k of ['c', 'ang', 'la', 'lb', 'E', 'l', 'A', 'J', 'a'] as const) out[k] = num(raw, k, out[k], e, where);
+  for (const k of ['c', 'ang', 'la', 'lb', 'E', 'l', 'A', 'J', 'a', 'cs'] as const) out[k] = num(raw, k, out[k], e, where);
   return out;
 }
 
@@ -104,14 +129,19 @@ export function parseOsc(raw: unknown): { ok: true; problem: OscProblem } | { ok
     },
     damp: {
       mode: pick<DampMode>(dm.mode, ['none', 'b', 'n', 'ratio', 'T1', 'dry'], b.damp.mode),
-      ...(Object.fromEntries((['b', 'n', 'q', 'N', 'T1', 'f', 'f0'] as const).map((k) => [k, num(dm, k, b.damp[k], e, 'Сопротивление')])) as Record<
+      ...(Object.fromEntries((['b', 'n', 'q', 'N', 'T1', 'f', 'f0', 'la', 'lb'] as const).map((k) => [k, num(dm, k, b.damp[k], e, 'Сопротивление')])) as Record<
         DampNum,
         number
       >),
     },
     exc: {
-      mode: pick<ForceMode>(ex.mode, ['none', 'H', 'rotor', 'base'], b.exc.mode),
-      ...(Object.fromEntries((['H', 'm0', 'e', 'a', 'p', 'delta'] as const).map((k) => [k, num(ex, k, b.exc[k], e, 'Возмущение')])) as Record<ExcNum, number>),
+      mode: pick<ForceMode>(ex.mode, ['none', 'H', 'rotor', 'base', 'support', 'two', 'ramp', 'exp', 'pulse', 'ramphold', 'cam'], b.exc.mode),
+      ...(Object.fromEntries(
+        (['H', 'm0', 'e', 'a', 'p', 'delta', 'mc', 'H2', 'p2', 'delta2', 'beta', 'tau', 'c1', 'L'] as const).map((k) => [
+          k,
+          num(ex, k, b.exc[k], e, 'Возмущение'),
+        ]),
+      ) as Record<ExcNum, number>),
     },
     init: {
       mode: pick<InitMode>(ini.mode, ['eq', 'lambda', 'load', 'drop'], b.init.mode),
@@ -134,6 +164,7 @@ export class OscStore {
     const k = opts.preset ?? 'm324';
     this.st = {
       problem: copy(OSC_PRESETS[k].problem),
+      inv: presetInv(k),
       title: OSC_PRESETS[k].title,
       preset: k,
       canUndo: false,
@@ -151,7 +182,7 @@ export class OscStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, inv: this.st.inv, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -171,7 +202,7 @@ export class OscStore {
   }
   loadPreset = (k: OscPresetKey) => {
     this.commit();
-    this.set({ problem: copy(OSC_PRESETS[k].problem), title: OSC_PRESETS[k].title, preset: k });
+    this.set({ problem: copy(OSC_PRESETS[k].problem), inv: presetInv(k), title: OSC_PRESETS[k].title, preset: k });
   };
   /* Числа. */
   typeTop = (k: TopNum, v: number) => {
@@ -208,6 +239,34 @@ export class OscStore {
   setDampMode = (m: DampMode) => this.change((p) => (p.damp.mode = m));
   setExcMode = (m: ForceMode) => this.change((p) => (p.exc.mode = m));
   setInitMode = (m: InitMode) => this.change((p) => (p.init.mode = m));
+  /* Обратная задача. */
+  private editInv(fn: (i: Inverse) => void) {
+    const i = copyInv(this.st.inv);
+    fn(i);
+    this.set({ inv: i });
+  }
+  private changeInv(fn: (i: Inverse) => void) {
+    this.commit();
+    this.editInv(fn);
+  }
+  setInvOn = (on: boolean) => this.changeInv((i) => (i.on = on));
+  setInvKind = (k: InvKind) => this.changeInv((i) => ((i.kind = k), (i.pick = 0)));
+  setInvUnknown = (u: InvUnknown) => this.changeInv((i) => ((i.unknown = u), (i.pick = 0)));
+  setInvTarget = (t: InvTarget) => this.changeInv((i) => ((i.target = t), (i.pick = 0)));
+  setInvPick = (n: number) => this.changeInv((i) => (i.pick = n));
+  typeInvValue = (v: number) => {
+    this.touch('inv:value');
+    this.editInv((i) => ((i.value = v), (i.pick = 0)));
+  };
+  typeInvExp = (k: keyof InvExp, v: number) => {
+    this.touch(`inv:exp:${k}`);
+    this.editInv((i) => (i.exp[k] = v));
+  };
+  /** Подставить найденное значение неизвестной в задачу и выключить обратную задачу. */
+  applyInv = (problem: OscProblem) => {
+    this.commit();
+    this.set({ problem: copy(problem), inv: { ...copyInv(this.st.inv), on: false } });
+  };
   /* Упругие элементы. */
   addStage = () => {
     if (this.st.problem.el.stages.length >= MAX_STAGES) return;
@@ -250,7 +309,7 @@ export class OscStore {
   projectTitle = () => this.st.title;
   exportProject = (now = new Date()) => ({
     name: projectFileName(this.st.title, now),
-    text: writeEnvelope(OSC_MODULE, this.st.title, { problem: this.st.problem }, now),
+    text: writeEnvelope(OSC_MODULE, this.st.title, { problem: this.st.problem, inv: this.st.inv }, now),
   });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
@@ -259,9 +318,12 @@ export class OscStore {
     if (env.module !== OSC_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseOsc(env.raw.problem);
     if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const ie: string[] = [];
+    const inv = parseInv(env.raw.inv, ie);
+    if (ie.length) return (this.notify(head + ie.slice(0, 4).join(' '), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Удар и колебания';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.problem, inv, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };
