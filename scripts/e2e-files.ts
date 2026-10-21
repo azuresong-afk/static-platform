@@ -150,7 +150,7 @@ async function main() {
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
   check((await p.locator('.rm-done').count()) === 42, 'готово сорок два пункта');
-  check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — резьбовые и сварные соединения');
+  check((await p.textContent('[data-rm="kinetostatics"] .rm-badge')) === 'следующий', 'следующий раздел — кинетостатика механизмов и машин');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
