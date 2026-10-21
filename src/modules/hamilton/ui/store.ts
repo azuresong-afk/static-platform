@@ -4,9 +4,12 @@ import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../.
 import type { NoticeData } from '../../../shared/ui/Notice';
 import type { LagCoord, LagParam, LagProblem } from '../../lagrange/model/lagrange';
 import { parseProblem as parseRouth } from '../../lagrange/ui/store';
+import type { StringBC, StringProblem } from '../model/jacobi';
+import type { LetCoord, LetProblem } from '../model/letters';
 import type { NonlinProblem } from '../model/nonlin';
+import type { RollMotion, RollProblem } from '../model/roll';
 import type { StabForm, StabProblem } from '../model/stability';
-import { defaultProblem, HAM_PRESETS, type HamMode, type HamPresetKey, type HamProblem } from '../presets';
+import { defaultProblem, defJacobi, defLetters, defRoll, HAM_PRESETS, type HamMode, type HamPresetKey, type HamProblem, type JacProblem } from '../presets';
 
 export const HAM_MODULE = 'hamilton';
 const MAX_PARAMS = 12;
@@ -82,15 +85,88 @@ function parseNonlin(raw: unknown): NonlinProblem | null {
     aMax: raw.aMax,
   };
 }
+const range = (x: unknown): { from: number; to: number } | null | undefined =>
+  x == null ? null : isObj(x) && isNum(x.from) && isNum(x.to) && x.to > x.from ? { from: x.from, to: x.to } : undefined;
+function parseLetters(raw: unknown): LetProblem | null {
+  if (raw == null) return defLetters();
+  if (!isObj(raw) || !Array.isArray(raw.coords) || raw.coords.length < 1 || raw.coords.length > 3) return null;
+  const coords: LetCoord[] = [];
+  for (const c of raw.coords) {
+    if (!isObj(c) || !isStr(c.name) || !isStr(c.at) || !isStr(c.Q) || !isNum(c.dq0) || !isNum(c.dv0)) return null;
+    coords.push({ name: c.name.slice(0, 20), at: c.at.slice(0, 200), Q: c.Q.slice(0, 200), dq0: c.dq0, dv0: c.dv0 });
+  }
+  const params = parseParams(raw.params);
+  const sc = range(raw.scan);
+  if (!params || !isStr(raw.T) || !isStr(raw.P) || !isStr(raw.unknown) || typeof raw.indifferent !== 'boolean' || !isStr(raw.cond) || sc === undefined)
+    return null;
+  return {
+    coords,
+    params,
+    T: raw.T.slice(0, 600),
+    P: raw.P.slice(0, 600),
+    unknown: raw.unknown.slice(0, 20),
+    indifferent: raw.indifferent,
+    cond: raw.cond.slice(0, 20),
+    scan: sc,
+  };
+}
+function parseRoll(raw: unknown): RollProblem | null {
+  if (raw == null) return defRoll();
+  if (!isObj(raw)) return null;
+  const params = parseParams(raw.params);
+  const sc = range(raw.scan);
+  const strs = ['m', 'a', 'A', 'C', 'w', 'cond'] as const;
+  if (!params || strs.some((k) => !isStr(raw[k])) || !['line', 'spin'].includes(raw.motion as string) || sc === undefined) return null;
+  if (!isNum(raw.th0) || !isNum(raw.tEnd) || raw.tEnd < 0) return null;
+  return {
+    params,
+    m: (raw.m as string).slice(0, 200),
+    a: (raw.a as string).slice(0, 200),
+    A: (raw.A as string).slice(0, 200),
+    C: (raw.C as string).slice(0, 200),
+    motion: raw.motion as RollMotion,
+    w: (raw.w as string).slice(0, 200),
+    cond: (raw.cond as string).slice(0, 20),
+    scan: sc,
+    th0: raw.th0,
+    tEnd: raw.tEnd,
+  };
+}
+function parseJacobi(raw: unknown): JacProblem | null {
+  if (raw == null) return defJacobi();
+  if (!isObj(raw) || !['hj', 'string'].includes(raw.form as string)) return null;
+  const h = parseRouth(raw.hj);
+  if (!h.ok) return null;
+  const st = raw.str;
+  if (!isObj(st) || !isStr(st.rho) || !isStr(st.T) || !isStr(st.l) || !['fixed', 'free'].includes(st.bc as string) || !isNum(st.modes)) return null;
+  const params = parseParams(st.params);
+  if (!params) return null;
+  const str: StringProblem = {
+    params,
+    rho: st.rho.slice(0, 200),
+    T: st.T.slice(0, 200),
+    l: st.l.slice(0, 200),
+    bc: st.bc as StringBC,
+    modes: Math.max(1, Math.min(6, Math.round(st.modes))),
+  };
+  return { form: raw.form as JacProblem['form'], hj: h.problem, str };
+}
+const MODES_ALL: HamMode[] = ['routh', 'stab', 'nonlin', 'letters', 'roll', 'jacobi'];
 export function parseProblem(raw: unknown): { ok: true; problem: HamProblem } | { ok: false; errors: string[] } {
-  if (!isObj(raw) || !['routh', 'stab', 'nonlin'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem.mode).'] };
+  if (!isObj(raw) || !MODES_ALL.includes(raw.mode as HamMode)) return { ok: false, errors: ['В файле нет задачи (problem.mode).'] };
   const r = parseRouth(raw.routh);
   if (!r.ok) return { ok: false, errors: r.errors };
   const s = parseStab(raw.stab);
   if (!s) return { ok: false, errors: ['Устойчивость: неверные данные (форма, коэффициенты, матрицы).'] };
   const n = parseNonlin(raw.nonlin);
   if (!n) return { ok: false, errors: ['Нелинейные колебания: неверные данные.'] };
-  return { ok: true, problem: { mode: raw.mode as HamMode, routh: r.problem, stab: s, nonlin: n } };
+  const l = parseLetters(raw.letters);
+  if (!l) return { ok: false, errors: ['В буквах: неверные данные.'] };
+  const ro = parseRoll(raw.roll);
+  if (!ro) return { ok: false, errors: ['Катящийся диск: неверные данные.'] };
+  const j = parseJacobi(raw.jacobi);
+  if (!j) return { ok: false, errors: ['Якоби — Гамильтон, струна: неверные данные.'] };
+  return { ok: true, problem: { mode: raw.mode as HamMode, routh: r.problem, stab: s, nonlin: n, letters: l, roll: ro, jacobi: j } };
 }
 
 const resize = (g: string[][], n: number, diag: string): string[][] =>
@@ -143,25 +219,31 @@ export class HamStore {
     this.put({ mode });
   };
 
-  /* Интегралы, Раус, Гамильтон. */
+  /* Интегралы, Раус, Гамильтон (и та же система для уравнения Якоби — Гамильтона). */
+  private get sys(): LagProblem {
+    const p = this.st.problem;
+    return p.mode === 'jacobi' ? p.jacobi.hj : p.routh;
+  }
   private setRouth(r: LagProblem) {
-    this.put({ routh: r });
+    const p = this.st.problem;
+    if (p.mode === 'jacobi') this.put({ jacobi: { ...p.jacobi, hj: r } });
+    else this.put({ routh: r });
   }
   typeRouthText = (key: 'T' | 'P', v: string) => {
     this.touch('r:' + key);
-    this.setRouth({ ...this.st.problem.routh, [key]: v });
+    this.setRouth({ ...this.sys, [key]: v });
   };
   typeRouthTime = (v: number) => {
     this.touch('r:tEnd');
-    this.setRouth({ ...this.st.problem.routh, tEnd: v });
+    this.setRouth({ ...this.sys, tEnd: v });
   };
   typeCoord = <K extends keyof LagCoord>(i: number, key: K, v: LagCoord[K]) => {
     this.touch(`r:coord:${i}:${key}`);
-    const r = this.st.problem.routh;
+    const r = this.sys;
     this.setRouth({ ...r, coords: r.coords.map((c, j) => (j === i ? { ...c, [key]: v } : c)) });
   };
   addCoord = () => {
-    const r = this.st.problem.routh;
+    const r = this.sys;
     if (r.coords.length >= 3) return;
     this.commit();
     const used = new Set([...r.coords.map((c) => c.name), ...r.params.map((c) => c.name)]);
@@ -169,7 +251,7 @@ export class HamStore {
     this.setRouth({ ...r, coords: [...r.coords, { name, q0: 0, v0: 0, eq: 0, Q: '' }] });
   };
   removeCoord = (i: number) => {
-    const r = this.st.problem.routh;
+    const r = this.sys;
     if (r.coords.length <= 1) return;
     this.commit();
     this.setRouth({ ...r, coords: r.coords.filter((_, j) => j !== i) });
@@ -178,13 +260,30 @@ export class HamStore {
   /* Параметры — свои у каждого режима. */
   private paramsOf = (): LagParam[] => {
     const p = this.st.problem;
-    return p.mode === 'routh' ? p.routh.params : p.mode === 'stab' ? p.stab.params : p.nonlin.params;
+    switch (p.mode) {
+      case 'routh':
+        return p.routh.params;
+      case 'stab':
+        return p.stab.params;
+      case 'nonlin':
+        return p.nonlin.params;
+      case 'letters':
+        return p.letters.params;
+      case 'roll':
+        return p.roll.params;
+      case 'jacobi':
+        return p.jacobi.form === 'hj' ? p.jacobi.hj.params : p.jacobi.str.params;
+    }
   };
   private setParams(params: LagParam[]) {
     const p = this.st.problem;
     if (p.mode === 'routh') this.put({ routh: { ...p.routh, params } });
     else if (p.mode === 'stab') this.put({ stab: { ...p.stab, params } });
-    else this.put({ nonlin: { ...p.nonlin, params } });
+    else if (p.mode === 'nonlin') this.put({ nonlin: { ...p.nonlin, params } });
+    else if (p.mode === 'letters') this.put({ letters: { ...p.letters, params } });
+    else if (p.mode === 'roll') this.put({ roll: { ...p.roll, params } });
+    else if (p.jacobi.form === 'hj') this.put({ jacobi: { ...p.jacobi, hj: { ...p.jacobi.hj, params } } });
+    else this.put({ jacobi: { ...p.jacobi, str: { ...p.jacobi.str, params } } });
   }
   typeParam = <K extends keyof LagParam>(i: number, key: K, v: LagParam[K]) => {
     this.touch(`param:${i}:${key}`);
@@ -263,6 +362,94 @@ export class HamStore {
     this.commit();
     const n = this.st.problem.nonlin;
     this.put({ nonlin: { ...n, starts: n.starts.filter((_, j) => j !== i) } });
+  };
+
+  /* В буквах. */
+  private setLet(l: LetProblem) {
+    this.put({ letters: l });
+  }
+  typeLetText = (key: 'T' | 'P', v: string) => {
+    this.touch('l:' + key);
+    this.setLet({ ...this.st.problem.letters, [key]: v });
+  };
+  typeLetCoord = <K extends keyof LetCoord>(i: number, key: K, v: LetCoord[K]) => {
+    this.touch(`l:coord:${i}:${key}`);
+    const l = this.st.problem.letters;
+    this.setLet({ ...l, coords: l.coords.map((c, j) => (j === i ? { ...c, [key]: v } : c)) });
+  };
+  addLetCoord = () => {
+    const l = this.st.problem.letters;
+    if (l.coords.length >= 3) return;
+    this.commit();
+    const used = new Set([...l.coords.map((c) => c.name), ...l.params.map((c) => c.name)]);
+    const name = ['ψ', 'φ', 'θ', 'x', 'y', 'z'].find((n) => !used.has(n)) ?? 'q' + (l.coords.length + 1);
+    this.setLet({ ...l, coords: [...l.coords, { name, at: '0', Q: '', dq0: 0, dv0: 0 }] });
+  };
+  removeLetCoord = (i: number) => {
+    const l = this.st.problem.letters;
+    if (l.coords.length <= 1) return;
+    this.commit();
+    this.setLet({ ...l, coords: l.coords.filter((_, j) => j !== i) });
+  };
+  setLetChoice = (key: 'unknown' | 'cond', v: string) => {
+    const l = this.st.problem.letters;
+    if (l[key] === v) return;
+    this.commit();
+    this.setLet({ ...l, [key]: v, ...(key === 'cond' && !v ? { scan: null } : {}) });
+  };
+  setIndifferent = (on: boolean) => {
+    const l = this.st.problem.letters;
+    if (l.indifferent === on) return;
+    this.commit();
+    this.setLet({ ...l, indifferent: on });
+  };
+  /** Перебор параметра (в буквах и для диска). */
+  setRange = (on: boolean) => {
+    const p = this.st.problem;
+    const cur = p.mode === 'roll' ? p.roll.scan : p.letters.scan;
+    if (on === !!cur) return;
+    this.commit();
+    const v = on ? { from: 0, to: 5 } : null;
+    if (p.mode === 'roll') this.put({ roll: { ...p.roll, scan: v } });
+    else this.setLet({ ...p.letters, scan: v });
+  };
+  typeRange = (key: 'from' | 'to', v: number) => {
+    const p = this.st.problem;
+    this.touch('range:' + key);
+    if (p.mode === 'roll') {
+      if (p.roll.scan) this.put({ roll: { ...p.roll, scan: { ...p.roll.scan, [key]: v } } });
+    } else if (p.letters.scan) this.setLet({ ...p.letters, scan: { ...p.letters.scan, [key]: v } });
+  };
+
+  /* Катящийся диск. */
+  typeRoll = <K extends 'm' | 'a' | 'A' | 'C' | 'w' | 'th0' | 'tEnd'>(key: K, v: RollProblem[K]) => {
+    this.touch('o:' + key);
+    this.put({ roll: { ...this.st.problem.roll, [key]: v } });
+  };
+  setRollChoice = <K extends 'motion' | 'cond'>(key: K, v: RollProblem[K]) => {
+    const r = this.st.problem.roll;
+    if (r[key] === v) return;
+    this.commit();
+    this.put({ roll: { ...r, [key]: v, ...(key === 'cond' && !v ? { scan: null } : {}) } });
+  };
+
+  /* Якоби — Гамильтон, струна. */
+  setJacForm = (form: JacProblem['form']) => {
+    const j = this.st.problem.jacobi;
+    if (j.form === form) return;
+    this.commit();
+    this.put({ jacobi: { ...j, form } });
+  };
+  typeStr = <K extends 'rho' | 'T' | 'l' | 'modes'>(key: K, v: StringProblem[K]) => {
+    this.touch('j:' + key);
+    const j = this.st.problem.jacobi;
+    this.put({ jacobi: { ...j, str: { ...j.str, [key]: v } } });
+  };
+  setStrBC = (bc: StringBC) => {
+    const j = this.st.problem.jacobi;
+    if (j.str.bc === bc) return;
+    this.commit();
+    this.put({ jacobi: { ...j, str: { ...j.str, bc } } });
   };
 
   undo = () => {

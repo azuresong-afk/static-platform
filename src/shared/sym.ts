@@ -187,6 +187,13 @@ export function fn(f: Fn, a: Sym): Sym {
     return ODD.includes(f) ? neg(r) : r;
   }
   if (f === 'ln' && a.length === 1 && a[0].f.length === 0) return num(Math.log(a[0].c));
+  // Функция от обратной: cos(arccos u) = u, sin(arccos u) = √(1 − u²) и т. п. (главные ветви).
+  if (a.length === 1 && a[0].c === 1 && a[0].f.length === 1 && a[0].f[0][1] === 1 && a[0].f[0][0].k === 'fn') {
+    const g = a[0].f[0][0].f,
+      u = a[0].f[0][0].a;
+    if ((f === 'cos' && g === 'arccos') || (f === 'sin' && g === 'arcsin') || (f === 'tg' && g === 'arctg')) return u;
+    if ((f === 'sin' && g === 'arccos') || (f === 'cos' && g === 'arcsin')) return pow(sub(num(1), mul(u, u)), 0.5);
+  }
   return atom({ k: 'fn', f, a });
 }
 export const sqrt = (a: Sym): Sym => pow(a, 0.5);

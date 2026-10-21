@@ -16,6 +16,8 @@ import type { Doc } from '../../../shared/doc';
 import { renderPlots } from '../draw/plots';
 import { LAGRANGE_PRESETS, type LagrangePresetKey } from '../presets';
 import { lagrangeDoc } from '../text/solution';
+import { solveReact } from '../model/react';
+import { reactSteps } from '../text/react';
 import type { LagrangeStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
@@ -59,6 +61,8 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
   const r = useMemo(() => solveLagrange(pr), [pr]);
   const ok = r.ok ? r : null;
   const eqr = useMemo(() => findEquilibria(pr), [pr]);
+  const rr = useMemo(() => (ok && (pr.body || pr.stop != null || pr.program) ? solveReact(pr, ok) : null), [pr, ok]);
+  const rok = rr && rr.ok ? rr : null;
   // Без T — только статика: положения равновесия и устойчивость по Π.
   const statOnly = !r.ok && r.field === 'T' && !pr.T.trim() && !!eqr;
   const doc = useMemo((): Doc | null => {
@@ -66,15 +70,20 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
     const eqErr = eqr && !eqr.ok ? [{ title: 'Положения равновесия', blocks: [{ k: 'badge' as const, tone: 'bad' as const, text: 'проверьте данные' }, { k: 'p' as const, c: [eqr.error] }] }] : [];
     if (ok) {
       const base = lagrangeDoc(pr, ok, { explain: st.explain });
+      const rs = rok ? reactSteps(pr, ok, rok, { explain: st.explain }) : null;
+      const rErr = rr && !rr.ok ? [{ title: 'Реакция и программное движение', blocks: [{ k: 'badge' as const, tone: 'bad' as const, text: 'проверьте данные' }, { k: 'p' as const, c: [rr.error] }] }] : [];
       const ans = base.steps[base.steps.length - 1];
       const blk = ans.blocks[0];
-      const rows = es && blk.k === 'answer' ? [...blk.rows, ...es.rows] : null;
-      return { steps: [...base.steps.slice(0, -1), ...(es?.steps ?? []), ...eqErr, rows && blk.k === 'answer' ? { ...ans, blocks: [{ ...blk, rows }] } : ans] };
+      const rows = blk.k === 'answer' ? [...blk.rows, ...(rs?.rows ?? []), ...(es?.rows ?? [])] : null;
+      return { steps: [...base.steps.slice(0, -1), ...(rs?.steps ?? []), ...rErr, ...(es?.steps ?? []), ...eqErr, rows && blk.k === 'answer' ? { ...ans, blocks: [{ ...blk, rows }] } : ans] };
     }
     if (statOnly) return { steps: [...(es?.steps ?? []), ...eqErr, ...(es ? [{ title: 'Ответ', blocks: [{ k: 'answer' as const, rows: es.rows }] }] : [])] };
     return null;
-  }, [pr, ok, eqr, statOnly, st.explain]);
-  const plots = useMemo(() => (ok ? renderPlots(ok) : null), [ok]);
+  }, [pr, ok, rr, rok, eqr, statOnly, st.explain]);
+  const plots = useMemo(() => (ok ? renderPlots(ok, rok) : null), [ok, rok]);
+  const rerr = (field: string) => (rr && !rr.ok && rr.field === field ? rr.error : undefined);
+  const pctx: SymContext = { coords: [], params: pr.params.map((p) => normName(p.name.trim())) };
+  const bd = pr.body;
   const ctx: SymContext = { coords: pr.coords.map((c) => normName(c.name.trim())), params: pr.params.map((p) => normName(p.name.trim())) };
   const err = (field: string) => (!r.ok && r.field === field ? r.error : undefined);
   const note = st.preset !== 'custom' ? LAGRANGE_PRESETS[st.preset].note : null;
@@ -87,7 +96,7 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
         <header className="top">
           <div>
             <h1>Уравнения Лагранжа второго рода</h1>
-            <p className="lede">По кинетической и потенциальной энергии системы — уравнения движения в обобщённых координатах: производные по шагам, ускорения, интегрирование движения, частоты малых колебаний (Мещерский, §48).</p>
+            <p className="lede">По кинетической и потенциальной энергии системы — уравнения движения в обобщённых координатах: производные по шагам, ускорения, интегрирование движения, частоты малых колебаний; реакция связей на тело и отрыв, обобщённые силы программного движения (Мещерский, §43, 48; Яблонский, Д.20).</p>
           </div>
           <div className="topright">
             <label className="preset">
@@ -209,6 +218,137 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
             <div className="sgrid">
               <Num id="lg-tend" label="Время интегрирования" unit="с" value={pr.tEnd} zero onType={store.typeTime} onEnd={() => store.endSession('tEnd')} />
             </div>
+            <div className="sub">Реакции, отрыв, программное движение</div>
+            <label className="toggle">
+              <input type="checkbox" id="lgbody" checked={!!bd} onChange={(e) => store.setBody(e.target.checked)} />
+              реакция связей на тело и отрыв (нужен параметр g)
+            </label>
+            {bd && (
+              <>
+                <div className="sgrid">
+                  <SymField
+                    id="lg-bm"
+                    label="m — масса тела"
+                    wide={false}
+                    value={bd.m}
+                    ctx={pctx}
+                    err={rerr('bm')}
+                    onType={(v) => store.typeBody('m', v)}
+                    onEnd={() => store.endSession('body:m')}
+                  />
+                  <SymField
+                    id="lg-bx"
+                    label="x_C(q)"
+                    wide={false}
+                    value={bd.x}
+                    ctx={ctx}
+                    err={rerr('bx')}
+                    onType={(v) => store.typeBody('x', v)}
+                    onEnd={() => store.endSession('body:x')}
+                  />
+                  <SymField
+                    id="lg-by"
+                    label="y_C(q), ось вверх"
+                    wide={false}
+                    value={bd.y}
+                    ctx={ctx}
+                    err={rerr('by')}
+                    onType={(v) => store.typeBody('y', v)}
+                    onEnd={() => store.endSession('body:y')}
+                  />
+                  <SymField
+                    id="lg-bdir"
+                    label="β — угол оси e с осью x (пусто — оси x, y)"
+                    wide={false}
+                    value={bd.dir}
+                    ctx={ctx}
+                    err={rerr('bdir')}
+                    onType={(v) => store.typeBody('dir', v)}
+                    onEnd={() => store.endSession('body:dir')}
+                  />
+                  <SymField
+                    id="lg-bangle"
+                    label="угол поворота тела (для ω)"
+                    wide={false}
+                    value={bd.angle}
+                    ctx={ctx}
+                    err={rerr('bangle')}
+                    onType={(v) => store.typeBody('angle', v)}
+                    onEnd={() => store.endSession('body:angle')}
+                  />
+                  <SymField
+                    id="lg-bfrom"
+                    label="q₀ в буквах — движение из покоя (для R(q))"
+                    wide={false}
+                    value={bd.from}
+                    ctx={pctx}
+                    err={rerr('bfrom')}
+                    onType={(v) => store.typeBody('from', v)}
+                    onEnd={() => store.endSession('body:from')}
+                  />
+                  <label className="field">
+                    <span>Отрыв</span>
+                    <select id="lg-bsep" value={bd.sep} onChange={(e) => store.setBodyChoice('sep', e.target.value as 'none' | 'e' | 'n')}>
+                      <option value="none">не искать</option>
+                      <option value="e">{bd.dir.trim() ? 'R_e = 0' : 'R_x = 0'}</option>
+                      <option value="n">{bd.dir.trim() ? 'R_n = 0' : 'R_y = 0'}</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="toggle">
+                  <input type="checkbox" id="lg-bflight" checked={bd.flight} onChange={(e) => store.setBodyChoice('flight', e.target.checked)} />
+                  после отрыва (или заданного положения) тело свободно — траектория центра масс
+                </label>
+              </>
+            )}
+            <label className="toggle">
+              <input type="checkbox" id="lgstop" checked={pr.stop != null} onChange={(e) => store.setStop(e.target.checked)} />
+              состояние в момент, когда {dotted(pr.coords[0]?.name ?? 'q', 0)} достигает значения
+            </label>
+            {pr.stop != null && (
+              <div className="sgrid">
+                <SymField
+                  id="lg-stop"
+                  label={`${dotted(pr.coords[0]?.name ?? 'q', 0)} =`}
+                  wide={false}
+                  value={pr.stop}
+                  ctx={pctx}
+                  err={rerr('stop')}
+                  onType={store.typeStop}
+                  onEnd={() => store.endSession('stop')}
+                />
+              </div>
+            )}
+            <label className="toggle">
+              <input type="checkbox" id="lgprog" checked={!!pr.program} onChange={(e) => store.setProgram(e.target.checked)} />
+              программное движение: найти обобщённые силы по законам qⱼ(t)
+            </label>
+            {pr.program && (
+              <div className="sgrid">
+                {pr.coords.map((c, i) => (
+                  <SymField
+                    key={i}
+                    id={`lg-law${i}`}
+                    label={`${dotted(c.name, 0)}(t)`}
+                    value={pr.program!.laws[i] ?? ''}
+                    ctx={pctx}
+                    err={rerr('law' + i)}
+                    onType={(v) => store.typeLaw(i, v)}
+                    onEnd={() => store.endSession(`law:${i}`)}
+                  />
+                ))}
+                <SymField
+                  id="lg-at"
+                  label="момент t*"
+                  wide={false}
+                  value={pr.program.at}
+                  ctx={pctx}
+                  err={rerr('at')}
+                  onType={store.typeAt}
+                  onEnd={() => store.endSession('law:at')}
+                />
+              </div>
+            )}
             {err('names') && <p className="lg-err">{err('names')}</p>}
             {err('coords') && <p className="lg-err">{err('coords')}</p>}
             <p className="empty">Параметры остаются в формулах буквами; числа нужны для ускорений, графиков и частот. Единицы — СИ.</p>

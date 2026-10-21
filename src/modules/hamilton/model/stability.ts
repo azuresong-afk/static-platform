@@ -8,7 +8,23 @@
  * у каждого такого корня столько собственных векторов, какова его кратность; иначе отклонения растут
  * (вековые члены). Для нелинейной системы первое приближение в критическом случае ответа не даёт.
  */
-import { add, constOf, evalSym, expand, mul, neg, parseSym, scale, sub, trigSimplify, variable, commonFactor, type Sym, type Term } from '../../../shared/sym';
+import {
+  add,
+  constOf,
+  evalSym,
+  expand,
+  mul,
+  neg,
+  num,
+  parseSym,
+  scale,
+  sub,
+  trigSimplify,
+  variable,
+  commonFactor,
+  type Sym,
+  type Term,
+} from '../../../shared/sym';
 import type { LagParam } from '../../lagrange/model/lagrange';
 
 export type Cx = [number, number];
@@ -214,6 +230,8 @@ export interface StabSolution {
   /** Условия: коэффициенты (k = −1, индекс в cond.idx) и миноры Гурвица Δ₂ … Δₘ₋₁. */
   conds: (HurwitzCond & { idx?: number })[];
   hurNum: number[];
+  /** Только чётные степени λ (2 или 4): условия вещественности и положительности корней μ = −λ² (a₀ > 0). */
+  even: { label: string; D: Sym; factor: Term; rest: Sym; value: number }[] | null;
   roots: Cx[];
   maxRe: number;
   verdict: StabVerdict;
@@ -256,7 +274,7 @@ export function classify(roots: Cx[], matrix: number[][] | null): { maxRe: numbe
 
 const isStableV = (v: StabVerdict) => v === 'asym' || v === 'linear';
 
-interface Built {
+export interface Built {
   coefSym: Sym[];
   /** Числовые коэффициенты и матрица первого порядка при данных значениях параметров. */
   numeric: (pv: Map<string, number>) => { coef: number[]; matrix: number[][] | null };
@@ -317,6 +335,13 @@ function build(pr: StabProblem): Built | { ok: false; field: string; error: stri
   if (!Array.isArray(M)) return M;
   if (!Array.isArray(B)) return B;
   if (!Array.isArray(C)) return C;
+  return buildSecond(M, B, C);
+}
+
+/** det(Mλ² + Bλ + C) = 0 по матрицам в буквах (общая часть для режима «В буквах»). */
+export function buildSecond(M: Sym[][], B: Sym[][], C: Sym[][]): Built | { ok: false; field: string; error: string } {
+  const n = M.length;
+  const ev = (s: Sym, pv: Map<string, number>) => evalSym(s, (nm) => pv.get(nm) ?? NaN);
   const l = variable(LAMBDA);
   const D = M.map((row, i) => row.map((m, j) => add(mul(m, l, l), mul(B[i][j], l), C[i][j])));
   const cs = collect(detSym(D), 2 * n);
@@ -361,7 +386,7 @@ function invert(M: number[][]): number[][] | null {
 }
 
 /** Коэффициенты при λᵏ (по убыванию степеней) многочлена от λ. */
-function collect(p: Sym, deg: number): Sym[] {
+export function collect(p: Sym, deg: number): Sym[] {
   const by: Term[][] = Array.from({ length: deg + 1 }, () => []);
   for (const t of p) {
     const hit = t.f.find(([a]) => a.k === 'var' && a.name === LAMBDA);
@@ -375,6 +400,12 @@ export function solveStability(pr: StabProblem): StabResult {
   const bt = build(pr);
   if ('ok' in bt) return bt;
   const pv = new Map(pr.params.map((p) => [p.name.trim(), p.value]));
+  return analyzeBuilt(bt, pv, pr.scan);
+}
+
+/** Условия устойчивости, корни и граница по параметру для уже составленного характеристического уравнения. */
+export function analyzeBuilt(bt: Built, pv: Map<string, number>, scanIn: StabProblem['scan']): StabResult {
+  const pr = { scan: scanIn };
   // Нулевые корни: последние коэффициенты тождественно равны нулю.
   let zeroRoots = 0;
   while (zeroRoots < bt.coefSym.length - 1 && !bt.coefSym[bt.coefSym.length - 1 - zeroRoots].length) zeroRoots++;
@@ -405,6 +436,18 @@ export function solveStability(pr: StabProblem): StabResult {
     }
   }
   const hurNum = hurwitzNum(coef.map((c) => c * s0));
+  // Только чётные степени λ (нет диссипации): λ² = −μ, нужны вещественные положительные простые корни μ.
+  let even: StabSolution['even'] = null;
+  if (m >= 2 && m % 2 === 0 && red.every((a, i) => i % 2 === 0 || !a.length) && m <= 4) {
+    const b0 = scale(red[0], s0),
+      b1 = scale(red[2], s0);
+    const mk = (label: string, D: Sym) => ({ label, D, ...reduceBy(D, pv), value: ev(D, pv) });
+    even = [mk('a₂', b1)];
+    if (m === 4) {
+      const b2 = scale(red[4], s0);
+      even.push(mk('a₄', b2), mk('a₂² − 4a₀a₄', simp(sub(mul(b1, b1), mul(num(4), b0, b2)))));
+    }
+  }
   const roots = polyRoots(full);
   const { maxRe, verdict, imag } = classify(roots, matrix);
   let scan: StabSolution['scan'] = null;
@@ -444,13 +487,13 @@ export function solveStability(pr: StabProblem): StabResult {
     if (start != null) stable.push([start, to]);
     scan = { param: name, from, to, stable, bounds };
   }
-  return { ok: true, coefSym: bt.coefSym, zeroRoots, red, coef, conds, hurNum, roots, maxRe, verdict, imag, matrix, scan };
+  return { ok: true, coefSym: bt.coefSym, zeroRoots, red, coef, conds, hurNum, even, roots, maxRe, verdict, imag, matrix, scan };
 }
 
 const ev = (s: Sym, pv: Map<string, number>) => evalSym(s, (n) => pv.get(n) ?? NaN);
 
 /** Сократить условие D > 0 на общий множитель, если он положителен при заданных параметрах. */
-function reduceBy(D: Sym, pv: Map<string, number>): { factor: Term; rest: Sym } {
+export function reduceBy(D: Sym, pv: Map<string, number>): { factor: Term; rest: Sym } {
   if (constOf(D) !== null) return { factor: { c: 1, f: [] }, rest: D };
   const { factor, rest } = commonFactor(D);
   const fv = ev([factor], pv);

@@ -8,15 +8,27 @@
  * измеренный по движению; a1 — амплитуда первой гармоники.
  */
 import type { LagCoord, LagProblem } from '../lagrange/model/lagrange';
+import type { StringProblem } from './model/jacobi';
+import type { LetCoord, LetProblem } from './model/letters';
 import type { NonlinProblem } from './model/nonlin';
+import type { RollProblem } from './model/roll';
 import type { StabProblem } from './model/stability';
 
-export type HamMode = 'routh' | 'stab' | 'nonlin';
+export type HamMode = 'routh' | 'stab' | 'nonlin' | 'letters' | 'roll' | 'jacobi';
+/** Якоби — Гамильтон (система как в «Интегралах») или струна и нить. */
+export interface JacProblem {
+  form: 'hj' | 'string';
+  hj: LagProblem;
+  str: StringProblem;
+}
 export interface HamProblem {
   mode: HamMode;
   routh: LagProblem;
   stab: StabProblem;
   nonlin: NonlinProblem;
+  letters: LetProblem;
+  roll: RollProblem;
+  jacobi: JacProblem;
 }
 export interface HamPreset {
   title: string;
@@ -54,11 +66,122 @@ export const defNonlin = (): NonlinProblem => ({
   starts: [3],
   aMax: 3,
 });
-export const defaultProblem = (): HamProblem => ({ mode: 'routh', routh: defRouth(), stab: defStab(), nonlin: defNonlin() });
+const LC = (name: string, at: string, Q = '', dq0 = 0, dv0 = 0): LetCoord => ({ name, at, Q, dq0, dv0 });
+export const defLetters = (): LetProblem => ({
+  coords: [LC('φ', '0')],
+  params: par({ m: 1, l: 1, ω: 2, g: G }),
+  T: "m l^2 (φ'^2 + ω^2 sin^2 φ)/2",
+  P: '−m g l cos φ',
+  unknown: '',
+  indifferent: false,
+  cond: 'ω',
+  scan: { from: 0, to: 5 },
+});
+export const defRoll = (): RollProblem => ({
+  params: par({ m: 1, a: 1, ω: 2, g: G }),
+  m: 'm',
+  a: 'a',
+  A: 'm a^2/2',
+  C: 'm a^2',
+  motion: 'line',
+  w: 'ω',
+  cond: 'ω',
+  scan: { from: 0, to: 4 },
+  th0: 0.05,
+  tEnd: 10,
+});
+export const defString = (): StringProblem => ({ params: par({ ρ: 0.01, T: 100, l: 1 }), rho: 'ρ', T: 'T', l: 'l', bc: 'fixed', modes: 4 });
+export const defJacobi = (): JacProblem => ({
+  form: 'hj',
+  hj: { coords: [C('φ', 0.5)], params: par({ J: 1, M: 1, l: 0.3, g: G }), T: "J φ'^2/2", P: '−M g l cos φ', tEnd: 4 },
+  str: defString(),
+});
+export const defaultProblem = (): HamProblem => ({
+  mode: 'routh',
+  routh: defRouth(),
+  stab: defStab(),
+  nonlin: defNonlin(),
+  letters: defLetters(),
+  roll: defRoll(),
+  jacobi: defJacobi(),
+});
 
 const routh = (r: LagProblem): HamProblem => ({ ...defaultProblem(), mode: 'routh', routh: r });
 const stab = (s: Partial<StabProblem>): HamProblem => ({ ...defaultProblem(), mode: 'stab', stab: { ...defStab(), ...s } });
 const nonlin = (n: Partial<NonlinProblem>): HamProblem => ({ ...defaultProblem(), mode: 'nonlin', nonlin: { ...defNonlin(), ...n } });
+const letters = (l: Partial<LetProblem>): HamProblem => ({
+  ...defaultProblem(),
+  mode: 'letters',
+  letters: { ...defLetters(), T: '', P: '', unknown: '', cond: '', scan: null, ...l },
+});
+const roll = (r: Partial<RollProblem>): HamProblem => ({ ...defaultProblem(), mode: 'roll', roll: { ...defRoll(), ...r } });
+const hj = (h: LagProblem): HamProblem => ({ ...defaultProblem(), mode: 'jacobi', jacobi: { ...defJacobi(), form: 'hj', hj: h } });
+const str = (x: Partial<StringProblem>): HamProblem => ({
+  ...defaultProblem(),
+  mode: 'jacobi',
+  jacobi: { ...defJacobi(), form: 'string', str: { ...defString(), ...x } },
+});
+
+/** Корень f на [a, b] делением пополам (для ответов книги, заданных уравнением). */
+function bisect(f: (x: number) => number, a: number, b: number): number {
+  let fa = f(a);
+  for (let i = 0; i < 200; i++) {
+    const m = (a + b) / 2,
+      fm = f(m);
+    if (Math.sign(fm) === Math.sign(fa)) ((a = m), (fa = fm));
+    else b = m;
+  }
+  return (a + b) / 2;
+}
+// 52.3: M√(l² − (b − a)² − 4ab sin²(θ/2)) = Qab sin θ.
+const s523 = { Q: 1, a: 0.5, b: 0.4, l: 1, M: 0.1 };
+const th523 = bisect(
+  (t) => s523.M * Math.sqrt(s523.l ** 2 - (s523.b - s523.a) ** 2 - 4 * s523.a * s523.b * Math.sin(t / 2) ** 2) - s523.Q * s523.a * s523.b * Math.sin(t),
+  0.01,
+  1.5,
+);
+// 52.14: граница по c₂ из ответа книги [(c₁ + c₂)l₂ − (m₁ + m₂)g](c₁l₁ − m₁g) = c₁²l₁l₂.
+const s5214 = { m1: 1, m2: 1.5, l1: 0.8, l2: 1, c1: 40, c2: 60, g: G };
+const c5214 =
+  (s5214.c1 ** 2 * s5214.l1 * s5214.l2) / ((s5214.c1 * s5214.l1 - s5214.m1 * s5214.g) * s5214.l2) + ((s5214.m1 + s5214.m2) * s5214.g) / s5214.l2 - s5214.c1;
+// 52.15: граница по c — наибольший корень условий книги.
+const s5215 = { m: 1, c: 300, h: 0.2, g: G };
+const ok5215 = (c: number) => {
+  const { m, h, g } = s5215;
+  return (
+    13 * c * h * h - 4 * m * g * h > 0 &&
+    49 * c * c * h ** 4 - 59 * m * g * c * h ** 3 + 12 * m * m * g * g * h * h > 0 &&
+    36 * c ** 3 * h ** 6 - 153 * m * g * c * c * h ** 5 + 130 * m * m * g * g * c * h ** 4 - 24 * m ** 3 * g ** 3 * h ** 3 > 0
+  );
+};
+const c5215 = bisect((c) => (ok5215(c) ? 1 : -1), 100, 600);
+// 52.16: устойчиво при √(rl) > h − r: граница l = (h − r)²/r.
+const s5216 = { m: 1, g: G, r: 0.3, h: 0.5, l: 0.3 };
+// 55.2: эллипс x²/a² + z²/c² = 1, ось z вниз; x = a sin φ, z = c cos φ. Граница ω² = gc/a².
+const s552 = { m: 1, a: 1, c: 0.5, ω: 2, g: G };
+const s552b = { ...s552, ω: 4 };
+// 55.3: парабола x² = 2pz; граница ω² = g/p.
+const s553 = { m: 1, p: 0.5, ω: 3, g: G };
+// 55.4 на примере окружности радиуса R: r(s) = R sin(s/R), V = −mgR cos(s/R); k² = g/R − ω² при s₀ = 0.
+const s554 = { m: 1, R: 1, ω: 2, g: G };
+// 55.6: B > C — граница ω² = Mgh/(B − C).
+const s556 = { M: 1, h: 0.5, A: 0.4, B: 3, C: 1, ω: 1, g: G };
+// 55.8: B = A + Mh²; среднее положение cos φ = Mgh/((B − C)ω²), период — по ответу книги.
+const s558 = { M: 1, h: 1, A: 0.5, C: 0.2, ω: 5, g: G };
+const B558 = s558.A + s558.M * s558.h ** 2;
+const T558 = 2 * Math.PI * s558.ω * Math.sqrt((B558 * (B558 - s558.C)) / ((B558 - s558.C) ** 2 * s558.ω ** 4 - (s558.M * s558.g * s558.h) ** 2));
+// 55.9: диск на пружинах, Ql > c₂L² — устойчиво при ω > ω*.
+const s559 = { Q: 20, r: 0.3, l: 0.5, L: 0.6, c1: 10, c2: 20, ω: 40, g: G };
+const w559 =
+  (Math.sqrt(s559.g * s559.l * (s559.r ** 2 + 4 * s559.l ** 2)) / s559.r ** 2) *
+  (Math.sqrt(1 - (s559.c1 * s559.L ** 2) / (s559.Q * s559.l)) + Math.sqrt(1 - (s559.c2 * s559.L ** 2) / (s559.Q * s559.l)));
+// 55.10: T = 2π√(a/(g sin α)).
+const s5510 = { m: 1, a: 0.5, α: 0.6, g: G };
+// 49.12: волчок около верхнего вертикального положения.
+const s4912 = { A: 1, C: 0.5, n: 20, m: 1, l: 0.3, g: G };
+// Д.23 (пример): m₁ = 1, m₂ = 2, m₄ = 1, m₆ = 3 кг, l = 0,6 м, c = 20 Н/см, y₀ = 0,2 см, ẏ₀ = 8 см/с.
+const yd23 = { m1: 1, m2: 2, m4: 1, m6: 3, l: 0.6, c: 2000, g: G };
+const k23 = Math.sqrt((9 * yd23.c - (8 * yd23.m6 * yd23.g) / yd23.l) / (yd23.m1 + yd23.m2 / 2 + (16 * yd23.m6) / 3 + 6 * yd23.m4));
 
 // 55.24: конический маятник θ₀ = 1 рад, l = 1, ψ̇² = g/(l cos θ₀); частота возмущений ω² = (g/l)(1 + 3cos²θ₀)/cos θ₀.
 const th0 = 1;
@@ -337,6 +460,239 @@ export const HAM_PRESETS = {
     problem: nonlin({ name: 'x', params: par(s5611), f: "μ ((α^2 − x^2) x' − γ x^3) − k^2 x", k2: 'k^2', x0: 0.1, v0: 0, tEnd: 150, starts: [3], aMax: 3 }),
     book: { a: 2 * s5611.α, T: ((2 * Math.PI) / s5611.k) * (1 - (3 * s5611.μ * s5611.γ * s5611.α ** 2) / (2 * s5611.k ** 2)) },
     relTol: 1e-3,
+  },
+  m521: {
+    title: 'Мещерский 52.1: момент, поворачивающий пластину на наклонной оси',
+    note: 'Ось AB наклонена под углом α к вертикали; центр тяжести O — на расстоянии a от оси, φ — угол поворота. Высота центра тяжести −a sin α cos φ: Π = −Pa sin α cos φ, момент M — непотенциальная обобщённая сила. Искомый параметр M — из условия равновесия при φ = θ. Ответ книги: M = Pa sin α sin θ.',
+    problem: letters({ coords: [LC('φ', 'θ', 'M')], params: par({ P: 1, a: 0.8, α: 0.5, θ: 0.7, M: 0 }), T: '', P: '−P a sin(α) cos φ', unknown: 'M' }),
+    book: { X: 0.8 * Math.sin(0.5) * Math.sin(0.7) },
+  },
+  m522: {
+    title: 'Мещерский 52.2: шарнирный шестиугольник — безразличное равновесие',
+    note: 'Стороны a, вес каждой p; φ — угол боковых стержней с вертикалью (по симметрии нижние наклонены так же). Центры тяжести опускаются: верхних боковых на (a/2)cos φ, нижних — на (3a/2)cos φ, нижней стороны — на 2a cos φ; сила Q приложена вверх. Π = −6pa cos φ + 2Qa cos φ. Безразличное равновесие — Π не зависит от φ. Ответ книги: Q = 3p.',
+    problem: letters({ coords: [LC('φ', 'π/6')], params: par({ p: 1, a: 1, Q: 0 }), P: '−6 p a cos φ + 2 Q a cos φ', unknown: 'Q', indifferent: true }),
+    book: { X: 3 },
+  },
+  m523: {
+    title: 'Мещерский 52.3: стержень на двух нитях под действием пары — угол поворота',
+    note: 'Стержень 2a, вес Q, нити длиной l, точки подвеса на расстоянии 2b; поворот на угол θ поднимает стержень: Π = −Q√(l² − (a − b)² − 4ab sin²(θ/2)), момент пары M — непотенциальная сила. Положение θ* = 0,3 — только начальное приближение: уравнение равновесия выводится в буквах, корень — методом Ньютона. Ответ книги: M√(l² − (b − a)² − 4ab sin²(θ/2)) = Qab sin θ.',
+    problem: letters({ coords: [LC('θ', '0,3', 'M')], params: par(s523), P: '−Q sqrt(l^2 − (a − b)^2 − 4 a b sin(θ/2)^2)' }),
+    book: { q: th523, stable: 1 },
+  },
+  m5214: {
+    title: 'Мещерский 52.14: «обращённый» двойной маятник на пружинах',
+    note: 'φ₁ — угол верхнего стержня l₁ (масса m₁), φ₂ — нижнего l₂ (масса m₂); горизонтальные пружины c₁, c₂ — у масс m₁ и m₂. Π = c₁(l₂ sin φ₂ + l₁ sin φ₁)²/2 + c₂(l₂ sin φ₂)²/2 + m₂gl₂ cos φ₂ + m₁g(l₂ cos φ₂ + l₁ cos φ₁). Ответ книги: c₁l₁ > m₁g; [(c₁ + c₂)l₂ − (m₁ + m₂)g]·[c₁l₁ − m₁g] > c₁²l₁l₂ — здесь те же условия Сильвестра (второе — с раскрытыми скобками). Граница — по c₂.',
+    problem: letters({
+      coords: [LC('φ1', '0'), LC('φ2', '0')],
+      params: par(s5214),
+      P: 'c1 (l2 sin φ2 + l1 sin φ1)^2/2 + c2 (l2 sin φ2)^2/2 + m2 g l2 cos φ2 + m1 g (l2 cos φ2 + l1 cos φ1)',
+      cond: 'c2',
+      scan: { from: 0, to: 100 },
+    }),
+    book: { stable: 1, bound: c5214, cb: c5214 },
+  },
+  m5215: {
+    title: 'Мещерский 52.15: три маятника, связанные пружинами',
+    note: 'Длины 4h, 3h, 2h, массы m, пружины c на h ниже масс: стенка — первый маятник (высота 3h), первый — второй (2h), второй — третий (h). Π = mgh(4 cos φ₁ + 3 cos φ₂ + 2 cos φ₃) + ch²[9 sin²φ₁ + 4(sin φ₂ − sin φ₁)² + (sin φ₃ − sin φ₂)²]/2. Ответ книги: 13ch² − 4mgh > 0; 49c²h⁴ − 59mgch³ + 12m²g²h² > 0; 36c³h⁶ − 153mgc²h⁵ + 130m²g²ch⁴ − 24m³g³h³ > 0 — миноры Сильвестра (сокращены на h, h², h³). Граница — по c.',
+    problem: letters({
+      coords: [LC('φ1', '0'), LC('φ2', '0'), LC('φ3', '0')],
+      params: par(s5215),
+      P: 'm g h (4 cos φ1 + 3 cos φ2 + 2 cos φ3) + c h^2 (9 sin(φ1)^2 + 4 (sin φ2 − sin φ1)^2 + (sin φ3 − sin φ2)^2)/2',
+      cond: 'c',
+      scan: { from: 100, to: 600 },
+    }),
+    book: { stable: 1, bound: c5215 },
+  },
+  m5216: {
+    title: 'Мещерский 52.16: маятник паллографа',
+    note: 'O₁ — ось коромысла r (угол φ от вертикали), O — цилиндрик на высоте h над O₁, груз M — на продолжении стержня OA за шарниром A на расстоянии l. Π = mg[r cos φ + l(r cos φ − h)/√(r² + h² − 2rh cos φ)]. Ответ книги: при √(rl) > h − r положение устойчиво, при √(rl) < h − r — неустойчиво. Граница — по l: l = (h − r)²/r.',
+    problem: letters({
+      coords: [LC('φ', '0')],
+      params: par(s5216),
+      P: 'm g (r cos φ + l (r cos φ − h)/sqrt(h^2 − 2 r h cos φ + r^2))',
+      cond: 'l',
+      scan: { from: 0, to: 1 },
+    }),
+    book: { stable: 1, bound: (s5216.h - s5216.r) ** 2 / s5216.r, cb: (s5216.h - s5216.r) ** 2 / s5216.r },
+  },
+  m552: {
+    title: 'Мещерский 55.2: шарик в эллиптической трубке, вращающейся вокруг вертикали — нижнее положение',
+    note: 'x = a sin φ, z = c cos φ (ось z вниз). T = m[(a² cos²φ + c² sin²φ)φ̇² + ω²a² sin²φ]/2, Π = −mgc cos φ. Ответ книги: при ω² ≤ gc/a² положение z = c (φ = 0) устойчиво, при ω² > gc/a² — неустойчиво; z = −c неустойчиво всегда (q* = π). Граница — по ω.',
+    problem: letters({
+      coords: [LC('φ', '0')],
+      params: par(s552),
+      T: "m ((a^2 cos(φ)^2 + c^2 sin(φ)^2) φ'^2 + ω^2 a^2 sin(φ)^2)/2",
+      P: '−m g c cos φ',
+      cond: 'ω',
+      scan: { from: 0, to: 5 },
+    }),
+    book: { stable: 1, bound: Math.sqrt(s552.g * s552.c) / s552.a, cb: Math.sqrt(s552.g * s552.c) / s552.a },
+  },
+  m552b: {
+    title: 'Мещерский 55.2: шарик в эллиптической трубке — боковое положение при ω² > gc/a²',
+    note: 'Третье положение равновесия z = gc²/(ω²a²), то есть cos φ = gc/(ω²a²) (существует при ω² > gc/a²). Ответ книги: оно устойчиво. Здесь же условие в буквах: K = ma²ω² sin²φ* > 0.',
+    problem: letters({
+      coords: [LC('φ', 'arccos(g c/(ω^2 a^2))')],
+      params: par(s552b),
+      T: "m ((a^2 cos(φ)^2 + c^2 sin(φ)^2) φ'^2 + ω^2 a^2 sin(φ)^2)/2",
+      P: '−m g c cos φ',
+    }),
+    book: { stable: 1, q: Math.acos((s552b.g * s552b.c) / (s552b.ω ** 2 * s552b.a ** 2)) },
+  },
+  m553: {
+    title: 'Мещерский 55.3: шарик в параболической трубке, вращающейся вокруг вертикали',
+    note: 'x² = 2pz, ось z вверх; координата x: z = x²/(2p). T = m[(1 + x²/p²)ẋ² + ω²x²]/2, Π = mgx²/(2p). Ответ книги: z = 0 устойчиво при ω² < g/p, неустойчиво при ω² > g/p, при ω² = g/p — безразличное равновесие (W ≡ 0). Граница — по ω.',
+    problem: letters({
+      coords: [LC('x', '0')],
+      params: par(s553),
+      T: "m ((1 + x^2/p^2) x'^2 + ω^2 x^2)/2",
+      P: 'm g x^2/(2 p)',
+      cond: 'ω',
+      scan: { from: 0, to: 6 },
+    }),
+    book: { stable: 1, bound: Math.sqrt(s553.g / s553.p), cb: Math.sqrt(s553.g / s553.p) },
+  },
+  m554: {
+    title: 'Мещерский 55.4: точка на плоской кривой, вращающейся вокруг вертикали — частота малых колебаний',
+    note: 'Ответ книги в общем виде: k² = (1/m)[d²V/ds² − ω²·d/ds(r·dr/ds)] при s = s₀, где (dV/ds) = ω²(r·dr/ds). Это k² = W″/m, W = V − mω²r²/2 — так и считает раздел. Пример: окружность радиуса R, s — дуга от нижней точки: r(s) = R sin(s/R), V = −mgR cos(s/R); при s₀ = 0 k² = g/R − ω².',
+    problem: letters({
+      coords: [LC('s', '0')],
+      params: par(s554),
+      T: "m (s'^2 + ω^2 R^2 sin(s/R)^2)/2",
+      P: '−m g R cos(s/R)',
+    }),
+    book: { stable: 1, w: Math.sqrt(s554.g / s554.R - s554.ω ** 2) },
+  },
+  m556: {
+    title: 'Мещерский 55.6: тело на горизонтальной оси, вращающейся вокруг вертикали',
+    note: 'φ — угол OG с вертикалью Oz; при повороте на φ момент инерции относительно Oz равен C cos²φ + B sin²φ. T = [Jφ̇² + ω²(C cos²φ + B sin²φ)]/2 (J — относительно оси NT), Π = −Mgh cos φ. Ответ книги: φ = 0 устойчиво при B < C, а при B > C — если ω² < Mgh/(B − C); φ = π (q* = π) — при B < C и ω² > Mgh/(C − B); третье положение cos φ = Mgh/((B − C)ω²) устойчиво при B > C. Граница — по ω.',
+    problem: letters({
+      coords: [LC('φ', '0')],
+      params: par({ ...s556, J: 2 }),
+      T: "(J φ'^2 + ω^2 (C cos(φ)^2 + B sin(φ)^2))/2",
+      P: '−M g h cos φ',
+      cond: 'ω',
+      scan: { from: 0, to: 4 },
+    }),
+    book: { stable: 1, bound: Math.sqrt((s556.M * s556.g * s556.h) / (s556.B - s556.C)), cb: Math.sqrt((s556.M * s556.g * s556.h) / (s556.B - s556.C)) },
+  },
+  m557: {
+    title: 'Мещерский 55.7: балка на канате через блок — положение α = 0, φ = π/2',
+    note: 'По задаче 48.29: Π = −P(b sin φ cos α − a cos φ sin α), b = √(a² − l²); φ — эксцентрическая аномалия, α — угол балки с горизонталью. Ответ книги: положение α = 0, φ = π/2 неустойчиво (det K = −P²l² < 0).',
+    problem: letters({
+      coords: [LC('α', '0'), LC('φ', 'π/2')],
+      params: par({ P: 1, a: 1.5, l: 1 }),
+      P: '−P (sqrt(a^2 − l^2) sin φ cos α − a cos φ sin α)',
+    }),
+    book: { stable: 0 },
+  },
+  m558: {
+    title: 'Мещерский 55.8: маятник на универсальном шарнире — период колебаний около среднего положения',
+    note: 'Как в 55.6 с B = A + Mh²; среднее положение cos φ = Mgh/((A + Mh² − C)ω²). Ответ книги: T = 2πω√((A + Mh²)(A + Mh² − C)/((A + Mh² − C)²ω⁴ − M²g²h²)).',
+    problem: letters({
+      coords: [LC('φ', 'arccos(M g h/((A + M h^2 − C) ω^2))')],
+      params: par(s558),
+      T: "((A + M h^2) φ'^2 + ω^2 (C cos(φ)^2 + (A + M h^2) sin(φ)^2))/2",
+      P: '−M g h cos φ',
+    }),
+    book: { stable: 1, T: T558 },
+  },
+  m559: {
+    title: 'Мещерский 55.9: диск на оси с двумя пружинами — гироскопическая стабилизация',
+    note: 'α, β — малые отклонения оси в двух плоскостях; момент инерции относительно горизонтальной оси через A — (Q/g)(r²/4 + l²), относительно оси диска — Qr²/(2g); вращение ω даёт гироскопический член Cωα̇β в T. Π = (c₁L² sin²α + c₂L² sin²β)/2 + Ql cos α cos β. Ответ книги: при Ql > c₂L² устойчиво, если ω > ω* = (√(gl(r² + 4l²))/r²)·[√(1 − c₁L²/(Ql)) + √(1 − c₂L²/(Ql))]; при c₁L² < Ql < c₂L² неустойчиво при любой ω. Граница — по ω.',
+    problem: letters({
+      coords: [LC('α', '0'), LC('β', '0')],
+      params: par(s559),
+      T: "(Q/g) ((r^2/4 + l^2) (α'^2 + β'^2)/2 + (r^2/2) ω α' β)",
+      P: '(c1 L^2 sin(α)^2 + c2 L^2 sin(β)^2)/2 + Q l cos α cos β',
+      cond: 'ω',
+      scan: { from: 0, to: 60 },
+    }),
+    book: { stable: 1, bound: w559 },
+    relTol: 1e-5,
+  },
+  m5510: {
+    title: 'Мещерский 55.10: точка на наклонном цилиндре — колебания около нижней образующей',
+    note: 'φ — угол от нижней образующей; движение вдоль оси (равноускоренное) от φ не зависит. T = ma²φ̇²/2, Π = −mga sin α cos φ. Ответ книги: по верхней образующей (q* = π) — неустойчиво; период колебаний около нижней T = 2π√(a/(g sin α)).',
+    problem: letters({ coords: [LC('φ', '0', '', 0.1, 0)], params: par(s5510), T: "m a^2 φ'^2/2", P: '−m g a sin(α) cos φ' }),
+    book: { stable: 1, T: 2 * Math.PI * Math.sqrt(s5510.a / (s5510.g * Math.sin(s5510.α))) },
+  },
+  m4912: {
+    title: 'Мещерский 49.12: волчок около верхнего вертикального положения — уравнения в канонических переменных',
+    note: 'Функция Рауса задачи 49.11 (n = φ̇ − sin β·α̇ = const) задаёт T = A(cos²β·α̇² + β̇²)/2 − Cn sin β·α̇ (части R₂ и R₁) и Π = mgl cos α cos β. Ответ книги: α̇ = (pα + Cnβ)/A, ṗα = mglα; β̇ = pβ/A, ṗβ = −(Cn/A)(pα + Cnβ) + mglβ. Устойчивость — при C²n² > 4Amgl.',
+    problem: letters({ coords: [LC('α', '0'), LC('β', '0')], params: par(s4912), T: "A (cos(β)^2 α'^2 + β'^2)/2 − C n sin(β) α'", P: 'm g l cos α cos β' }),
+    book: { stable: 1 },
+  },
+  yd23: {
+    title: 'Яблонский, Д.23: свободные колебания системы с одной степенью свободы (пример)',
+    note: 'Пример книги (рис. 229): груз 1, блок 2, диск 4, стержень 6. T = (m₁ + m₂/2 + 16m₆/3 + 6m₄)ẏ²/2, Π = (9c − 8m₆g/l)y²/2 (y — от положения покоя). Ответ книги: k = 27,1 1/с, T = 0,23 с, y = 0,2 cos 27,1t + 0,3 sin 27,1t (см) = 0,36 sin(27,1t + 0,597) см.',
+    problem: letters({ coords: [LC('y', '0', '', 0.002, 0.08)], params: par(yd23), T: "(m1 + m2/2 + 16 m6/3 + 6 m4) y'^2/2", P: '(9 c − 8 m6 g/l) y^2/2' }),
+    book: { stable: 1, w: k23, amp: Math.hypot(0.002, 0.08 / k23) },
+  },
+  m5512: {
+    title: 'Мещерский 55.12: устойчивость обруча, катящегося по горизонтальной плоскости',
+    note: 'Обруч: A = ma²/2, C = ma². Качение по прямой с угловой скоростью ω вокруг оси обруча. Ответ книги: движение устойчиво, если ω² > g/(4a). Граница — по ω.',
+    problem: roll({ params: par({ m: 1, a: 1, ω: 2, g: G }), A: 'm a^2/2', C: 'm a^2', motion: 'line', w: 'ω', cond: 'ω', scan: { from: 0, to: 4 } }),
+    book: { stable: 1, bound: Math.sqrt(G / 4), cb: Math.sqrt(G / 4) },
+  },
+  m5513: {
+    title: 'Мещерский 55.13: колесо с четырьмя спицами из тяжёлой проволоки',
+    note: 'Линейная плотность ρ: масса (2π + 4)ρa, C = (2π + 4/3)ρa³ (обод и четыре спицы), A = (π + 2/3)ρa³. Угловая скорость ω = v/a. Ответ книги: устойчиво при v² > (π + 2)ag/(4(π + 4/3)). Граница — по v.',
+    problem: roll({
+      params: par({ ρ: 1, a: 1, v: 2, g: G }),
+      m: '(2 π + 4) ρ a',
+      A: '(π + 2/3) ρ a^3',
+      C: '(2 π + 4/3) ρ a^3',
+      motion: 'line',
+      w: 'v/a',
+      cond: 'v',
+      scan: { from: 0, to: 4 },
+    }),
+    book: { stable: 1, bound: Math.sqrt(((Math.PI + 2) * G) / (4 * (Math.PI + 4 / 3))), cb: Math.sqrt(((Math.PI + 2) * G) / (4 * (Math.PI + 4 / 3))) },
+  },
+  m5514: {
+    title: 'Мещерский 55.14: обруч, вращающийся вокруг вертикального диаметра',
+    note: 'Нижняя точка обруча касается плоскости (качение без скольжения). Ответ книги: устойчиво при ω² > 2g/(3a). Граница — по ω.',
+    problem: roll({ params: par({ m: 1, a: 1, ω: 3, g: G }), A: 'm a^2/2', C: 'm a^2', motion: 'spin', w: 'ω', cond: 'ω', scan: { from: 0, to: 5 } }),
+    book: { stable: 1, bound: Math.sqrt((2 * G) / 3), cb: Math.sqrt((2 * G) / 3) },
+  },
+  m4915: {
+    title: 'Мещерский 49.15–49.16: свободная точка в поле тяжести — уравнение Якоби — Гамильтона',
+    note: 'Ответ книги: ∂V/∂t + [(∂V/∂x)² + (∂V/∂y)²]/2 + gy = 0; полный интеграл V = −ht + b₁x − (2h − b₁² − 2gy)^(3/2)/(3g) (здесь α_x = b₁); первые интегралы ∂V/∂h = −t − √(2h − b₁² − 2gy)/g = a₁ и ∂V/∂b₁ = x + b₁√(2h − b₁² − 2gy)/g = a₂.',
+    problem: hj({ coords: [C('x', 0, 1), C('y', 0, 3)], params: par({ g: G }), T: "(x'^2 + y'^2)/2", P: 'g y', tEnd: 0.25 }),
+    book: { sep: 1 },
+  },
+  m4917: {
+    title: 'Мещерский 49.17: физический маятник — уравнение Якоби — Гамильтона',
+    note: 'Ответ книги: ∂V/∂t + (1/(2J))(∂V/∂φ)² − Mgl cos φ = 0; V = −ht + ∫√(2J(h + Mgl cos φ))dφ; первый интеграл t = ∫J dφ/√(2J(h + Mgl cos φ)) + β (интеграл эллиптический — оставлен интегралом).',
+    problem: hj({ coords: [C('φ', 0.5)], params: par({ J: 1, M: 1, l: 0.3, g: G }), T: "J φ'^2/2", P: '−M g l cos φ', tEnd: 2 }),
+    book: { sep: 1 },
+  },
+  m4918: {
+    title: 'Мещерский 49.18: волчок — уравнение Якоби — Гамильтона в углах Эйлера',
+    note: 'ψ и φ — циклические: ∂V/∂ψ = α_ψ, ∂V/∂φ = α_φ. Ответ книги: ∂V/∂t + (1/(2A))(∂V/∂θ)² + (∂V/∂ψ − ∂V/∂φ cos θ)²/(2A sin²θ) + (∂V/∂φ)²/(2C) + mgl cos θ = 0; V = −ht + α_ψψ + α_φφ + ∫p_θ(θ)dθ.',
+    problem: hj({
+      coords: [C('θ', 0.5, 0.2), C('ψ', 0, 1), C('φ', 0, 20)],
+      params: par({ A: 1, C: 0.5, m: 1, l: 0.3, g: G }),
+      T: "A (θ'^2 + ψ'^2 sin^2 θ)/2 + C (φ' + ψ' cos θ)^2/2",
+      P: 'm g l cos θ',
+      tEnd: 1,
+    }),
+    book: { sep: 1 },
+  },
+  m4919: {
+    title: 'Мещерский 49.19–49.20: колебания струны — принцип Гамильтона — Остроградского',
+    note: 'Ответ книги: S = ∫∫[ρ(∂y/∂t)² − T(∂y/∂x)²]/2 dx dt; ∂²y/∂t² = a²∂²y/∂x², a² = T/ρ, y(0, t) = y(l, t) = 0. Собственные частоты ωₖ = kπa/l (k = 1, 2, …) — по разностной схеме.',
+    problem: str({ params: par({ ρ: 0.01, T: 100, l: 1 }), rho: 'ρ', T: 'T', l: 'l', bc: 'fixed', modes: 4 }),
+    book: { w1: Math.PI * Math.sqrt(100 / 0.01), w2: 2 * Math.PI * Math.sqrt(100 / 0.01) },
+    relTol: 1e-4,
+  },
+  m4921: {
+    title: 'Мещерский 49.21–49.22: колебания тяжёлой нити, подвешенной за конец',
+    note: 'x — от точки подвеса вниз, натяжение T = ρg(l − x). Ответ книги: S = ∫∫[ρ(∂y/∂t)² − ρg(l − x)(∂y/∂x)²]/2 dx dt; ∂²y/∂t² = g·∂/∂x[(l − x)∂y/∂x], y(0, t) = 0, на нижнем конце ∂y/∂x конечна. Частоты (не в книге): ωₖ = (jₖ/2)√(g/l), jₖ — нули функции Бесселя J₀ (2,4048; 5,5201; …).',
+    problem: str({ params: par({ ρ: 1, g: G, l: 1 }), rho: 'ρ', T: 'ρ g (l − x)', l: 'l', bc: 'free', modes: 4 }),
+    book: { w1: (2.404825557695773 / 2) * Math.sqrt(G), w2: (5.520078110286311 / 2) * Math.sqrt(G) },
+    relTol: 1e-4,
   },
 } satisfies Record<string, HamPreset>;
 

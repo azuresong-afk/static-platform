@@ -22,12 +22,12 @@ export function g4(x: number): string {
     .replace('-', '⁻')
     .replace(/\d/g, (d) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[+d])}`;
 }
-const cx = (r: Cx) =>
+export const cx = (r: Cx) =>
   Math.abs(r[1]) < 1e-12
     ? g4(r[0])
     : `${Math.abs(r[0]) < 1e-12 ? '' : g4(r[0]) + ' '}${r[1] < 0 ? '−' : Math.abs(r[0]) < 1e-12 ? '' : '+'} ${g4(Math.abs(r[1]))}i`.trim();
 const sub = (s: string) => s.replace(/\d/g, (d) => '₀₁₂₃₄₅₆₇₈₉'[+d]);
-const exOf =
+export const exOf =
   (opts: { explain?: boolean }) =>
   (bl: Block[], ...c: Inline[]) => {
     if (opts.explain) bl.push({ k: 'p', cls: 'explain', c });
@@ -235,22 +235,24 @@ const negS = (s: Sym): Sym => s.map((t) => ({ c: -t.c, f: t.f }));
 
 /* ───────────── Устойчивость по первому приближению ───────────── */
 
+/** Многочлен от λ по коэффициентам (старший — первый). */
+export const polyText = (cs: Sym[]) =>
+  cs
+    .map((c, i) => {
+      if (!c.length) return '';
+      const p = cs.length - 1 - i;
+      const s = symText(c);
+      const wrap = c.length > 1 ? `(${s})` : s === '1' && p ? '' : s === '−1' && p ? '−' : s;
+      return `${wrap}${p ? (wrap && wrap !== '−' ? '·' : '') + 'λ' + (p > 1 ? '⁰¹²³⁴⁵⁶⁷⁸⁹'[p] : '') : ''}`;
+    })
+    .filter(Boolean)
+    .join(' + ')
+    .replace(/\+ −/g, '− ');
+
 export function stabDoc(pr: StabProblem, r: StabSolution, opts: { explain?: boolean } = {}): Doc {
   setCoordNames([]);
   const ex = exOf(opts);
   const steps: Step[] = [];
-  const polyText = (cs: Sym[]) =>
-    cs
-      .map((c, i) => {
-        if (!c.length) return '';
-        const p = cs.length - 1 - i;
-        const s = symText(c);
-        const wrap = c.length > 1 ? `(${s})` : s === '1' && p ? '' : s === '−1' && p ? '−' : s;
-        return `${wrap}${p ? (wrap && wrap !== '−' ? '·' : '') + 'λ' + (p > 1 ? '⁰¹²³⁴⁵⁶⁷⁸⁹'[p] : '') : ''}`;
-      })
-      .filter(Boolean)
-      .join(' + ')
-      .replace(/\+ −/g, '− ');
   {
     const bl: Block[] = [];
     if (pr.form === 'first') {
@@ -313,7 +315,27 @@ export function stabDoc(pr: StabProblem, r: StabSolution, opts: { explain?: bool
         return [cond, ' — ', b(!c.D.length ? 'не выполнено' : ok ? `выполнено (${g4(c.value)})` : `не выполнено (${g4(c.value)})`)];
       });
       bl.push({ k: 'ul', items });
-      if (r.conds.some((c) => !c.D.length))
+      if (r.even)
+        bl.push(
+          {
+            k: 'p',
+            c: [
+              'Сопротивления нет — в уравнении только чётные степени λ. Подстановка μ = −λ²: устойчивость (не асимптотическая) — когда все корни μ вещественны, положительны и различны:',
+            ],
+          },
+          {
+            k: 'ul',
+            items: r.even.map((c) => {
+              const ok = c.value > 1e-12 * Math.max(1, Math.abs(c.value));
+              const red = c.factor.f.length > 0 || Math.abs(c.factor.c) !== 1;
+              return [
+                `${c.label} = ${symText(c.D)}${red && c.rest.length > 0 ? `;  сокращаем на ${termText(c.factor, true)} > 0:  ${symText(c.rest)}` : ''} > 0 — `,
+                b(ok ? `выполнено (${g4(c.value)})` : `не выполнено (${g4(c.value)})`),
+              ];
+            }),
+          },
+        );
+      else if (r.conds.some((c) => !c.D.length))
         bl.push({
           k: 'p',
           c: [

@@ -100,7 +100,7 @@ const shorter = (a: Sym) => {
 };
 
 /** Символьное обращение матрицы 1–3 через присоединённую; null, если определитель тождественно нуль. */
-function invSym(A: Sym[][]): Sym[][] | null {
+export function invSym(A: Sym[][]): Sym[][] | null {
   const n = A.length;
   if (n === 1) return A[0][0].length ? [[div([{ c: 1, f: [] }], A[0][0])]] : null;
   const minor = (i: number, j: number) => A.filter((_, r) => r !== i).map((row) => row.filter((_, c) => c !== j));

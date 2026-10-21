@@ -149,7 +149,7 @@ async function main() {
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 42, 'готово сорок два пункта');
+  check((await p.locator('.rm-done').count()) === 43, 'готово сорок три пункта');
   check((await p.textContent('[data-rm="kinetostatics"] .rm-badge')) === 'следующий', 'следующий раздел — кинетостатика механизмов и машин');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
@@ -964,6 +964,27 @@ async function main() {
   await tab('frames');
   await openText('hm.json', hmText, 'ok');
   check((await p.getAttribute('[data-tab="hamilton"]', 'aria-selected')) === 'true' && (await p.innerText('#hmsolution')) === hmSol, 'файл открывается в своей вкладке без потерь');
+  // Пункт 25: устойчивость в общем виде, катящийся диск, Якоби — Гамильтон, струна.
+  await p.selectOption('#hmpreset', 'm552');
+  hm = await p.innerText('#hmsolution');
+  check(hm.includes('ω² < c·g/a²') && hm.includes('ω = 2,215') && (await p.getAttribute('#hm-mode-letters', 'aria-pressed')) === 'true', 'Мещерский 55.2: условие ω² < gc/a² в буквах и граница по ω', hm.slice(-400));
+  await p.selectOption('#hm-lcond', '');
+  check(!(await p.innerText('#hmsolution')).includes('Область устойчивости'), 'без параметра условия — без перебора');
+  await p.selectOption('#hmpreset', 'm521');
+  check((await p.innerText('#hmsolution')).includes('M = P·a·sin α·sin θ'), 'Мещерский 52.1: искомый момент в буквах');
+  await p.selectOption('#hmpreset', 'm4912');
+  hm = await p.innerText('#hmsolution');
+  check(hm.includes('δṗ_β = (−C²·n²/A + g·l·m)·δβ − (C·n/A)·δp_α') && hm.includes('−4·A·g·l·m + C²·n² > 0'), 'Мещерский 49.12: канонические уравнения и условие C²n² > 4Amgl', hm.slice(-600));
+  await p.selectOption('#hmpreset', 'm5512');
+  hm = await p.innerText('#hmsolution');
+  check(hm.includes('ω² > g/(4·a)') && (await p.locator('#hmplot .rt-line').count()) === 2, 'Мещерский 55.12: обруч устойчив при ω² > g/(4a); графики θ(t), ψ(t)', hm.slice(-400));
+  await p.click('#hm-motion-spin');
+  check((await p.innerText('#hmsolution')).includes('ω² > 2·g/(3·a)'), 'вращение вокруг диаметра: ω² > 2g/(3a)');
+  await p.selectOption('#hmpreset', 'm4915');
+  hm = await p.innerText('#hmsolution');
+  check(hm.includes('∂V/∂t + (∂V/∂x)²/2 + (∂V/∂y)²/2 + g·y = 0') && hm.includes('точностью лучше 10⁻⁶'), 'Мещерский 49.15: уравнение Якоби — Гамильтона и проверка полного интеграла', hm.slice(-400));
+  await p.click('#hm-jform-string');
+  check((await p.innerText('#hmsolution')).includes('ω₁ = 314,2 рад/с') && (await p.locator('#hmplot .vb-mode-l').count()) === 8, 'струна: частоты kπa/l и формы');
   await tab('frames');
 
   // Поиск положения равновесия («Балки и рамы», пункт 17): неизвестен угол, а не нагрузка; трение в шарнире.
@@ -1367,6 +1388,15 @@ async function main() {
   check(!(await p.innerText('#lgsolution')).includes('180°'), 'отрезок поиска сужен — верхнего положения нет');
   await p.click('#lgeq');
   check(!(await p.innerText('#lgsolution')).includes('Положения равновесия'), 'поиск выключен');
+  // Пункт 25: реакция и отрыв (§43), программное движение (Д.20).
+  await p.selectOption('#lgpreset', 'm435');
+  lg = await p.innerText('#lgsolution');
+  check(lg.includes('отрыв') && lg.includes('φ = 0,6705') && (await p.isChecked('#lgbody')) && (await p.locator('#lgplot .rt-line').count()) === 4, 'Мещерский 43.5: отрыв от стены при sin φ₁ = (2/3) sin φ₀', lg.slice(-600));
+  await p.selectOption('#lgpreset', 'm4311');
+  check((await p.innerText('#lgsolution')).includes('7·g·m·cos θ/3 − 4·g·m/3'), 'Мещерский 43.11: нормальная реакция ребра в буквах');
+  await p.selectOption('#lgpreset', 'yd20');
+  lg = await p.innerText('#lgsolution');
+  check(lg.includes('Q_x = 33,9') && lg.includes('Q_φ = −4,386') && (await p.isChecked('#lgprog')), 'Яблонский, Д.20: обобщённые силы программного движения', lg.slice(-400));
   await tab('frames');
 
   // 33а. Вкладка «Удар и колебания».
