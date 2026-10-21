@@ -4,6 +4,9 @@ import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../.
 import type { NoticeData } from '../../../shared/ui/Notice';
 import type { NodeForce, ReduceProblem, V3 } from '../model/forces';
 import { CONV_PRESETS, type ConvPresetKey, type ConvProblem } from '../presets';
+import { extraProblem, findAsk, parseExtra, type ExtraProblem } from '../../../shared/extra';
+import { CONV_ASKS } from '../model/extra';
+import { CONV_EXTRA_PRESETS, type ConvExtraKey } from '../extraPresets';
 
 export const CONV_MODULE = 'converging';
 const MAX_ITEMS = 12;
@@ -11,8 +14,11 @@ const KINDS: NodeForce['kind'][] = ['known', 'rope', 'rod', 'normal'];
 
 export interface ConvState {
   problem: ConvProblem;
+  /** Экран задач пункта 26: система тел на шарнирах, трение, механизмы. */
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
-  preset: ConvPresetKey | 'custom';
+  preset: ConvPresetKey | ConvExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -20,6 +26,8 @@ export interface ConvState {
 }
 interface Snap {
   problem: ConvProblem;
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
   preset: ConvState['preset'];
 }
@@ -60,7 +68,7 @@ export class ConvStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: ConvPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm27';
-    this.st = { problem: copy(CONV_PRESETS[k].problem as ConvProblem), title: CONV_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { problem: copy(CONV_PRESETS[k].problem as ConvProblem), extra: structuredClone(CONV_EXTRA_PRESETS.x238.problem), view: 'main', title: CONV_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): ConvState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -71,7 +79,7 @@ export class ConvStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -90,9 +98,39 @@ export class ConvStore {
     if (p.mode === 'reduce') fn(p.reduce);
     this.set({ problem: p });
   }
-  loadPreset = (k: ConvPresetKey) => {
+  loadPreset = (k: ConvPresetKey | ConvExtraKey) => {
     this.commit();
-    this.set({ problem: copy(CONV_PRESETS[k].problem as ConvProblem), title: CONV_PRESETS[k].title, preset: k });
+    if (k in CONV_EXTRA_PRESETS) {
+      const e = CONV_EXTRA_PRESETS[k as ConvExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    const m = CONV_PRESETS[k as ConvPresetKey];
+    this.set({ problem: copy(m.problem as ConvProblem), view: 'main', title: m.title, preset: k });
+  };
+  /* ---------- задачи пункта 26 ---------- */
+  setView = (view: 'main' | 'extra') => {
+    if (view !== this.st.view) this.set({ view });
+  };
+  private editX(fn: (x: ExtraProblem) => void) {
+    const x = structuredClone(this.st.extra);
+    fn(x);
+    this.set({ extra: x });
+  }
+  setXAsk = (id: string) => {
+    this.commit();
+    this.set({ extra: extraProblem(findAsk(CONV_ASKS, id)) });
+  };
+  typeNum = (k: string, v: number) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.n[k] = v));
+  };
+  typeText = (k: string, s: string) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.s[k] = s.slice(0, 300)));
+  };
+  pick = (k: string, v: string) => {
+    this.commit();
+    this.editX((x) => (x.s[k] = v));
   };
   setMode = (mode: ConvProblem['mode']) => {
     if (mode === this.st.problem.mode) return;
@@ -181,17 +219,19 @@ export class ConvStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(CONV_MODULE, this.st.title, { problem: this.st.problem }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(CONV_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== CONV_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseConv(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const ex = parseExtra(env.raw.extra, CONV_ASKS);
+    const view = env.raw.view === 'extra' && ex ? 'extra' : 'main';
+    if (!r.ok && view !== 'extra') return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Сходящиеся силы';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: ex ?? this.st.extra, view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

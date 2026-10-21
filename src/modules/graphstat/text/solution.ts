@@ -5,7 +5,8 @@
 import { b, sub, sym, v, type AnswerRow, type Block, type Doc, type Inline, type Step } from '../../../shared/doc';
 import { fmt } from '../../../shared/format';
 import { nodeName, type Truss, type TrussResult } from '../../truss/model/truss';
-import type { Cremona } from '../model/cremona';
+import { planarityError, type Cremona } from '../model/cremona';
+import { nodePolygons } from '../model/nodepoly';
 import type { ChainInput, ChainResult, FunicularInput, FunicularResult } from '../model/funicular';
 
 const f = (x: number) => fmt(x, 3);
@@ -55,6 +56,36 @@ export function cremonaDoc(t: Truss, res: TrussResult, cr: Cremona, opts: GraphD
         : [['Внешних сил нет.']],
     });
     steps.push({ title: 'Внешние силы в узлах', blocks: bl });
+  }
+  const np = !cr.ok && planarityError(t) ? nodePolygons(t, res) : null;
+  if (np?.ok) {
+    steps.push({
+      title: 'Почему не диаграмма Кремоны',
+      blocks: [
+        { k: 'p', c: [cr.error ?? ''] },
+        { k: 'p', cls: opts.explain ? 'explain' : undefined, c: ['Вместо общей диаграммы строим силовой многоугольник каждого узла по очереди (графическое вырезание узлов): в узле не больше двух неизвестных усилий; известные силы откладываем одну за другой, а многоугольник замыкаем прямыми, параллельными неизвестным стержням, — их точка пересечения даёт усилия.'] },
+      ],
+    });
+    steps.push({
+      title: 'Силовые многоугольники узлов',
+      blocks: [
+        {
+          k: 'ul',
+          items: np.polys.map((p) => [
+            `узел ${nodeName(p.node)}: известны ${p.items.filter((q) => q.kind !== 'new').map((q) => q.label).join(', ') || '—'}; замыкаем: `,
+            ...p.found.flatMap((x, i): Inline[] => [i ? ', ' : '', Nsym(x.bar), ` = ${fmt(x.N, 3)} — ${kind(x.N)}`]),
+          ]),
+        },
+        { k: 'badge', tone: np.maxErr < 1e-8 ? 'ok' : 'warn', text: `проверка: усилия по многоугольникам совпадают с решением фермы (расхождение ${np.maxErr < 1e-9 ? '< 10⁻⁹' : fmt(np.maxErr, 3)})` },
+      ],
+    });
+    const found = np.polys.flatMap((p) => p.found).sort((x, y) => x.bar - y.bar);
+    const rows: AnswerRow[] = found.map((x) => {
+      const bk = opts.book?.bars?.[x.bar];
+      return { kind: 'main', val: [Nsym(x.bar), ' = ', fmt(x.N, 3)], note: `${kind(x.N)}${bk != null ? `; книга: ${fmt(bk, 3)}` : ''}` };
+    });
+    steps.push({ title: 'Ответ', blocks: [{ k: 'answer', rows }] });
+    return { steps };
   }
   if (!cr.ok) {
     steps.push({

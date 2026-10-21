@@ -1,10 +1,10 @@
 /**
- * Центр тяжести составных фигур, линий, тел и систем грузов (Мещерский §9).
+ * Центр тяжести составных фигур, линий, тел, поверхностей (оболочек и листов в пространстве) и систем грузов (Мещерский §9).
  * Каждая часть: вид, параметры, знак (вырез — «−») и удельный вес k (по умолчанию 1).
  * Центр тяжести: x_C = Σ s·k·m·x / Σ s·k·m, где m — площадь, длина, объём или вес части.
  */
-export type Mode = 'area' | 'line' | 'volume' | 'mass';
-export type PartKind = 'rect' | 'tri' | 'poly' | 'circle' | 'sector' | 'segment' | 'line' | 'arc' | 'point' | 'box' | 'cyl' | 'cone' | 'sphere' | 'hemi';
+export type Mode = 'area' | 'line' | 'volume' | 'surface' | 'mass';
+export type PartKind = 'rect' | 'tri' | 'poly' | 'circle' | 'sector' | 'segment' | 'line' | 'arc' | 'point' | 'box' | 'cyl' | 'cone' | 'sphere' | 'hemi' | 'frustum' | 'tri3' | 'quad3' | 'cylsurf' | 'capsurf';
 
 export interface CPart {
   kind: PartKind;
@@ -25,7 +25,8 @@ export interface CProblem {
 export const KINDS: Record<Mode, PartKind[]> = {
   area: ['rect', 'tri', 'poly', 'circle', 'sector', 'segment'],
   line: ['line', 'arc'],
-  volume: ['box', 'cyl', 'cone', 'sphere', 'hemi'],
+  volume: ['box', 'cyl', 'cone', 'sphere', 'hemi', 'frustum'],
+  surface: ['tri3', 'quad3', 'cylsurf', 'capsurf'],
   mass: ['point'],
 };
 export const KIND_NAME: Record<PartKind, string> = {
@@ -43,6 +44,11 @@ export const KIND_NAME: Record<PartKind, string> = {
   cone: 'конус',
   sphere: 'шар',
   hemi: 'полушар',
+  frustum: 'усечённая пирамида (конус)',
+  tri3: 'треугольник в пространстве',
+  quad3: 'плоский четырёхугольник в пространстве',
+  cylsurf: 'боковая поверхность цилиндра',
+  capsurf: 'поверхность сферического сегмента',
 };
 /** Параметры: ключ и подпись. Ось тела ax: 0 — x, 1 — y, 2 — z; dir — ±1 (направление от основания). */
 export const PARAMS: Record<PartKind, [string, string][]> = {
@@ -60,7 +66,21 @@ export const PARAMS: Record<PartKind, [string, string][]> = {
   cone: [['x', 'x основания'], ['y', 'y основания'], ['z', 'z основания'], ['r', 'радиус'], ['h', 'высота'], ['ax', 'ось'], ['dir', 'направление']],
   sphere: [['x', 'x центра'], ['y', 'y центра'], ['z', 'z центра'], ['r', 'радиус']],
   hemi: [['x', 'x основания'], ['y', 'y основания'], ['z', 'z основания'], ['r', 'радиус'], ['ax', 'ось'], ['dir', 'направление']],
+  frustum: [['x', 'x центра основания'], ['y', 'y центра основания'], ['z', 'z центра основания'], ['a', 'площадь нижнего основания'], ['b', 'площадь верхнего основания'], ['h', 'высота'], ['ax', 'ось'], ['dir', 'направление']],
+  tri3: [['x1', 'x₁'], ['y1', 'y₁'], ['z1', 'z₁'], ['x2', 'x₂'], ['y2', 'y₂'], ['z2', 'z₂'], ['x3', 'x₃'], ['y3', 'y₃'], ['z3', 'z₃']],
+  quad3: [['x1', 'x₁'], ['y1', 'y₁'], ['z1', 'z₁'], ['x2', 'x₂'], ['y2', 'y₂'], ['z2', 'z₂'], ['x3', 'x₃'], ['y3', 'y₃'], ['z3', 'z₃'], ['x4', 'x₄'], ['y4', 'y₄'], ['z4', 'z₄']],
+  cylsurf: [['x', 'x основания'], ['y', 'y основания'], ['z', 'z основания'], ['r', 'радиус'], ['h', 'высота'], ['ax', 'ось'], ['dir', 'направление']],
+  capsurf: [['x', 'x центра основания'], ['y', 'y центра основания'], ['z', 'z центра основания'], ['r', 'радиус основания'], ['h', 'высота сегмента'], ['ax', 'ось'], ['dir', 'направление']],
 };
+
+const vtx = (p: Record<string, number>, i: number): V3 => [p[`x${i}`] ?? 0, p[`y${i}`] ?? 0, p[`z${i}`] ?? 0];
+/** Площадь и центр треугольника в пространстве: половина модуля векторного произведения, среднее вершин. */
+function tri3(a: V3, b: V3, c: V3): { m: number; c: V3 } {
+  const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+    w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  const m = Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]) / 2;
+  return { m, c: [0, 1, 2].map((i) => (a[i] + b[i] + c[i]) / 3) as V3 };
+}
 
 export type V3 = [number, number, number];
 const rad = (a: number) => (a * Math.PI) / 180;
@@ -135,9 +155,23 @@ export function partProps(q: CPart): PartResult {
       return { m: p.a * p.b * p.c, c: [p.x + p.a / 2, p.y + p.b / 2, p.z + p.c / 2], how: 'V = abc; центр — пересечение диагоналей' };
     case 'sphere':
       return { m: (4 / 3) * Math.PI * p.r ** 3, c: [p.x, p.y, p.z], how: 'V = 4πr³/3; центр — центр шара' };
+    case 'tri3': {
+      const t = tri3(vtx(p, 1), vtx(p, 2), vtx(p, 3));
+      return { ...t, how: 'A = ½|r₁₂ × r₁₃|; центр — среднее координат вершин' };
+    }
+    case 'quad3': {
+      const t1 = tri3(vtx(p, 1), vtx(p, 2), vtx(p, 3)),
+        t2 = tri3(vtx(p, 1), vtx(p, 3), vtx(p, 4));
+      const m = t1.m + t2.m;
+      if (!(m > 0)) return bad('вершины лежат на одной прямой');
+      return { m, c: [0, 1, 2].map((i) => (t1.m * t1.c[i] + t2.m * t2.c[i]) / m) as V3, how: 'делим диагональю 1–3 на два треугольника; вершины обходим по контуру' };
+    }
     case 'cyl':
     case 'cone':
-    case 'hemi': {
+    case 'hemi':
+    case 'frustum':
+    case 'cylsurf':
+    case 'capsurf': {
       const ax = Math.round(p.ax ?? 2),
         dir = (p.dir ?? 1) >= 0 ? 1 : -1;
       const c: V3 = [p.x, p.y, p.z];
@@ -150,10 +184,23 @@ export function partProps(q: CPart): PartResult {
         m = (Math.PI * p.r * p.r * p.h) / 3;
         off = p.h / 4;
         how = 'V = πr²h/3; центр — на оси, на расстоянии h/4 от основания';
-      } else {
+      } else if (q.kind === 'hemi') {
         m = (2 / 3) * Math.PI * p.r ** 3;
         off = (3 * p.r) / 8;
         how = 'V = 2πr³/3; центр — на оси, на расстоянии 3r/8 от плоскости основания';
+      } else if (q.kind === 'frustum') {
+        const s2 = Math.sqrt(Math.max(0, p.a * p.b));
+        m = (p.h * (p.a + s2 + p.b)) / 3;
+        off = (p.h * (p.a + 2 * s2 + 3 * p.b)) / (4 * (p.a + s2 + p.b));
+        how = 'V = h(a + √(ab) + b)/3; центр — на оси, на расстоянии h(a + 2√(ab) + 3b)/(4(a + √(ab) + b)) от нижнего основания (a, b — площади оснований)';
+      } else if (q.kind === 'cylsurf') {
+        m = 2 * Math.PI * p.r * p.h;
+        off = p.h / 2;
+        how = 'A = 2πrh; центр — на оси, посередине высоты';
+      } else {
+        m = Math.PI * (p.r * p.r + p.h * p.h);
+        off = p.h / 2;
+        how = 'A = 2πRh = π(r² + h²), R = (r² + h²)/(2h); центр сферического пояса — на оси, посередине его высоты';
       }
       c[ax] += dir * off;
       return { m, c, how };
@@ -176,7 +223,7 @@ export function solveCentroid(pr: CProblem): CentroidResult {
     return { ...r, w: q.s * (q.k || 0) * r.m };
   });
   const M = parts.reduce((s, x) => s + x.w, 0);
-  const is3d = pr.mode === 'volume' || pr.mode === 'mass' || parts.some((x) => Math.abs(x.c[2]) > 1e-12);
+  const is3d = pr.mode === 'volume' || pr.mode === 'surface' || pr.mode === 'mass' || parts.some((x) => Math.abs(x.c[2]) > 1e-12);
   if (Math.abs(M) < 1e-12) return { parts, M, c: null, is3d };
   const c = [0, 1, 2].map((i) => parts.reduce((s, x) => s + x.w * x.c[i], 0) / M) as V3;
   return { parts, M, c, is3d };

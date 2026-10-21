@@ -4,6 +4,7 @@ import { taskEntries } from '../../shared/tasks';
 import { GRAPH_PRESETS, type GraphPresetKey } from './presets';
 import { GRAPHSTAT_MODULE, GraphStore } from './ui/store';
 import { GraphStatView } from './ui/GraphStatView';
+import './graphstat.css';
 
 const EXPLAIN_KEY = 'statika.explain';
 

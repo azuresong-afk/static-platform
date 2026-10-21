@@ -35,6 +35,10 @@ function outline(q: CPart): { pts: V3[]; closed: boolean }[] {
       return [{ pts: [[p.x1, p.y1, p.z1 ?? 0], [p.x2, p.y2, p.z2 ?? 0]], closed: false }];
     case 'point':
       return [];
+    case 'tri3':
+      return [{ pts: [1, 2, 3].map((i) => [p[`x${i}`], p[`y${i}`], p[`z${i}`]] as V3), closed: true }];
+    case 'quad3':
+      return [{ pts: [1, 2, 3, 4].map((i) => [p[`x${i}`], p[`y${i}`], p[`z${i}`]] as V3), closed: true }];
     case 'box': {
       const c = (i: number, j: number, k: number): V3 => [p.x + i * p.a, p.y + j * p.b, p.z + k * p.c];
       const e: [V3, V3][] = [];
@@ -69,7 +73,25 @@ function outline(q: CPart): { pts: V3[]; closed: boolean }[] {
           return { pts: Array.from({ length: 49 }, (_, n) => { const t = (2 * Math.PI * n) / 48; const q3 = [...C] as V3; q3[i] += p.r * Math.cos(t); q3[j] += p.r * Math.sin(t); return q3; }), closed: false };
         });
       }
-      if (q.kind === 'cyl') return [ring(0, p.r), ring(dir * p.h, p.r), ...[0, 1, 2, 3].map((k) => ({ pts: [at(0, p.r, (k * Math.PI) / 2), at(dir * p.h, p.r, (k * Math.PI) / 2)], closed: false }))];
+      if (q.kind === 'frustum') {
+        // Квадратные основания с заданными площадями.
+        const sq = (o: number, A: number) => [0, 1, 2, 3, 4].map((k) => at(o, Math.sqrt(Math.max(0, A) / 2), Math.PI / 4 + (k * Math.PI) / 2));
+        const lo = sq(0, p.a),
+          hi = sq(dir * p.h, p.b);
+        return [{ pts: lo, closed: false }, { pts: hi, closed: false }, ...[0, 1, 2, 3].map((k) => ({ pts: [lo[k], hi[k]], closed: false }))];
+      }
+      if (q.kind === 'capsurf') {
+        const R = (p.r * p.r + p.h * p.h) / (2 * p.h);
+        const merid = (phi: number) => ({
+          pts: Array.from({ length: 25 }, (_, n) => {
+            const z = (p.h * n) / 24;
+            return at(dir * z, Math.sqrt(Math.max(0, R * R - (R - p.h + z) ** 2)), phi);
+          }),
+          closed: false,
+        });
+        return [ring(0, p.r), merid(0), merid(Math.PI / 2), merid(Math.PI), merid((3 * Math.PI) / 2)];
+      }
+      if (q.kind === 'cyl' || q.kind === 'cylsurf') return [ring(0, p.r), ring(dir * p.h, p.r), ...[0, 1, 2, 3].map((k) => ({ pts: [at(0, p.r, (k * Math.PI) / 2), at(dir * p.h, p.r, (k * Math.PI) / 2)], closed: false }))];
       if (q.kind === 'cone') return [ring(0, p.r), ...[0, 1, 2, 3].map((k) => ({ pts: [at(0, p.r, (k * Math.PI) / 2), at(dir * p.h, 0, 0)], closed: false }))];
       // Полушар: основание и две полуокружности-меридиана.
       const merid = (phi: number) => ({
