@@ -10,11 +10,18 @@ import { type MCons, type MDrive, type MechProblem, type MLoad, type MMass, type
 import { plotKeys, solveMech, substTime, type LawState } from '../model/solve';
 import { MECH_PRESETS, type MechPresetKey } from '../presets';
 import { mechDoc } from '../text/solution';
+import { Acc2View } from './Acc2View';
 import { MAX_ITEMS, MAX_LAWS, type MechStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
 
+/** Экран раздела: механизм или (в задачах 18.29–18.36) тело с двумя заданными ускорениями. */
 export function MechView({ chrome, store }: { chrome: Chrome; store: MechStore }) {
+  const st = useSyncExternalStore(store.subscribe, store.get);
+  return st.problem.acc2 ? <Acc2View chrome={chrome} store={store} /> : <MechMain chrome={chrome} store={store} />;
+}
+
+function MechMain({ chrome, store }: { chrome: Chrome; store: MechStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const r = useMemo(() => solveMech(pr), [pr]);
@@ -34,7 +41,10 @@ export function MechView({ chrome, store }: { chrome: Chrome; store: MechStore }
             <h1>Плоский механизм</h1>
             <p className="lede">
               Скорости и ускорения точек и звеньев (МЦС, метод полюса, кулисы — теорема Кориолиса), равновесие механизма по принципу возможных перемещений, кинетическая энергия и теорема об её изменении, график по
-              положению механизма. Механизм собирается из точек, звеньев, опор, ползунов, кулис и колёс.
+              положению механизма. Механизм собирается из точек, звеньев, опор, ползунов, кулис и колёс.{' '}
+              <button type="button" id="macc2-on" className="linkbtn" onClick={() => store.setAcc2(true)}>
+                ω и ε по ускорениям двух точек →
+              </button>
             </p>
           </div>
           <div className="topright">
@@ -90,6 +100,17 @@ export function MechView({ chrome, store }: { chrome: Chrome; store: MechStore }
                   ))}
                 </select>
               </label>
+              {pr.plot && keys.some((k) => k[0] === pr.plot) && (
+                <LawField
+                  id="mformula"
+                  label={`Формула книги для сверки: ${pr.time ? 'от t' : 'от φ (в радианах)'}`}
+                  wide
+                  value={pr.formulas?.find((q) => q.key === pr.plot)?.f ?? ''}
+                  prep={(s) => s.replace(/φ|phi/g, '(1)')}
+                  onType={(s) => store.typeFormula(pr.plot!, s)}
+                  onEnd={() => store.endSession(`formula:${pr.plot}`)}
+                />
+              )}
             </div>
             {plot && (
               <div className="canvas">

@@ -4,6 +4,7 @@ import { MechStore, MECH_MODULE } from './ui/store';
 import { MechView } from './ui/MechView';
 import { taskEntries } from '../../shared/tasks';
 import { MECH_PRESETS, type MechPresetKey } from './presets';
+import './mechanism.css';
 
 const EXPLAIN_KEY = 'statika.explain';
 

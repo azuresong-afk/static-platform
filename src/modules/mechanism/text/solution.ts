@@ -128,6 +128,8 @@ export function mechDoc(pr: MechProblem, r: MechSolution, opts: { explain?: bool
     steps.push({ title: 'Ускорения: метод полюса', blocks: bl });
   }
   steps.push(...dynSteps(pr, r, ex));
+  const fstep = formulaStep(r, ex);
+  if (fstep) steps.push(fstep);
   const acc = pr.acc !== false;
   const rows: AnswerRow[] = [
     ...dynRows(r),
@@ -200,6 +202,23 @@ function loadName(pr: MechProblem, i: number): Inline[] {
   if (l.k === 'force') return [v('F'), sub(String(i + 1)), ` в точке ${l.p}`];
   if (l.k === 'couple') return [v('M'), sub(String(i + 1)), ` на звене ${l.b}`];
   return [v('M'), sub('с'), ` в шарнире ${l.b1}–${l.b2 || 'опора'}`];
+}
+
+/** Шаг «Сверка с формулами»: формулы книги против расчёта механизма на диапазоне графика. */
+function formulaStep(r: MechSolution, ex: Ex): Step | null {
+  if (!r.checks?.length) return null;
+  const bl: Block[] = [];
+  const lines: { c: Inline[] }[] = [];
+  for (const q of r.checks) {
+    if (q.error) lines.push({ c: [`${q.label}: ${q.f} — ${q.error}`] });
+    else {
+      const ok = q.dev <= q.tol * Math.max(1, q.scale);
+      lines.push({ c: [`${q.label} = ${q.f}:  наибольшее отклонение от расчёта ${q.dev.toExponential(1)} (по ${q.n} точкам; наибольшее значение ${f(q.scale)}) — `, ok ? (q.tol > 1e-6 ? `совпадает в пределах приближения (допуск ${q.tol.toExponential(0)})` : 'совпадает') : b('не совпадает')] });
+    }
+  }
+  bl.push({ k: 'eq', lines });
+  ex(bl, 'Формула сверяется с численным расчётом механизма (положение, скорости и ускорения по общим уравнениям) на диапазоне графика; φ в формуле — в радианах. Малое приближение в формуле книги (например, при λ ≪ 1) даёт малое, но ненулевое отклонение.');
+  return { title: 'Сверка с формулами', blocks: bl };
 }
 
 function dynSteps(pr: MechProblem, r: MechSolution, ex: Ex): Step[] {
