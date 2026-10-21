@@ -13,10 +13,13 @@ import { shaftDoc } from '../text/solution';
 import type { ShaftStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
+import { ModeSwitch } from '../../../shared/machines/MachineView';
+import type { MachineStore } from '../../../shared/machines/store';
+import { KINETO_PRESETS } from '../machines';
 
 const AX = ['x', 'y', 'z'];
 
-export function ShaftView({ chrome, store }: { chrome: Chrome; store: ShaftStore }) {
+export function ShaftView({ chrome, store, ms }: { chrome: Chrome; store: ShaftStore; ms: MachineStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const r = useMemo(() => solveShaft(pr), [pr]);
@@ -34,10 +37,11 @@ export function ShaftView({ chrome, store }: { chrome: Chrome; store: ShaftStore
             <p className="lede">Динамические реакции и давления на опоры тела, вращающегося вокруг неподвижной оси: силы инерции приводятся к главному вектору и главному моменту, реакции — статические и динамические.</p>
           </div>
           <div className="topright">
+            <ModeSwitch ms={ms} base="Вращающееся тело" />
             <label className="preset">
               Готовая задача
-              <select id="dpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as ShaftPresetKey)}>
-                <PresetOptions items={taskEntries(SHAFT_PRESETS)} />
+              <select id="dpreset" value={st.preset} onChange={(e) => (e.target.value in KINETO_PRESETS ? ms.loadPreset(e.target.value) : store.loadPreset(e.target.value as ShaftPresetKey))}>
+                <PresetOptions items={[...taskEntries(SHAFT_PRESETS), ...taskEntries(KINETO_PRESETS)]} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -81,7 +85,18 @@ export function ShaftView({ chrome, store }: { chrome: Chrome; store: ShaftStore
               {pr.drive ? (
                 <>
                   <Num id="d-M" label={`M, ${pr.byWeight ? 'кГ·м' : 'Н·м'}`} value={pr.drive.M} neg zero onType={(v) => store.typeDrive('M', v)} onEnd={end('d:M')} />
-                  <Num id="d-t" label="момент τ, с" value={pr.drive.t} zero onType={(v) => store.typeDrive('t', v)} onEnd={end('d:t')} />
+                  <label className="sfield">
+                    <span>момент задан</span>
+                    <select id="dby" value={pr.drive.angle === undefined ? 'time' : 'angle'} onChange={(e) => store.setDriveBy(e.target.value === 'angle')}>
+                      <option value="time">временем τ</option>
+                      <option value="angle">углом поворота φ</option>
+                    </select>
+                  </label>
+                  {pr.drive.angle === undefined ? (
+                    <Num id="d-t" label="момент τ, с" value={pr.drive.t} zero onType={(v) => store.typeDrive('t', v)} onEnd={end('d:t')} />
+                  ) : (
+                    <Num id="d-angle" label="угол поворота φ, °" value={pr.drive.angle} zero onType={(v) => store.typeAngle(v)} onEnd={end('d:angle')} />
+                  )}
                   <Num id="d-omega0" label="ω₀, рад/с" value={pr.drive.omega0} neg zero onType={(v) => store.typeDrive('omega0', v)} onEnd={end('d:omega0')} />
                 </>
               ) : (
@@ -144,7 +159,7 @@ export function ShaftView({ chrome, store }: { chrome: Chrome; store: ShaftStore
                 + часть
               </button>
             </div>
-            <p className="empty">Положение части — её центр масс в осях x, y, z; ось части — ось симметрии (у стержня — направление). Длины — в метрах.{pr.drive ? ' Пара сил M действует в плоскости, перпендикулярной оси z; ε = M/J_z, ω = ω₀ + ετ.' : ''}</p>
+            <p className="empty">Положение части — её центр масс в осях x, y, z; ось части — ось симметрии (у стержня — направление). Длины — в метрах.{pr.drive ? ' Пара сил M действует в плоскости, перпендикулярной оси z; ε = M/J_z, ω = ω₀ + ετ (или ω² = ω₀² + 2εφ).' : ''}</p>
           </section>
           <section className="panel" aria-label="Решение">
             <div className="sol-head">

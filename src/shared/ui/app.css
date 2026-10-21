@@ -913,3 +913,22 @@ body[data-wstep="2"] .item[data-kind="load"],body[data-wstep="3"] .item[data-kin
 .ce-lf{fill:var(--react)}
 .ce-lm{fill:var(--load)}
 .ce-phi input[type="range"]{width:100%;accent-color:var(--react)}
+
+/* Каталог машин (Мещерский §41, 46): схемы и переключатель режима вкладки */
+.mc-body{fill:none;stroke:var(--ink);stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
+.mc-fill{fill:var(--paper)}
+.mc-pin{fill:var(--sheet);stroke:var(--ink);stroke-width:1.8}
+.mc-ground{stroke:var(--ink);stroke-width:2.4;fill:none}
+.mc-hatch{stroke:var(--ink-3);stroke-width:1.4}
+.mc-axis{stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:10 5 2 5;fill:none}
+.mc-thread{stroke:var(--ink-2);stroke-width:1.4;fill:none}
+.mc-liquid{fill:var(--react);fill-opacity:.18;stroke:var(--react);stroke-width:1.6}
+.mc-force{stroke:var(--load);stroke-width:2.4;fill:none}
+.mc-force-f{fill:var(--load)}
+.mc-inert{stroke:var(--warn);stroke-width:2.4;fill:none;stroke-dasharray:7 4}
+.mc-inert-f{fill:var(--warn)}
+.mc-react{stroke:var(--react);stroke-width:2.4;fill:none}
+.mc-react-f{fill:var(--react)}
+.mc-t{font-family:"PT Serif",Georgia,serif;font-style:italic;font-size:17px;fill:var(--ink);paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
+.mc-mode{align-self:flex-end}
+.mc-kind{min-width:260px;max-width:420px}

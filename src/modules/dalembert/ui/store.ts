@@ -35,7 +35,7 @@ export function parseShaft(raw: unknown): { ok: true; problem: ShaftProblem } | 
   const p = parseInertia({ parts: raw.parts, A: [0, 0, 0], axis: [0, 0, 1], byWeight: raw.byWeight });
   if (!p.ok) return p;
   const d = raw.drive;
-  if (d != null && !(isObj(d) && DRIVE_KEYS.every((k) => isNum(d[k])) && (d.t as number) >= 0)) return { ok: false, errors: ['Вращение под действием пары: числа M, t ≥ 0 и omega0.'] };
+  if (d != null && !(isObj(d) && DRIVE_KEYS.every((k) => isNum(d[k])) && (d.t as number) >= 0 && (d.angle === undefined || (isNum(d.angle) && d.angle >= 0)))) return { ok: false, errors: ['Вращение под действием пары: числа M, t ≥ 0, omega0 и (необязательно) angle ≥ 0.'] };
   return {
     ok: true,
     problem: {
@@ -46,7 +46,7 @@ export function parseShaft(raw: unknown): { ok: true; problem: ShaftProblem } | 
       zB: raw.zB as number,
       omega: raw.omega as number,
       eps: raw.eps as number,
-      ...(isObj(d) ? { drive: { M: d.M as number, t: d.t as number, omega0: d.omega0 as number } } : {}),
+      ...(isObj(d) ? { drive: { M: d.M as number, t: d.t as number, omega0: d.omega0 as number, ...(isNum(d.angle) ? { angle: d.angle } : {}) } } : {}),
     },
   };
 }
@@ -133,6 +133,21 @@ export class ShaftStore {
       if (on) p.drive = { M: 1, t: 1, omega0: 0 };
       else delete p.drive;
     });
+  };
+  /** Рассматриваемый момент вращения под парой: по времени τ или по углу поворота φ (Яблонский, Д.16). */
+  setDriveBy = (angle: boolean) => {
+    const d = this.st.problem.drive;
+    if (!d || angle === (d.angle !== undefined)) return;
+    this.commit();
+    this.edit((p) => {
+      if (angle) p.drive!.angle = 90;
+      else delete p.drive!.angle;
+    });
+  };
+  typeAngle = (v: number) => {
+    if (!this.st.problem.drive) return;
+    this.touch('d:angle');
+    this.edit((p) => (p.drive!.angle = v));
   };
   typeDrive = (key: DriveKey, v: number) => {
     if (!this.st.problem.drive) return;
