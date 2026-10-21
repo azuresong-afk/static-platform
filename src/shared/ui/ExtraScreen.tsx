@@ -23,7 +23,7 @@ export interface ExtraHostState {
 export interface ExtraHost {
   get(): ExtraHostState;
   subscribe(fn: () => void): () => void;
-  setAsk(id: string): void;
+  setXAsk(id: string): void;
   typeNum(k: string, v: number): void;
   typeText(k: string, s: string): void;
   pick(k: string, v: string): void;
@@ -132,7 +132,7 @@ export function ExtraScreen({
             <h2>Задача</h2>
             <label className="field">
               <span>Вопрос</span>
-              <select id={`${prefix}xask`} value={ask.id} onChange={(e) => host.setAsk(e.target.value)}>
+              <select id={`${prefix}xask`} value={ask.id} onChange={(e) => host.setXAsk(e.target.value)}>
                 {asks.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.title}

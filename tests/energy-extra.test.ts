@@ -102,7 +102,7 @@ describe('независимая проверка', () => {
   });
   it('38.51: ω(t) удовлетворяет J·dω/dt = M₀ − αω − M_тр·R/r', () => {
     const p = ENERGY_EXTRA_PRESETS.x3851.problem;
-    const n = { ...p.n, Mfr: 0.2 };
+    const n: Record<string, number> = { ...p.n, Mfr: 0.2 };
     const c = jw({ hypo: false, P: n.P, Q: n.Q, R: n.R, r: n.r, M0: n.M0, alpha: n.alpha, Mfr: n.Mfr, w0: 0, t: 0, byWeight: false });
     const r = rk4((_t, y) => [(n.M0 - n.alpha * y[0] - (n.Mfr * n.R) / n.r) / c.J], [0], 0, 1, 2000);
     const out = solveExtra(ENERGY_ASKS, { ...p, n }, false);
@@ -143,7 +143,7 @@ describe('состояние: задачи пункта 24', () => {
     st.loadPreset('x3835');
     st.typeNum('h', 0.25);
     expect(st.get().extra.n.h).toBe(0.25);
-    st.setAsk('table');
+    st.setXAsk('table');
     expect(st.get().extra.ask).toBe('table');
     st.undo();
     expect(st.get().extra.ask).toBe('rod');

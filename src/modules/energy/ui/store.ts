@@ -127,7 +127,7 @@ export class EnergyStore {
     fn(x);
     this.set({ extra: x });
   }
-  setAsk = (id: string) => {
+  setXAsk = (id: string) => {
     this.commit();
     this.set({ extra: extraProblem(findAsk(ENERGY_ASKS, id)) });
   };
