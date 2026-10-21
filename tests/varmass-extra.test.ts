@@ -141,7 +141,7 @@ describe('состояние: задачи пункта 24', () => {
   });
   it('смена вопроса не ломает ступени ракеты (setAsk — старый, setXAsk — новый)', () => {
     const st = new VmStore();
-    st.loadPreset('x455');
+    st.loadPreset('x456');
     st.setXAsk('rotor');
     expect(st.get().extra.ask).toBe('rotor');
     st.setAsk('z');
@@ -155,7 +155,7 @@ describe('состояние: задачи пункта 24', () => {
     delete file.extra;
     delete file.view;
     const st2 = new VmStore();
-    st2.loadPreset('x455');
+    st2.loadPreset('x456');
     expect(st2.importProject(JSON.stringify(file))).toBe(true);
     expect(st2.get().view).toBe('main');
   });
