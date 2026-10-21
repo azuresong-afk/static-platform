@@ -16,10 +16,34 @@ import { taskEntries } from '../../../shared/tasks';
 import { ModeSwitch } from '../../../shared/machines/MachineView';
 import type { MachineStore } from '../../../shared/machines/store';
 import { KINETO_PRESETS } from '../machines';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { SHAFT_ASKS } from '../model/extra';
+import { SHAFT_EXTRA_PRESETS, type ShaftExtraKey } from '../extraPresets';
+
+const ALL_PRESETS = { ...SHAFT_PRESETS, ...SHAFT_EXTRA_PRESETS };
 
 const AX = ['x', 'y', 'z'];
 
 export function ShaftView({ chrome, store, ms }: { chrome: Chrome; store: ShaftStore; ms: MachineStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={SHAFT_ASKS}
+        presets={ALL_PRESETS}
+        prefix="d"
+        heading="Принцип Даламбера: пластинка, вращающаяся вокруг оси в своей плоскости"
+        lede="Однородная пластинка-многоугольник вращается вокруг оси, лежащей в её плоскости: боковые давления на опоры и угловая скорость, при которой давление на опору обращается в нуль."
+        mainLabel="тело на оси вращения"
+        tabName="Принцип Даламбера"
+      />
+    );
+  return <ShaftMain chrome={chrome} store={store} ms={ms} />;
+}
+
+function ShaftMain({ chrome, store, ms }: { chrome: Chrome; store: ShaftStore; ms: MachineStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const r = useMemo(() => solveShaft(pr), [pr]);
@@ -40,8 +64,8 @@ export function ShaftView({ chrome, store, ms }: { chrome: Chrome; store: ShaftS
             <ModeSwitch ms={ms} base="Вращающееся тело" />
             <label className="preset">
               Готовая задача
-              <select id="dpreset" value={st.preset} onChange={(e) => (e.target.value in KINETO_PRESETS ? ms.loadPreset(e.target.value) : store.loadPreset(e.target.value as ShaftPresetKey))}>
-                <PresetOptions items={[...taskEntries(SHAFT_PRESETS), ...taskEntries(KINETO_PRESETS)]} />
+              <select id="dpreset" value={st.preset} onChange={(e) => (e.target.value in KINETO_PRESETS ? ms.loadPreset(e.target.value) : store.loadPreset(e.target.value as ShaftPresetKey | ShaftExtraKey))}>
+                <PresetOptions items={[...taskEntries(ALL_PRESETS), ...taskEntries(KINETO_PRESETS)]} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -71,6 +95,11 @@ export function ShaftView({ chrome, store, ms }: { chrome: Chrome; store: ShaftS
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Тело">
+            <div className="segbtns">
+              <button type="button" id="dto-extra" onClick={() => store.xhost.setView('extra')}>
+                Пластинка, вращающаяся вокруг оси в своей плоскости →
+              </button>
+            </div>
             <h2>Ось и вращение</h2>
             <div className="cgpar cg0">
               <Num id="d-zA" label="подпятник A: z" value={pr.zA} neg zero onType={(v) => store.typeTop('zA', v)} onEnd={end('t:zA')} />

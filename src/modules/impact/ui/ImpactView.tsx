@@ -12,6 +12,11 @@ import { solveImpact, type After, type Before, type BodyKind, type ImpBody, type
 import { IMP_PRESETS, type ImpPresetKey } from '../presets';
 import { impactDoc } from '../text/solution';
 import { AFTER_OF, BEFORE_OF, INERTIA_OF, type BodyNumKey, type ImpStore, type TopNumKey } from './store';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { IMPACT_ASKS } from '../model/extra';
+import { IMP_EXTRA_PRESETS, type ImpExtraKey } from '../extraPresets';
+
+const ALL_PRESETS = { ...IMP_PRESETS, ...IMP_EXTRA_PRESETS };
 
 const KIND_T: Record<BodyKind, string> = { free: 'свободное тело', axis: 'тело на неподвижной оси', wall: 'неподвижная преграда' };
 const INERTIA_T: Record<Inertia, string> = {
@@ -44,6 +49,25 @@ const AFTER_T: Record<After, string> = {
 };
 
 export function ImpactView({ chrome, store }: { chrome: Chrome; store: ImpStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={IMPACT_ASKS}
+        presets={ALL_PRESETS}
+        prefix="im"
+        heading="Удар: обратные задачи о соударении шаров"
+        lede="Отношение масс, при котором шар после удара останавливается; масса среднего из трёх шаров для наибольшей передачи скорости; углы падения и отражения по отношению скоростей; прицеливание третьего шара."
+        mainLabel="соударение тел"
+        tabName="Удар"
+      />
+    );
+  return <ImpactViewMain chrome={chrome} store={store} />;
+}
+
+function ImpactViewMain({ chrome, store }: { chrome: Chrome; store: ImpStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const s = st.problem;
   const out = useMemo(() => {
@@ -179,8 +203,8 @@ export function ImpactView({ chrome, store }: { chrome: Chrome; store: ImpStore 
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="imppreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as ImpPresetKey)}>
-                <PresetOptions items={taskEntries(IMP_PRESETS)} />
+              <select id="imppreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as ImpPresetKey | ImpExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -210,6 +234,11 @@ export function ImpactView({ chrome, store }: { chrome: Chrome; store: ImpStore 
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <div className="segbtns">
+              <button type="button" id="imto-extra" onClick={() => store.xhost.setView('extra')}>
+                Обратные задачи о соударении шаров →
+              </button>
+            </div>
             <h2>Задача</h2>
             <label className="field">
               <span>Что ищем</span>

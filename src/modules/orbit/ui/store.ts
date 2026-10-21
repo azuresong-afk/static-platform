@@ -1,4 +1,8 @@
 /** Состояние вкладки «Тяготение и орбиты»: небесное тело, орбита, движение по прямой; история отмены, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
+import { ORBIT_ASKS } from '../model/extra';
+import { ORB_EXTRA_PRESETS, type OrbExtraKey } from '../extraPresets';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -79,8 +83,10 @@ const BODY_KEYS = [...Object.keys(BODIES), 'ratio', 'custom'];
 
 export interface OrbStoreState {
   problem: OrbState;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: OrbPresetKey | 'custom';
+  preset: OrbPresetKey | OrbExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -88,6 +94,8 @@ export interface OrbStoreState {
 }
 interface Snap {
   problem: OrbState;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: OrbStoreState['preset'];
 }
@@ -166,7 +174,7 @@ export class OrbStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: OrbPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm5022';
-    this.st = { problem: presetState(k), title: ORB_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { extra: structuredClone(ORB_EXTRA_PRESETS.x5007.problem), view: 'main', problem: presetState(k), title: ORB_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): OrbStoreState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -177,7 +185,7 @@ export class OrbStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -191,10 +199,16 @@ export class OrbStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: OrbPresetKey) => {
+  loadPreset = (k: OrbPresetKey | OrbExtraKey) => {
     this.commit();
-    this.set({ problem: presetState(k, this.st.problem), title: ORB_PRESETS[k].title, preset: k });
+    if (k in ORB_EXTRA_PRESETS) {
+      const e = ORB_EXTRA_PRESETS[k as OrbExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    this.set({ problem: presetState(k as OrbPresetKey, this.st.problem), view: 'main', title: ORB_PRESETS[k as OrbPresetKey].title, preset: k });
   };
+  /** Второй экран (пункт 28): выводы формул §50, стыковка, оптимальная орбита, метеориты. */
+  xhost = extraHost(ORBIT_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   setMode = (m: OrbMode) => {
     if (m === this.st.problem.mode) return;
     this.commit();
@@ -266,7 +280,7 @@ export class OrbStore {
   projectTitle = () => this.st.title;
   exportProject = (now = new Date()) => ({
     name: projectFileName(this.st.title, now),
-    text: writeEnvelope(ORBIT_MODULE, this.st.title, { problem: this.st.problem }, now),
+    text: writeEnvelope(ORBIT_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now),
   });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
@@ -274,10 +288,11 @@ export class OrbStore {
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== ORBIT_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseOrb(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, ORBIT_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Тяготение и орбиты';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

@@ -1,4 +1,8 @@
 /** Состояние вкладки «Вращение тела»: уравнение вращения или сохранение кинетического момента; отмена, файл. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
+import { ROT_ASKS } from '../model/extra';
+import { ROT_EXTRA_PRESETS, type RotExtraKey } from '../extraPresets';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -14,8 +18,10 @@ export type KNumKey = (typeof K_NUM)[number];
 
 export interface RotState {
   problem: RotProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: RotPresetKey | 'custom';
+  preset: RotPresetKey | RotExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -23,6 +29,8 @@ export interface RotState {
 }
 interface Snap {
   problem: RotProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: RotState['preset'];
 }
@@ -55,7 +63,7 @@ export class RotStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: RotPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm3745';
-    this.st = { problem: copy(ROT_PRESETS[k].problem as RotProblem), title: ROT_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { extra: structuredClone(ROT_EXTRA_PRESETS.x3725.problem), view: 'main', problem: copy(ROT_PRESETS[k].problem as RotProblem), title: ROT_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): RotState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -66,7 +74,7 @@ export class RotStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -80,10 +88,16 @@ export class RotStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: RotPresetKey) => {
+  loadPreset = (k: RotPresetKey | RotExtraKey) => {
     this.commit();
-    this.set({ problem: copy(ROT_PRESETS[k].problem as RotProblem), title: ROT_PRESETS[k].title, preset: k });
+    if (k in ROT_EXTRA_PRESETS) {
+      const e = ROT_EXTRA_PRESETS[k as RotExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    this.set({ problem: copy(ROT_PRESETS[k as RotPresetKey].problem as RotProblem), view: 'main', title: ROT_PRESETS[k as RotPresetKey].title, preset: k });
   };
+  /** Второй экран (пункт 28): магнит, физический маятник, человек на канате, муфта и ремень. */
+  xhost = extraHost(ROT_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   setMode = (mode: RotProblem['mode']) => {
     if (mode === this.st.problem.mode) return;
     this.commit();
@@ -161,17 +175,18 @@ export class RotStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(ROT_MODULE, this.st.title, { problem: this.st.problem }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(ROT_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== ROT_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseRot(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, ROT_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Вращение тела';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

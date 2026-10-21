@@ -1,4 +1,8 @@
 /** Состояние вкладки «Удар»: два тела, контакт, вопрос задачи; история отмены, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
+import { IMPACT_ASKS } from '../model/extra';
+import { IMP_EXTRA_PRESETS, type ImpExtraKey } from '../extraPresets';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -29,8 +33,10 @@ export const INERTIA_OF: Record<BodyKind, Inertia[]> = {
 
 export interface ImpState {
   problem: ImpProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: ImpPresetKey | 'custom';
+  preset: ImpPresetKey | ImpExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -38,6 +44,8 @@ export interface ImpState {
 }
 interface Snap {
   problem: ImpProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: ImpState['preset'];
 }
@@ -97,7 +105,7 @@ export class ImpStore {
   constructor(opts: { preset?: ImpPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm4410';
     this.st = {
-      problem: copy(IMP_PRESETS[k].problem),
+      extra: structuredClone(IMP_EXTRA_PRESETS.x4408a.problem), view: 'main', problem: copy(IMP_PRESETS[k].problem),
       title: IMP_PRESETS[k].title,
       preset: k,
       canUndo: false,
@@ -115,7 +123,7 @@ export class ImpStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -130,10 +138,16 @@ export class ImpStore {
     this.set({ problem: p });
   }
   private body = (p: ImpProblem, i: number) => (i === 0 ? p.b1 : p.b2);
-  loadPreset = (k: ImpPresetKey) => {
+  loadPreset = (k: ImpPresetKey | ImpExtraKey) => {
     this.commit();
-    this.set({ problem: copy(IMP_PRESETS[k].problem), title: IMP_PRESETS[k].title, preset: k });
+    if (k in IMP_EXTRA_PRESETS) {
+      const e = IMP_EXTRA_PRESETS[k as ImpExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    this.set({ problem: copy(IMP_PRESETS[k as ImpPresetKey].problem), view: 'main', title: IMP_PRESETS[k as ImpPresetKey].title, preset: k });
   };
+  /** Второй экран (пункт 28): обратные задачи о соударении шаров. */
+  xhost = extraHost(IMPACT_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   typeTop = (key: TopNumKey, v: number) => {
     this.touch(`t:${key}`);
     this.edit((p) => (p[key] = v));
@@ -209,7 +223,7 @@ export class ImpStore {
   projectTitle = () => this.st.title;
   exportProject = (now = new Date()) => ({
     name: projectFileName(this.st.title, now),
-    text: writeEnvelope(IMPACT_MODULE, this.st.title, { problem: this.st.problem }, now),
+    text: writeEnvelope(IMPACT_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now),
   });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
@@ -217,10 +231,11 @@ export class ImpStore {
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== IMPACT_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseImpact(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, IMPACT_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Удар';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

@@ -16,6 +16,11 @@ import { ORB_PRESETS, type OrbMode, type OrbPresetKey } from '../presets';
 import { LEN, orbitDoc, planetDoc, radialDoc } from '../text/solution';
 import { trajDoc } from '../text/traj';
 import type { OrbitNumKey, OrbStore, PlanetNumKey, RadialNumKey, TrajNumKey } from './store';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { ORBIT_ASKS } from '../model/extra';
+import { ORB_EXTRA_PRESETS, type OrbExtraKey } from '../extraPresets';
+
+const ALL_PRESETS = { ...ORB_PRESETS, ...ORB_EXTRA_PRESETS };
 
 type Kind = 'any' | 'pos' | 'nonneg';
 const HINT: Record<OrbMode, string> = {
@@ -26,6 +31,25 @@ const HINT: Record<OrbMode, string> = {
 };
 
 export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={ORBIT_ASKS}
+        presets={ALL_PRESETS}
+        prefix="ob"
+        heading="Тяготение и орбиты: формулы §50 на числах, стыковка, оптимальная орбита"
+        lede="Интеграл энергии, коническое сечение, постоянная энергии через элементы и третий закон Кеплера — выводы, проверенные на числах; стыковка спутников на касающихся орбитах, радиус круговой орбиты для выхода на гиперболу с наименьшим импульсом, метеориты на одном эллипсе."
+        mainLabel="движение в поле тяготения"
+        tabName="Тяготение и орбиты"
+      />
+    );
+  return <OrbitViewMain chrome={chrome} store={store} />;
+}
+
+function OrbitViewMain({ chrome, store }: { chrome: Chrome; store: OrbStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const s = st.problem;
   const out = useMemo(() => {
@@ -153,8 +177,8 @@ export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="orbpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as OrbPresetKey)}>
-                <PresetOptions items={taskEntries(ORB_PRESETS)} />
+              <select id="orbpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as OrbPresetKey | OrbExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -184,6 +208,11 @@ export function OrbitView({ chrome, store }: { chrome: Chrome; store: OrbStore }
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <div className="segbtns">
+              <button type="button" id="obto-extra" onClick={() => store.xhost.setView('extra')}>
+                Формулы §50, стыковка, оптимальная орбита →
+              </button>
+            </div>
             <h2>Задача</h2>
             <label className="field">
               <span>Что решаем</span>

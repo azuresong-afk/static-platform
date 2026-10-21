@@ -12,6 +12,11 @@ import { solveBody, type BodyProblem, type ConstrKind, type Shape } from '../mod
 import { BODY_PRESETS, type BodyPresetKey } from '../presets';
 import { bodyDoc } from '../text/solution';
 import type { BodyNumKey, BodyStore } from './store';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { BODY_ASKS } from '../model/extra';
+import { BODY_EXTRA_PRESETS, type BodyExtraKey } from '../extraPresets';
+
+const ALL_PRESETS = { ...BODY_PRESETS, ...BODY_EXTRA_PRESETS };
 
 const SHAPES: [Shape, string][] = [
   ['rod', 'однородный стержень'],
@@ -30,6 +35,25 @@ const KINDS: [ConstrKind, string][] = [
 ];
 
 export function BodyView({ chrome, store }: { chrome: Chrome; store: BodyStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={BODY_ASKS}
+        presets={ALL_PRESETS}
+        prefix="b"
+        heading="Плоское движение: кинетический момент, свободное тело, задачи в несколько этапов"
+        lede="Кинетический момент тел в плоском движении относительно оси, свободное движение тела по начальным условиям (в том числе с моментом сопротивления), стержень, освобождённый в горизонтальном положении, стержень у стены после отхода от неё, замена массы стержня точечными массами."
+        mainLabel="реакции при плоском движении"
+        tabName="Реакции при плоском движении"
+      />
+    );
+  return <BodyViewMain chrome={chrome} store={store} />;
+}
+
+function BodyViewMain({ chrome, store }: { chrome: Chrome; store: BodyStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const s = st.problem;
   const out = useMemo(() => {
@@ -57,8 +81,8 @@ export function BodyView({ chrome, store }: { chrome: Chrome; store: BodyStore }
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="pbpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as BodyPresetKey)}>
-                <PresetOptions items={taskEntries(BODY_PRESETS)} />
+              <select id="pbpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as BodyPresetKey | BodyExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -88,6 +112,11 @@ export function BodyView({ chrome, store }: { chrome: Chrome; store: BodyStore }
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <div className="segbtns">
+              <button type="button" id="bto-extra" onClick={() => store.xhost.setView('extra')}>
+                Кинетический момент, свободное тело, несколько этапов →
+              </button>
+            </div>
             <h2>Задача</h2>
             <label className="field">
               <span>Что решаем</span>

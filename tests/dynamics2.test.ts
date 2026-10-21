@@ -6,12 +6,30 @@ import { POINT_EXTRA_ASKS } from '../src/modules/pointdyn/model/extra';
 import { POINT_EXTRA_PRESETS } from '../src/modules/pointdyn/extraPresets';
 import { OSC_ASKS } from '../src/modules/oscillation/model/extra';
 import { OSC_EXTRA_PRESETS } from '../src/modules/oscillation/extraPresets';
+import { ROT_ASKS } from '../src/modules/rotation/model/extra';
+import { ROT_EXTRA_PRESETS } from '../src/modules/rotation/extraPresets';
+import { BODY_ASKS } from '../src/modules/planebody/model/extra';
+import { BODY_EXTRA_PRESETS } from '../src/modules/planebody/extraPresets';
+import { IMPACT_ASKS } from '../src/modules/impact/model/extra';
+import { IMP_EXTRA_PRESETS } from '../src/modules/impact/extraPresets';
+import { ORBIT_ASKS } from '../src/modules/orbit/model/extra';
+import { ORB_EXTRA_PRESETS } from '../src/modules/orbit/extraPresets';
+import { SHAFT_ASKS } from '../src/modules/dalembert/model/extra';
+import { SHAFT_EXTRA_PRESETS } from '../src/modules/dalembert/extraPresets';
+import { INERTIA_ASKS } from '../src/modules/inertia/model/extra';
+import { INERTIA_EXTRA_PRESETS } from '../src/modules/inertia/extraPresets';
 
 const near = (got: number, book: number, rel: number) => Math.abs(got - book) <= rel * Math.abs(book) + 1e-12;
 type P = Record<string, { title: string; problem: ExtraProblem; book: Record<string, number>; relTol: number }>;
 const SETS: [string, AskDef[], P][] = [
   ['Динамика точки', POINT_EXTRA_ASKS, POINT_EXTRA_PRESETS],
   ['Удар и колебания', OSC_ASKS, OSC_EXTRA_PRESETS],
+  ['Вращение тела', ROT_ASKS, ROT_EXTRA_PRESETS],
+  ['Реакции при плоском движении', BODY_ASKS, BODY_EXTRA_PRESETS],
+  ['Удар', IMPACT_ASKS, IMP_EXTRA_PRESETS],
+  ['Тяготение и орбиты', ORBIT_ASKS, ORB_EXTRA_PRESETS],
+  ['Принцип Даламбера', SHAFT_ASKS, SHAFT_EXTRA_PRESETS],
+  ['Геометрия масс', INERTIA_ASKS, INERTIA_EXTRA_PRESETS],
 ];
 
 for (const [name, asks, presets] of SETS)

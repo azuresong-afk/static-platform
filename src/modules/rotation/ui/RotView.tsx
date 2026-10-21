@@ -12,6 +12,11 @@ import { eqDoc, kDoc } from '../text/solution';
 import type { EqNumKey, KNumKey, RotStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { ROT_ASKS } from '../model/extra';
+import { ROT_EXTRA_PRESETS, type RotExtraKey } from '../extraPresets';
+
+const ALL_PRESETS = { ...ROT_PRESETS, ...ROT_EXTRA_PRESETS };
 
 const BODY: [InertiaKind, string][] = [
   ['J', 'момент инерции J задан'],
@@ -32,6 +37,25 @@ const TERMS: [EqNumKey, string][] = [
 ];
 
 export function RotView({ chrome, store }: { chrome: Chrome; store: RotStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={ROT_ASKS}
+        presets={ALL_PRESETS}
+        prefix="r"
+        heading="Вращение тела: магнит, физический маятник, канат через блок, муфта и ремень"
+        lede="Колебания магнита в поле, физический маятник с наклонной осью и добавленной массой (центр качаний), человек на канате через блок — сохранение кинетического момента, соединение дисков муфтой и шкивов ремнём."
+        mainLabel="вращение вокруг оси и передачи"
+        tabName="Вращение тела"
+      />
+    );
+  return <RotViewMain chrome={chrome} store={store} />;
+}
+
+function RotViewMain({ chrome, store }: { chrome: Chrome; store: RotStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const out = useMemo(() => {
@@ -57,8 +81,8 @@ export function RotView({ chrome, store }: { chrome: Chrome; store: RotStore }) 
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="rpreset" value={st.preset} onChange={(ev) => store.loadPreset(ev.target.value as RotPresetKey)}>
-                <PresetOptions items={taskEntries(ROT_PRESETS)} />
+              <select id="rpreset" value={st.preset} onChange={(ev) => store.loadPreset(ev.target.value as RotPresetKey | RotExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -88,6 +112,11 @@ export function RotView({ chrome, store }: { chrome: Chrome; store: RotStore }) 
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <div className="segbtns">
+              <button type="button" id="rto-extra" onClick={() => store.xhost.setView('extra')}>
+                Магнит, физический маятник, канат через блок, муфта и ремень →
+              </button>
+            </div>
             <h2>Задача</h2>
             <label className="field">
               <span>Раздел</span>

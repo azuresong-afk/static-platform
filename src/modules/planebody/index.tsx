@@ -4,6 +4,7 @@ import { BodyStore, BODY_MODULE } from './ui/store';
 import { BodyView } from './ui/BodyView';
 import { taskEntries } from '../../shared/tasks';
 import { BODY_PRESETS, type BodyPresetKey } from './presets';
+import { BODY_EXTRA_PRESETS, type BodyExtraKey } from './extraPresets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -38,7 +39,7 @@ export function createPlaneBodyModule(): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
-    tasks: taskEntries(BODY_PRESETS),
-    loadTask: (k) => store.loadPreset(k as BodyPresetKey),
+    tasks: taskEntries({ ...BODY_PRESETS, ...BODY_EXTRA_PRESETS }),
+    loadTask: (k) => store.loadPreset(k as BodyPresetKey | BodyExtraKey),
   };
 }
