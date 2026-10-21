@@ -18,6 +18,8 @@ import { SHAFT_ASKS } from '../src/modules/dalembert/model/extra';
 import { SHAFT_EXTRA_PRESETS } from '../src/modules/dalembert/extraPresets';
 import { INERTIA_ASKS } from '../src/modules/inertia/model/extra';
 import { INERTIA_EXTRA_PRESETS } from '../src/modules/inertia/extraPresets';
+import { MC_ASKS } from '../src/modules/masscenter/model/extra';
+import { MC_EXTRA_PRESETS } from '../src/modules/masscenter/extraPresets';
 
 const near = (got: number, book: number, rel: number) => Math.abs(got - book) <= rel * Math.abs(book) + 1e-12;
 type P = Record<string, { title: string; problem: ExtraProblem; book: Record<string, number>; relTol: number }>;
@@ -30,6 +32,7 @@ const SETS: [string, AskDef[], P][] = [
   ['Тяготение и орбиты', ORBIT_ASKS, ORB_EXTRA_PRESETS],
   ['Принцип Даламбера', SHAFT_ASKS, SHAFT_EXTRA_PRESETS],
   ['Геометрия масс', INERTIA_ASKS, INERTIA_EXTRA_PRESETS],
+  ['Центр масс', MC_ASKS, MC_EXTRA_PRESETS],
 ];
 
 for (const [name, asks, presets] of SETS)

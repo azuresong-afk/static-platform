@@ -17,6 +17,11 @@ import { pointsDoc, shiftDoc, wheelDoc } from '../text/solution';
 import type { LoadNumKey, McMode, McStore, WheelNumKey } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { MC_ASKS } from '../model/extra';
+import { MC_EXTRA_PRESETS, type McExtraKey } from '../extraPresets';
+
+const ALL_PRESETS = { ...MC_PRESETS, ...MC_EXTRA_PRESETS };
 
 const MODES: [McMode, string][] = [
   ['points', 'система точек: центр масс и внешние силы'],
@@ -36,6 +41,25 @@ const HINT: Record<McMode, string> = {
 };
 
 export function McView({ chrome, store }: { chrome: Chrome; store: McStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={MC_ASKS}
+        presets={ALL_PRESETS}
+        prefix="mc"
+        heading="Центр масс: работа, тележка с грузом, тела на призме, внутреннее торможение, предельное качение"
+        lede="Работа на опрокидывание и потенциальная энергия маятника, крановая тележка с колеблющимся грузом, тело 3 с движущимися по нему телами (гладкая и шероховатая плоскость), торможение внутренними силами с трением об опору, сила P, при которой колесо катится на грани скольжения."
+        mainLabel="центр масс, колесо, работа и количество движения"
+        tabName="Центр масс"
+      />
+    );
+  return <McViewMain chrome={chrome} store={store} />;
+}
+
+function McViewMain({ chrome, store }: { chrome: Chrome; store: McStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const s = st.problem;
   const out = useMemo(() => {
@@ -83,8 +107,8 @@ export function McView({ chrome, store }: { chrome: Chrome; store: McStore }) {
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="mpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as McPresetKey)}>
-                <PresetOptions items={taskEntries(MC_PRESETS)} />
+              <select id="mpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as McPresetKey | McExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -114,6 +138,11 @@ export function McView({ chrome, store }: { chrome: Chrome; store: McStore }) {
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <div className="segbtns">
+              <button type="button" id="mcto-extra" onClick={() => store.xhost.setView('extra')}>
+                Работа, тележка, призма, торможение, качение →
+              </button>
+            </div>
             <h2>Задача</h2>
             <label className="field">
               <span>Что решаем</span>
