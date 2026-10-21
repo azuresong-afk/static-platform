@@ -17,6 +17,9 @@ import type { RelProblem } from '../model/rel';
 import { FINDS, type SpinProblem } from '../model/spin';
 import type { SurfProblem } from '../model/surf';
 import type { StageProblem } from '../model/stages';
+import { extraProblem, findAsk, parseExtra, type ExtraProblem } from '../../../shared/extra';
+import { POINT_EXTRA_ASKS } from '../model/extra';
+import { POINT_EXTRA_PRESETS, type PointExtraKey } from '../extraPresets';
 import type { ImpulseProblem } from '../model/impulse';
 import {
   CIRCLE_PRESETS,
@@ -91,8 +94,11 @@ export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey | Ci
 
 export interface PointState {
   problem: PointTask;
+  /** Задачи пункта 24 (сила по пути и скорости, несколько центров, баллистика) и какой экран показан. */
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
-  preset: AnyPresetKey | 'custom';
+  preset: AnyPresetKey | PointExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -100,6 +106,8 @@ export interface PointState {
 }
 interface Snap {
   problem: PointTask;
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
   preset: PointState['preset'];
 }
@@ -249,7 +257,7 @@ export class PointStore {
   constructor(opts: { preset?: AnyPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm277';
     const { task, title } = presetTask(k);
-    this.st = { problem: task, title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { problem: task, extra: copy(POINT_EXTRA_PRESETS.x2765.problem), view: 'main', title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): PointState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -260,7 +268,7 @@ export class PointStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -274,10 +282,39 @@ export class PointStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: AnyPresetKey) => {
+  loadPreset = (k: AnyPresetKey | PointExtraKey) => {
     this.commit();
-    const { task, title } = presetTask(k, this.st.problem);
-    this.set({ problem: task, title, preset: k });
+    if (k in POINT_EXTRA_PRESETS) {
+      const e = POINT_EXTRA_PRESETS[k as PointExtraKey];
+      return this.set({ extra: copy(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    const { task, title } = presetTask(k as AnyPresetKey, this.st.problem);
+    this.set({ problem: task, view: 'main', title, preset: k });
+  };
+  /* задачи пункта 24 */
+  setView = (view: 'main' | 'extra') => {
+    if (view !== this.st.view) this.set({ view });
+  };
+  private editX(fn: (x: ExtraProblem) => void) {
+    const x = copy(this.st.extra);
+    fn(x);
+    this.set({ extra: x });
+  }
+  setXAsk = (id: string) => {
+    this.commit();
+    this.set({ extra: extraProblem(findAsk(POINT_EXTRA_ASKS, id)) });
+  };
+  typeXNum = (k: string, v: number) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.n[k] = v));
+  };
+  typeXText = (k: string, s: string) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.s[k] = s.slice(0, 300)));
+  };
+  pick = (k: string, v: string) => {
+    this.commit();
+    this.editX((x) => (x.s[k] = v));
   };
   setMode = (mode: PointMode) => {
     if (mode === this.st.problem.mode) return;
@@ -419,17 +456,19 @@ export class PointStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(POINT_MODULE, this.st.title, { problem: this.st.problem }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(POINT_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== POINT_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parsePoint(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const ex = parseExtra(env.raw.extra, POINT_EXTRA_ASKS);
+    const view = env.raw.view === 'extra' && ex ? 'extra' : 'main';
+    if (!r.ok && !(view === 'extra' && ex)) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Динамика точки';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: ex ?? this.st.extra, view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

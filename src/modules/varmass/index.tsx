@@ -4,6 +4,7 @@ import { VmStore, VARMASS_MODULE } from './ui/store';
 import { VarView } from './ui/VarView';
 import { taskEntries } from '../../shared/tasks';
 import { VAR_PRESETS, type VarPresetKey } from './presets';
+import { VARMASS_EXTRA_PRESETS, type VarExtraKey } from './extraPresets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -38,7 +39,7 @@ export function createVarMassModule(): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
-    tasks: taskEntries(VAR_PRESETS),
-    loadTask: (k) => store.loadPreset(k as VarPresetKey),
+    tasks: taskEntries({ ...VAR_PRESETS, ...VARMASS_EXTRA_PRESETS }),
+    loadTask: (k) => store.loadPreset(k as VarPresetKey | VarExtraKey),
   };
 }

@@ -13,6 +13,11 @@ import { solveLine, solveStages, type Particles, type StagesProblem, type StopKi
 import { VAR_PRESETS, type VarMode, type VarPresetKey } from '../presets';
 import { lineDoc, stagesDoc } from '../text/solution';
 import type { LineNumKey, VmStore } from './store';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { VARMASS_ASKS } from '../model/extra';
+import { VARMASS_EXTRA_PRESETS } from '../extraPresets';
+
+const ALL_PRESETS = { ...VAR_PRESETS, ...VARMASS_EXTRA_PRESETS };
 
 const STOP_T: Record<StopKind, string> = {
   time: 'в момент t₁',
@@ -23,6 +28,25 @@ const STOP_T: Record<StopKind, string> = {
 };
 
 export function VarView({ chrome, store }: { chrome: Chrome; store: VmStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store}
+        asks={VARMASS_ASKS}
+        presets={ALL_PRESETS}
+        prefix="vm"
+        heading="Переменная масса: общий вид, обратные задачи, ротор"
+        lede="Уравнение Мещерского в общем виде (маятник, ракета по закону сгорания, аэростат с канатом), высота и оптимальное α, мягкая посадка, подъём вдоль наклонной прямой, реактивный запуск ротора, притяжение к центру переменной массы."
+        mainLabel="прямолинейное движение и ступени ракеты"
+        tabName="Переменная масса"
+      />
+    );
+  return <VarMain chrome={chrome} store={store} />;
+}
+
+function VarMain({ chrome, store }: { chrome: Chrome; store: VmStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const s = st.problem;
   const out = useMemo(() => {
@@ -58,7 +82,7 @@ export function VarView({ chrome, store }: { chrome: Chrome; store: VmStore }) {
             <label className="preset">
               Готовая задача
               <select id="vmpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as VarPresetKey)}>
-                <PresetOptions items={taskEntries(VAR_PRESETS)} />
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -90,6 +114,11 @@ export function VarView({ chrome, store }: { chrome: Chrome; store: VmStore }) {
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <div className="segbtns">
+              <button type="button" id="vmto-extra" onClick={() => store.setView('extra')}>
+                Общий вид, обратные задачи, ротор →
+              </button>
+            </div>
             <h2>Задача</h2>
             <label className="field">
               <span>Что решаем</span>

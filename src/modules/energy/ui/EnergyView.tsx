@@ -12,6 +12,11 @@ import { energyDoc } from '../text/solution';
 import type { EnergyStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { ENERGY_ASKS } from '../model/extra';
+import { ENERGY_EXTRA_PRESETS } from '../extraPresets';
+
+const ALL_PRESETS = { ...ENERGY_PRESETS, ...ENERGY_EXTRA_PRESETS };
 
 const KIND: [BodyKind, string][] = [
   ['translate', 'груз'],
@@ -31,6 +36,25 @@ const MODES: [EnergyMode, string][] = [
 ];
 
 export function EnergyView({ chrome, store }: { chrome: Chrome; store: EnergyStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store}
+        asks={ENERGY_ASKS}
+        presets={ALL_PRESETS}
+        prefix="e"
+        heading="Кинетическая энергия: нить, трос, падение тел"
+        lede="Весомая нить на столе и штифте, трос на барабане, груз на нити между блоками, стремянка и падающий стержень, приведённый момент инерции механизма и уравнение J·dω/dt = M(ω)."
+        mainLabel="цепочка грузов, блоков и катков"
+        tabName="Кинетическая энергия"
+      />
+    );
+  return <EnergyMain chrome={chrome} store={store} />;
+}
+
+function EnergyMain({ chrome, store }: { chrome: Chrome; store: EnergyStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const r = useMemo(() => solveEnergy(pr), [pr]);
@@ -54,7 +78,7 @@ export function EnergyView({ chrome, store }: { chrome: Chrome; store: EnergySto
             <label className="preset">
               Готовая задача
               <select id="epreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as EnergyPresetKey)}>
-                <PresetOptions items={taskEntries(ENERGY_PRESETS)} />
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -84,6 +108,11 @@ export function EnergyView({ chrome, store }: { chrome: Chrome; store: EnergySto
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Система">
+            <div className="segbtns">
+              <button type="button" id="eto-extra" onClick={() => store.setView('extra')}>
+                Нить, трос, падение тел, J·dω/dt →
+              </button>
+            </div>
             <h2>Что ищем</h2>
             <label className="field">
               <span>Найти</span>

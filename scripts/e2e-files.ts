@@ -149,8 +149,8 @@ async function main() {
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 44, 'готово сорок четыре пункта');
-  check((await p.textContent('[data-rm="heavyrope"] .rm-badge')) === 'следующий', 'следующий раздел — тяжёлые нити и переменная масса');
+  check((await p.locator('.rm-done').count()) === 45, 'готово сорок пять пунктов');
+  check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — соединения');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -500,6 +500,20 @@ async function main() {
 
   // 20. Вкладка «Кинетическая энергия».
   await tab('energy');
+  // Пункт 24: второй экран «Кинетической энергии» (нить, трос, падение тел, J·dω/dt).
+  await p.click('#eto-extra');
+  await p.selectOption('#epreset', 'x3835');
+  check((await p.innerText('#exsolution')).includes('2,606'), 'Мещерский 38.35: скорость центра падающего стержня 2,606 м/с');
+  await p.selectOption('#epreset', 'x3818');
+  check((await p.innerText('#exsolution')).includes('0,9317'), 'Мещерский 38.18: время схода нити со стола');
+  await p.selectOption('#epreset', 'x3834');
+  check((await p.innerText('#exsolution')).includes('6,862') && (await p.locator('#exsvg path').count()) > 0, 'Мещерский 38.34: скорость шарнира стремянки, график');
+  await p.selectOption('#exask', 'jw');
+  check((await p.locator('#exs-kind').count()) === 1 && (await p.locator('#ex-M0').count()) === 1, 'J·dω/dt: поля механизма');
+  await p.selectOption('#exs-kind', 'hypo');
+  check((await p.locator('#ex-w0').count()) === 1 && (await p.locator('#ex-M0').count()) === 0, 'гипоциклический механизм: другие поля');
+  await p.click('#eto-main');
+  check((await p.locator('#ebodies').count()) === 1, 'возврат к цепочке грузов, блоков и катков');
   const enS = await p.innerText('#esolution');
   check(enS.includes('2,3055') && enS.includes('приведённая масса'), 'Мещерский 38.45: v по теореме об изменении кинетической энергии', enS.slice(-300));
   check(enS.includes('Натяжения нитей (принцип Даламбера)'), '38.45: натяжения нитей по принципу Даламбера');
@@ -602,6 +616,16 @@ async function main() {
 
   // 23. Вкладка «Динамика точки».
   await tab('pointdyn');
+  // Пункт 24: второй экран «Динамики точки».
+  await p.click('#pto-extra');
+  await p.selectOption('#ppreset', 'x2764');
+  check((await p.innerText('#pxsolution')).includes('4,243'), 'Мещерский 27.64: v₁ = 4,24 см/с');
+  await p.selectOption('#ppreset', 'x2765');
+  check((await p.innerText('#pxsolution')).includes('2,221'), 'Мещерский 27.65: момент пересечения оси Ox π/k');
+  await p.selectOption('#ppreset', 'x2739');
+  check((await p.innerText('#pxsolution')).includes('0,5236'), 'Мещерский 27.39: время удвоения скорости');
+  await p.click('#pto-main');
+  check((await p.locator('#pmode').count()) === 1, 'возврат к режимам динамики точки');
   const pdS = await p.innerText('#psolution');
   check(pdS.includes('19,5497') && pdS.includes('2,6066'), 'Мещерский 27.7: путь 19,55 м и время 2,61 с до остановки', pdS.slice(-300));
   await p.selectOption('#ppreset', 'm279');
@@ -757,6 +781,16 @@ async function main() {
 
   // Вкладка «Переменная масса».
   await tab('varmass');
+  // Пункт 24: второй экран «Переменной массы».
+  await p.click('#vmto-extra');
+  await p.selectOption('#vmpreset', 'x4527');
+  check((await p.innerText('#vmxsolution')).includes('1,52'), 'Мещерский 45.27: число Циолковского для подъёма вдоль прямой');
+  await p.selectOption('#vmpreset', 'x458');
+  check((await p.innerText('#vmxsolution')).includes('135,1'), 'Мещерский 45.8: время сгорания (расхождение с книгой записано)');
+  await p.selectOption('#vmpreset', 'x4535');
+  check((await p.innerText('#vmxsolution')).includes('эллиптическая'), 'Мещерский 45.35: тип орбиты в приведённых переменных');
+  await p.click('#vmto-main');
+  check((await p.locator('#vmmode').count()) === 1, 'возврат к прямолинейному движению и ступеням');
   const vmS = await p.innerText('#vmsolution');
   check(vmS.includes('5651,0078') && vmS.includes('Циолковского'), 'Мещерский 45.3: высота ракеты через 30 с — 5,65 км', vmS.slice(-300));
   await p.selectOption('#vmpreset', 'm455');
