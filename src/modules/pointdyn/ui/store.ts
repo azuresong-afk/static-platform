@@ -1,7 +1,8 @@
 /**
- * Состояние вкладки «Динамика точки»: пять режимов — прямолинейное движение (вторая задача),
+ * Состояние вкладки «Динамика точки»: десять режимов — прямолинейное движение (вторая задача),
  * силы по заданному движению (первая задача), криволинейное движение в плоскости, движение по окружности
- * (реакция связи, отрыв), относительное движение в трубке подвижного тела и движение вблизи вращающейся Земли;
+ * (реакция связи, отрыв), относительное движение в трубке подвижного тела, движение вблизи вращающейся Земли,
+ * равновесие при вращении, движение по поверхности и кривой, составные задачи, теорема об импульсе;
  * история отмены, файл проекта.
  */
 import { History } from '../../../shared/history';
@@ -13,6 +14,10 @@ import type { FirstProblem } from '../model/first';
 import type { PlaneProblem } from '../model/plane';
 import type { PointProblem } from '../model/point';
 import type { RelProblem } from '../model/rel';
+import { FINDS, type SpinProblem } from '../model/spin';
+import type { SurfProblem } from '../model/surf';
+import type { StageProblem } from '../model/stages';
+import type { ImpulseProblem } from '../model/impulse';
 import {
   CIRCLE_PRESETS,
   EARTH_PRESETS,
@@ -20,12 +25,20 @@ import {
   PLANE_PRESETS,
   POINT_PRESETS,
   REL_PRESETS,
+  SPIN_PRESETS,
+  SURF_PRESETS,
+  STAGE_PRESETS,
+  IMPULSE_PRESETS,
   type CirclePresetKey,
   type EarthPresetKey,
   type FirstPresetKey,
   type PlanePresetKey,
   type PointPresetKey,
   type RelPresetKey,
+  type SpinPresetKey,
+  type SurfPresetKey,
+  type StagePresetKey,
+  type ImpulsePresetKey,
 } from '../presets';
 
 export const POINT_MODULE = 'pointdyn';
@@ -44,8 +57,23 @@ const FRAMES: RelProblem['frame'][] = ['vert', 'horz', 'trans'];
 export const EARTH_NUM = ['m', 'g', 'lat', 'omega', 'R', 'h', 'vE', 'vN', 'vh', 'v', 'k', 'L', 'b', 'psi'] as const;
 export type EarthNumKey = (typeof EARTH_NUM)[number];
 const ASKS: EarthDyn['ask'][] = ['fall', 'line', 'pend', 'g'];
+export const SPIN_NUM = ['m', 'g', 'R', 'v', 'alpha', 'f', 'd', 'k', 'l', 'theta', 'omega', 'r', 'T', 'D', 'c', 'rs', 'r2', 'w2', 'a', 'b', 'gamma', 'phi', 'x1'] as const;
+export type SpinNumKey = (typeof SPIN_NUM)[number];
+export const SURF_NUM = ['m', 'g', 'r', 'v0', 'alpha', 't1', 'c', 'a', 'f', 'l', 'h', 'beta', 'k', 'p', 'x0', 'Re', 'H'] as const;
+export type SurfNumKey = (typeof SURF_NUM)[number];
+const SURF_ASKS: SurfProblem['ask'][] = ['cyl', 'cone', 'rough', 'wire', 'chain', 'helix', 'alt'];
+export const STAGE_NUM = ['m', 'g', 'r', 'alpha', 'h', 'f', 'vy', 'beta', 'H', 's', 'phi0', 'v0'] as const;
+export type StageNumKey = (typeof STAGE_NUM)[number];
+const STAGE_ASKS: StageProblem['ask'][] = ['loop', 'jump', 'plate', 'fly', 'slack'];
+export const IMP_NUM = ['m', 'g', 'v0', 'v1', 't', 'F', 'f', 'alpha', 's', 'A', 'a0', 'a1', 'dt', 'v', 'T', 'psi', 'r1', 'n1', 'r2', 'R', 'u0', 'a', 'l1', 'l2'] as const;
+export type ImpNumKey = (typeof IMP_NUM)[number];
+const IMP_ASKS: ImpulseProblem['ask'][] = ['line', 'vec', 'circle', 'area', 'hole', 'sync'];
+const IMP_FINDS: ImpulseProblem['find'][] = ['t', 'v1', 'F', 'f', 'm', 'tpath'];
+/** Режимы пункта 21: числа и выбор вопроса правятся одинаково. */
+export type SubMode = 'spin' | 'surf' | 'stages' | 'impulse';
+type SubNum = { spin: SpinNumKey; surf: SurfNumKey; stages: StageNumKey; impulse: ImpNumKey };
 
-export type PointMode = 'line' | 'first' | 'plane' | 'circle' | 'rel' | 'earth';
+export type PointMode = 'line' | 'first' | 'plane' | 'circle' | 'rel' | 'earth' | SubMode;
 export interface PointTask {
   mode: PointMode;
   line: PointProblem;
@@ -54,8 +82,12 @@ export interface PointTask {
   circle: CircleProblem;
   rel: RelProblem;
   earth: EarthDyn;
+  spin: SpinProblem;
+  surf: SurfProblem;
+  stages: StageProblem;
+  impulse: ImpulseProblem;
 }
-export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey | CirclePresetKey | RelPresetKey | EarthPresetKey;
+export type AnyPresetKey = PointPresetKey | FirstPresetKey | PlanePresetKey | CirclePresetKey | RelPresetKey | EarthPresetKey | SpinPresetKey | SurfPresetKey | StagePresetKey | ImpulsePresetKey;
 
 export interface PointState {
   problem: PointTask;
@@ -79,10 +111,22 @@ const DEF_PLANE = PLANE_PRESETS.p2744.problem as PlaneProblem;
 const DEF_CIRCLE = CIRCLE_PRESETS.c311.problem as CircleProblem;
 const DEF_REL = REL_PRESETS.yd4.problem as RelProblem;
 const DEF_EARTH = EARTH_PRESETS.d335.problem as EarthDyn;
+const DEF_SPIN = SPIN_PRESETS.s269.problem as SpinProblem;
+const DEF_SURF = SURF_PRESETS.u3120.problem as SurfProblem;
+const DEF_STAGES = STAGE_PRESETS.g3111.problem as StageProblem;
+const DEF_IMPULSE = IMPULSE_PRESETS.i281.problem as ImpulseProblem;
+const defaults = () => ({ spin: copy(DEF_SPIN), surf: copy(DEF_SURF), stages: copy(DEF_STAGES), impulse: copy(DEF_IMPULSE) });
 
 /** Задача по ключу готовой задачи: режим и данные этого режима. */
 export function presetTask(k: AnyPresetKey, base?: PointTask): { task: PointTask; title: string } {
-  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL), earth: copy(DEF_EARTH) };
+  const b: PointTask = base ? copy(base) : { mode: 'line', line: copy(DEF_LINE), first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL), earth: copy(DEF_EARTH), ...defaults() };
+  for (const [mode, rec] of [
+    ['spin', SPIN_PRESETS],
+    ['surf', SURF_PRESETS],
+    ['stages', STAGE_PRESETS],
+    ['impulse', IMPULSE_PRESETS],
+  ] as [SubMode, Record<string, { title: string; problem: unknown }>][])
+    if (k in rec) return { task: { ...b, mode, [mode]: copy(rec[k].problem) }, title: rec[k].title };
   if (k in POINT_PRESETS) return { task: { ...b, mode: 'line', line: copy(POINT_PRESETS[k as PointPresetKey].problem as PointProblem) }, title: POINT_PRESETS[k as PointPresetKey].title };
   if (k in FIRST_PRESETS) return { task: { ...b, mode: 'first', first: copy(FIRST_PRESETS[k as FirstPresetKey].problem as FirstProblem) }, title: FIRST_PRESETS[k as FirstPresetKey].title };
   if (k in CIRCLE_PRESETS) return { task: { ...b, mode: 'circle', circle: copy(CIRCLE_PRESETS[k as CirclePresetKey].problem as CircleProblem) }, title: CIRCLE_PRESETS[k as CirclePresetKey].title };
@@ -143,23 +187,58 @@ function parseEarth(raw: unknown): EarthDyn | null {
   return { ...nums, byWeight: raw.byWeight === true, ask: raw.ask as EarthDyn['ask'] };
 }
 
+function nums<K extends string>(raw: Record<string, unknown>, keys: readonly K[]): Record<K, number> | null {
+  if (!keys.every((k) => isNum(raw[k]))) return null;
+  return Object.fromEntries(keys.map((k) => [k, raw[k]])) as Record<K, number>;
+}
+function parseSpin(raw: unknown): SpinProblem | null {
+  if (!isObj(raw) || !Object.keys(FINDS).includes(raw.ask as string) || !FINDS[raw.ask as SpinProblem['ask']].includes(raw.find as string)) return null;
+  const n = nums(raw, SPIN_NUM);
+  return n && { ...n, byWeight: raw.byWeight === true, ask: raw.ask as SpinProblem['ask'], find: raw.find as string };
+}
+function parseSurf(raw: unknown): SurfProblem | null {
+  if (!isObj(raw) || !SURF_ASKS.includes(raw.ask as SurfProblem['ask']) || !['outer', 'inner'].includes(raw.side as string)) return null;
+  const n = nums(raw, SURF_NUM);
+  return n && { ...n, byWeight: raw.byWeight === true, grav: raw.grav !== false, ask: raw.ask as SurfProblem['ask'], side: raw.side as SurfProblem['side'] };
+}
+function parseStages(raw: unknown): StageProblem | null {
+  if (!isObj(raw) || !STAGE_ASKS.includes(raw.ask as StageProblem['ask'])) return null;
+  const n = nums(raw, STAGE_NUM);
+  return n && { ...n, byWeight: raw.byWeight === true, ask: raw.ask as StageProblem['ask'] };
+}
+function parseImpulse(raw: unknown): ImpulseProblem | null {
+  if (!isObj(raw) || !IMP_ASKS.includes(raw.ask as ImpulseProblem['ask']) || !IMP_FINDS.includes(raw.find as ImpulseProblem['find'])) return null;
+  const n = nums(raw, IMP_NUM);
+  return n && { ...n, byWeight: raw.byWeight === true, ask: raw.ask as ImpulseProblem['ask'], find: raw.find as ImpulseProblem['find'] };
+}
+
 export function parsePoint(raw: unknown): { ok: true; problem: PointTask } | { ok: false; errors: string[] } {
   // Файл первой версии раздела — только прямолинейное движение.
   const old = parseLine(raw);
-  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL), earth: copy(DEF_EARTH) } };
-  if (!isObj(raw) || !['line', 'first', 'plane', 'circle', 'rel', 'earth'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
+  if (old) return { ok: true, problem: { mode: 'line', line: old, first: copy(DEF_FIRST), plane: copy(DEF_PLANE), circle: copy(DEF_CIRCLE), rel: copy(DEF_REL), earth: copy(DEF_EARTH), ...defaults() } };
+  if (!isObj(raw) || !['line', 'first', 'plane', 'circle', 'rel', 'earth', 'spin', 'surf', 'stages', 'impulse'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
   const line = parseLine(raw.line),
     first = parseFirst(raw.first),
     plane = parsePlane(raw.plane),
     circle = parseCircle(raw.circle),
     rel = parseRel(raw.rel),
-    earth = parseEarth(raw.earth);
-  const need = { line, first, plane, circle, rel, earth }[raw.mode as PointMode];
+    earth = parseEarth(raw.earth),
+    spin = parseSpin(raw.spin),
+    surf = parseSurf(raw.surf),
+    stages = parseStages(raw.stages),
+    impulse = parseImpulse(raw.impulse);
+  const need = { line, first, plane, circle, rel, earth, spin, surf, stages, impulse }[raw.mode as PointMode];
   if (!need) return { ok: false, errors: ['Данные задачи неполные.'] };
-  // Файлы до режимов «движение по окружности», «относительное движение», «вращение Земли» — без полей circle, rel, earth.
+  // Файлы до режимов «движение по окружности», «относительное движение», «вращение Земли» и режимов пункта 21 — без этих полей.
   return {
     ok: true,
-    problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE), circle: circle ?? copy(DEF_CIRCLE), rel: rel ?? copy(DEF_REL), earth: earth ?? copy(DEF_EARTH) },
+    problem: { mode: raw.mode as PointMode, line: line ?? copy(DEF_LINE), first: first ?? copy(DEF_FIRST), plane: plane ?? copy(DEF_PLANE), circle: circle ?? copy(DEF_CIRCLE), rel: rel ?? copy(DEF_REL),
+      earth: earth ?? copy(DEF_EARTH),
+      spin: spin ?? copy(DEF_SPIN),
+      surf: surf ?? copy(DEF_SURF),
+      stages: stages ?? copy(DEF_STAGES),
+      impulse: impulse ?? copy(DEF_IMPULSE),
+    },
   };
 }
 
@@ -311,6 +390,22 @@ export class PointStore {
   setEarthAsk = (ask: EarthDyn['ask']) => {
     this.commit();
     this.edit((p) => (p.earth.ask = ask));
+  };
+  /* режимы пункта 21: вращение, поверхности, составные задачи, импульс */
+  typeSub = <M extends SubMode>(mode: M, key: SubNum[M], v: number) => {
+    this.touch(`${mode}:${key}`);
+    this.edit((p) => ((p[mode] as unknown as Record<string, number>)[key] = v));
+  };
+  /** Выбор вопроса и переключатели; при смене вопроса «что ищем» — первый допустимый вариант. */
+  setSub = <M extends SubMode>(mode: M, patch: Partial<PointTask[M]>) => {
+    this.commit();
+    this.edit((p) => {
+      Object.assign(p[mode], patch);
+      if (mode === 'spin' && 'ask' in patch) {
+        const sp = p.spin;
+        if (!FINDS[sp.ask].includes(sp.find)) sp.find = FINDS[sp.ask][0];
+      }
+    });
   };
   undo = () => {
     const s = this.hist.undo(this.snap());

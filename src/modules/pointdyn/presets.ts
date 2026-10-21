@@ -1,4 +1,4 @@
-/** Готовые задачи: Мещерский §26–27, 31, 33, Яблонский Д.2, Д.4, Д.6. Ответы — по книге или по её формулам. */
+/** Готовые задачи: Мещерский §23, 26–28, 31, 33, 41, Яблонский Д.2, Д.4, Д.6. Ответы — по книге или по её формулам. */
 import { G } from '../rotation/model/rotation';
 import type { CircleProblem } from './model/circle';
 import type { RelProblem } from './model/rel';
@@ -6,6 +6,10 @@ import type { EarthDyn } from './model/earth';
 import type { FirstProblem } from './model/first';
 import type { PlaneProblem } from './model/plane';
 import type { PointProblem } from './model/point';
+import type { SpinProblem } from './model/spin';
+import type { SurfProblem } from './model/surf';
+import type { StageProblem } from './model/stages';
+import type { ImpulseProblem } from './model/impulse';
 
 export interface PointPreset {
   title: string;
@@ -504,3 +508,400 @@ export const EARTH_PRESETS = {
   },
 } satisfies Record<string, EarthPreset>;
 export type EarthPresetKey = keyof typeof EARTH_PRESETS;
+
+/* ---------- равновесие при равномерном вращении (§26, 31, 41) ---------- */
+
+export interface SpinPreset {
+  title: string;
+  problem: SpinProblem;
+  /**
+   * Ответ: alphaStar (°), Ntot, h, fNeed, R, vMin, vMax — вираж; theta, v, T, omega, period — конический маятник;
+   * omega, Nb, vTrainKmh — вертикальная окружность; r, c (на 1 см), omega — пружина; phi, omega, N — стержни; y — трубка.
+   */
+  book: Record<string, number>;
+  relTol: number;
+  note: string;
+}
+const spin = (o: Partial<SpinProblem>): SpinProblem => ({ byWeight: false, m: 1, g: G, ask: 'bank', find: 'angle', R: 1, v: 0, alpha: 0, f: 0, d: 0, k: 1, l: 1, theta: 30, omega: 1, r: 0.5, T: 0, D: 0, c: 0, rs: 0, r2: 0, w2: 0, a: 1, b: 0, gamma: 90, phi: 30, x1: 0.5, ...o });
+const rpmW = (n: number) => (n * Math.PI) / 30;
+// Мещерский 26.32: трек R = 50 м, α = 30°, f = 0,3 — по формулам книги.
+const t32 = { R: 50, a: rad(30), f: 0.3 };
+// Мещерский 41.25: a = 0,3 м, b = 0,2 м, φ = 30°; 41.26: a = 0,4 м, b = 0,1 м, ω = 10 рад/с.
+const t25 = { a: 0.3, b: 0.2, phi: rad(30) };
+const t26 = { a: 0.4, b: 0.1, w: 10 };
+
+export const SPIN_PRESETS = {
+  s266: {
+    title: 'Мещерский 26.6: возвышение наружного рельса на закруглении',
+    problem: spin({ ask: 'bank', find: 'angle', R: 400, v: 10, d: 1.6 }),
+    book: { h: 0.041 },
+    relTol: 0.01,
+    note: 'R = 400 м, v = 10 м/с, расстояние между рельсами 1,6 м; давление перпендикулярно полотну. Книга: h = 4,1 см (расчёт 4,08 см).',
+  },
+  s267: {
+    title: 'Мещерский 26.7: радиус закругления по показанию пружинных весов в вагоне',
+    problem: spin({ ask: 'bank', find: 'radius', v: 20, k: 5.1 / 5 }),
+    book: { R: 202 },
+    relTol: 0.005,
+    note: 'v = 72 км/ч = 20 м/с, груз 5 кГ, весы показывают 5,1 кГ: k = 1,02. Книга: 202 м (расчёт 202,9 м).',
+  },
+  s269: {
+    title: 'Мещерский 26.9: конический маятник — скорость груза и натяжение нити',
+    problem: spin({ ask: 'cone', find: 'theta', byWeight: true, m: 1, l: 0.3, theta: 60 }),
+    book: { v: 2.1, T: 2 },
+    relTol: 0.003,
+    note: 'Груз весом 1 Н на нити 30 см, угол с вертикалью 60°. Книга: v = 210 см/с, T = 2 Н.',
+  },
+  s2621: {
+    title: 'Мещерский 26.21: отклонение и давление вагона подвесной дороги на закруглении',
+    problem: spin({ ask: 'bank', find: 'angle', byWeight: true, m: 1.5, R: 30, v: 10 }),
+    book: { alphaStar: 18 + 47 / 60, Ntot: 1.585 },
+    relTol: 0.002,
+    note: 'R = 30 м, v = 10 м/с, вес вагона 1,5 т. Книга: α = 18°47′, N = 1,585 т (при g = 9,8; расчёт с g = 9,81: 18°46′, 1,584 т).',
+  },
+  s2627: {
+    title: 'Мещерский 26.27: летчик при выходе из пике — наибольшая сила давления на сиденье',
+    problem: spin({ ask: 'vert', find: 'N', byWeight: true, m: 80, R: 600, v: 1000 / 3.6 }),
+    book: { Nb: 1130 },
+    relTol: 0.002,
+    note: 'Скорость 1000 км/ч, дуга радиусом 600 м в вертикальной плоскости, летчик весом 80 кГ; наибольшее давление — в нижней точке. Книга: 1130 кГ (расчёт 1128,7 кГ).',
+  },
+  s265: {
+    title: 'Мещерский 26.5: наименьшая угловая скорость, при которой рвётся нить',
+    problem: spin({ ask: 'vert', find: 'break', byWeight: true, m: 3, R: 1, T: 9 }),
+    book: { omega: 4.44 },
+    relTol: 0.003,
+    note: 'Камень весом 3 Н на нити 1 м, сопротивление разрыву 9 Н; натяжение наибольшее в нижней точке. Книга: ω = 4,44 с⁻¹; расчёт ω = √(2g) = 4,43 с⁻¹ — расхождение 0,2 %.',
+  },
+  s2629: {
+    title: 'Мещерский 26.29: при какой скорости тепловоза масло вытекает из масленки на шатуне',
+    problem: spin({ ask: 'vert', find: 'top', R: 0.25, D: 1.02 }),
+    book: { vTrainKmh: 11.4 },
+    relTol: 0.01,
+    note: 'Кривошип r = 250 мм, колесо D = 1020 мм; шатун движется поступательно, масло выливается, когда в верхнем положении ω²r ≥ g. Книга: v ≥ 11,4 км/ч; расчёт √(g/r)·D/2 = 11,50 км/ч (с g = 9,8 — 11,49) — расхождение 0,9 %.',
+  },
+  s2631: {
+    title: 'Мещерский 26.31: наклон велосипедиста на кривой и наименьший коэффициент трения',
+    problem: spin({ ask: 'bank', find: 'angle', R: 10, v: 5 }),
+    book: { alphaStar: 14 + 20 / 60, fNeed: 0.255 },
+    relTol: 0.003,
+    note: 'R = 10 м, v = 5 м/с. Книга: 14°20′; 0,255 (расчёт с g = 9,81: 14°18′, 0,2548; с g = 9,8 — 14°19′).',
+  },
+  s2632: {
+    title: 'Мещерский 26.32: наименьшая и наибольшая скорость на вираже велотрека',
+    problem: spin({ ask: 'bank', find: 'speed', R: t32.R, alpha: 30, f: t32.f, v: 15 }),
+    book: { vMin: Math.sqrt((G * t32.R * (Math.tan(t32.a) - t32.f)) / (1 + t32.f * Math.tan(t32.a))), vMax: Math.sqrt((G * t32.R * (Math.tan(t32.a) + t32.f)) / (1 - t32.f * Math.tan(t32.a))) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты R = 50 м, α = 30°, f = 0,3. Книга: v_min = √(gR(tg α − f)/(1 + f tg α)), v_max = √(gR(tg α + f)/(1 − f tg α)).',
+  },
+  s2633: {
+    title: 'Мещерский 26.33: жёсткость пружины предохранителя маховика',
+    problem: spin({ ask: 'spring', find: 'c', byWeight: true, m: 1.5, omega: rpmW(120), rs: 1.475, r: 1.475 + 0.025 }),
+    book: { cCm: 14.5 },
+    relTol: 0.002,
+    note: 'Тело A весом 1,5 кГ на расстоянии 147,5 см от оси (пружина не напряжена), выступ B — на 2,5 см дальше; предельная скорость 120 об/мин. Книга: c = 14,5 кГ/см.',
+  },
+  s2634: {
+    title: 'Мещерский 26.34: расстояние гирь регулятора от оси',
+    problem: spin({ ask: 'spring', find: 'r', byWeight: true, m: 30, omega: rpmW(120), rs: 0.05, c: 2000 }),
+    book: { r: 0.0658 },
+    relTol: 0.002,
+    note: 'Гири по 30 кГ, длина пружины без напряжения — 5 см от оси, 20 кГ на 1 см (2000 кГ/м), 120 об/мин. Книга: 6,58 см (расчёт 6,59 см).',
+  },
+  s2635: {
+    title: 'Мещерский 26.35: жёсткость пружины предохранительного выключателя турбины',
+    problem: spin({ ask: 'spring', find: 'c2', byWeight: true, m: 0.225, omega: rpmW(1500), r: 0.0085, w2: rpmW(1650), r2: 0.0085 + 0.0045 }),
+    book: { cCm: 9.08 },
+    relTol: 0.002,
+    note: 'Палец весом 0,225 кГ: при 1500 об/мин центр тяжести на 8,5 мм от оси (пружина уравновешивает его с предварительным сжатием), при 1650 об/мин он отходит на 4,5 мм. Книга: c = 9,08 кГ/см (расчёт 9,09).',
+  },
+  s3110: {
+    title: 'Мещерский 31.10: сферический маятник описывает горизонтальную окружность',
+    problem: spin({ ask: 'cone', find: 'radius', l: 1, r: 0.5 }),
+    book: { v: 0.5 * Math.sqrt(G / Math.sqrt(0.75)), period: 2 * Math.PI * Math.sqrt(Math.sqrt(0.75) / G) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты l = 1 м, x₀ = 0,5 м. Книга: v₀ = x₀√(g/z₀), T = 2π√(z₀/g), z₀ = √(l² − x₀²).',
+  },
+  s3125: {
+    title: 'Мещерский 31.25: форма трубки, в которой шарик в относительном равновесии',
+    problem: spin({ ask: 'tube', find: 'y', omega: 2, x1: 0.5 }),
+    book: { y: (4 * 0.25) / (2 * G) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты ω = 2 рад/с, x = 0,5 м. Книга: парабола y = ω²x²/(2g) + c.',
+  },
+  s4124: {
+    title: 'Мещерский 41.24: угол отклонения стержня, описывающего конус, и давление на шарнир',
+    problem: spin({ ask: 'rods', find: 'phi', byWeight: true, m: 10, a: 1, b: 0, omega: 5 }),
+    book: { phi: (Math.acos((3 * G) / (2 * 1 * 25)) * 180) / Math.PI, N: 0.5 * (10 / G) * 1 * 25 * Math.sqrt(1 + (7 * G * G) / (4 * 1 * 625)) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты l = 1 м, P = 10 Н, ω = 5 рад/с. Книга: φ = arccos(3g/(2lω²)), N = ½(P/g)lω²√(1 + 7g²/(4l²ω⁴)).',
+  },
+  s4125: {
+    title: 'Мещерский 41.25: центробежный тахометр — связь ω и угла отклонения',
+    problem: spin({ ask: 'rods', find: 'omega', a: t25.a, b: t25.b, gamma: 90, phi: 30 }),
+    book: { omega: Math.sqrt((3 * G * (t25.b ** 2 * Math.cos(t25.phi) - t25.a ** 2 * Math.sin(t25.phi))) / ((t25.b ** 3 - t25.a ** 3) * Math.sin(2 * t25.phi))) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты a = 0,3 м, b = 0,2 м, φ = 30°; стержни под прямым углом, b — по другую сторону вала. Книга: ω² = 3g(b² cos φ − a² sin φ)/((b³ − a³) sin 2φ).',
+  },
+  s4126: {
+    title: 'Мещерский 41.26: угол отклонения стержня, шарнирно соединённого с валом',
+    problem: spin({ ask: 'rods', find: 'phi', a: t26.a, b: t26.b, gamma: 180, omega: t26.w }),
+    book: { phi: (Math.acos(((1.5 * G) / t26.w ** 2) * ((t26.a - t26.b) / (t26.a ** 2 - t26.a * t26.b + t26.b ** 2))) * 180) / Math.PI },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты OA = 0,4 м, OB = 0,1 м, ω = 10 рад/с. Книга: cos φ = (3/2)(g/ω²)(a − b)/(a² − ab + b²).',
+  },
+} satisfies Record<string, SpinPreset>;
+export type SpinPresetKey = keyof typeof SPIN_PRESETS;
+
+/* ---------- движение по поверхности и кривой (§31) ---------- */
+
+export interface SurfPreset {
+  title: string;
+  problem: SurfProblem;
+  /** Ответ: N, x, y, z, r, phi, vCrit, alphaMin, dT, kNeed, v, ratio. */
+  book: Record<string, number>;
+  relTol: number;
+  note: string;
+}
+const surf = (o: Partial<SurfProblem>): SurfProblem => ({ byWeight: false, m: 1, g: G, ask: 'cyl', side: 'outer', grav: true, r: 1, v0: 1, alpha: 30, t1: 1, c: 0, a: 1, f: 0, l: 1, h: 0.5, beta: 0, k: 0, p: 0, x0: 0, Re: 6370e3, H: 0, ...o });
+// Мещерский 31.20–31.21: r = 0,5 м, v₀ = 3 м/с, α = 30° (вниз), t = 0,4 с.
+const c20 = { r: 0.5, v0: 3, a: rad(30), t: 0.4 };
+// Мещерский 31.26: 2α = 90°, m = 1 г, c = 1 дин/см (c/m = 1 с⁻²), OA = 2 см, v₀ = 2 см/с; t = 1 с.
+const c26 = { t: 1 };
+// Мещерский 31.19: l = 1 м, h = 0,5 м, β = 30°.
+const w19 = { h: 0.5, cb: Math.cos(rad(30)) };
+const a19 = (Math.acos(w19.h * (1.5 + w19.cb) - 1.5) * 180) / Math.PI;
+// Мещерский 31.28: a = 0,1 м, r₀ = 0,5 м, f′(r₀) = 0,4.
+const h28 = { a: 0.1, r: 0.5, p: 0.4 };
+const f29 = 0.2,
+  f30 = 0.1;
+
+export const SURF_PRESETS = {
+  u3120: {
+    title: 'Мещерский 31.20: давление точки на гладкий вертикальный цилиндр',
+    problem: surf({ ask: 'cyl', byWeight: true, m: 1, r: c20.r, v0: c20.v0, alpha: 30, t1: c20.t }),
+    book: { N: (1 * c20.v0 ** 2 * Math.cos(c20.a) ** 2) / (G * c20.r) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты P = 1, r = 0,5 м, v₀ = 3 м/с под 30° к горизонту. Книга: N = Pv₀²cos²α/(gr).',
+  },
+  u3121: {
+    title: 'Мещерский 31.21: уравнения движения точки внутри вертикального цилиндра',
+    problem: surf({ ask: 'cyl', r: c20.r, v0: c20.v0, alpha: 30, t1: c20.t }),
+    book: { x: c20.r * Math.cos(((c20.v0 * Math.cos(c20.a)) / c20.r) * c20.t), y: c20.r * Math.sin(((c20.v0 * Math.cos(c20.a)) / c20.r) * c20.t), z: c20.v0 * c20.t * Math.sin(c20.a) + (G * c20.t ** 2) / 2 },
+    relTol: 1e-6,
+    note: 'Условия задачи 31.20, в начальный момент точка на оси x; t = 0,4 с. Книга: x = r cos(v₀t cos α/r), y = r sin(v₀t cos α/r), z = v₀t sin α + gt²/2 (ось z — вниз).',
+  },
+  u3124: {
+    title: 'Мещерский 31.24: движение по цепной линии под действием отталкивания от оси',
+    problem: surf({ ask: 'chain', a: 1, k: 1, x0: 1, v0: 1, t1: 2 }),
+    book: { N: 0, x: 3 },
+    relTol: 1e-6,
+    note: 'a = 1 м, k = 1 с⁻², при t = 0 x = 1 м, ẋ = 1 м/с; взято t = 2 с. Книга: N = 0, x = (1 + t) м.',
+  },
+  u3126: {
+    title: 'Мещерский 31.26: движение точки по гладкому конусу с отталкиванием от вершины',
+    problem: surf({ ask: 'cone', grav: false, m: 0.001, alpha: 45, a: 0.02, v0: 0.02, c: 0.001, t1: c26.t }),
+    book: { r: 0.01 * Math.sqrt(Math.exp(2 * c26.t) + Math.exp(-2 * c26.t)), phi: Math.SQRT2 * (Math.atan(Math.exp(2 * c26.t)) - Math.PI / 4) },
+    relTol: 1e-5,
+    note: '2α = 90°, m = 1 г, c = 1 дин/см, OA = 2 см, v₀ = 2 см/с параллельно основанию, без тяжести; взято t = 1 с. Книга: r² = e²ᵗ + e⁻²ᵗ (см²), tg(φ/√2 + π/4) = e²ᵗ.',
+  },
+  u3127: {
+    title: 'Мещерский 31.27: давление точки на конус с учётом силы тяжести',
+    problem: surf({ ask: 'cone', grav: true, m: 0.001, alpha: 45, a: 0.02, v0: 0.02, c: 0.001, t1: 0.5 }),
+    book: { Nformula: 1 },
+    relTol: 1e-6,
+    note: 'Условия задачи 31.26, ось конуса вертикальна; t = 0,5 с. Книга: N = m sin α[g + a²v₀² sin 2α/(2r³)] — проверяется при найденном r.',
+  },
+  u3129: {
+    title: 'Мещерский 31.29: какую скорость сообщить телу на шероховатом полуцилиндре, чтобы оно остановилось',
+    problem: surf({ ask: 'rough', side: 'outer', r: 1, f: f29, v0: 0.3 }),
+    book: { vCrit: Math.sqrt(((2 * G * 1) / (1 + 4 * f29 ** 2)) * (Math.sqrt(1 + f29 ** 2) * Math.exp(-2 * f29 * Math.atan(f29)) - (1 - 2 * f29 ** 2))) },
+    relTol: 1e-4,
+    note: 'Задача в общем виде; взяты R = 1 м, f = 0,2. Книга: v₀ ≤ √(2gR/(1 + 4f²)·[√(1 + f²)e^{−2fφ₀} − (1 − 2f²)]), φ₀ = arctg f; численное решение даёт то же.',
+  },
+  u3130: {
+    title: 'Мещерский 31.30: какую скорость сообщить телу внутри шероховатого цилиндра, чтобы оно дошло до верха',
+    problem: surf({ ask: 'rough', side: 'inner', r: 1, f: f30, v0: 9 }),
+    book: { vCrit: Math.sqrt(((G * 1) / (1 + 4 * f30 ** 2)) * (2 * (1 - 2 * f30 ** 2) + 3 * Math.exp(2 * Math.PI * f30))) },
+    relTol: 1e-4,
+    note: 'Задача в общем виде; взяты R = 1 м, f = 0,1. Книга: v₀ ≥ √(gR/(1 + 4f²)·[2(1 − 2f²) + 3e^{2πf}]).',
+  },
+  u3119: {
+    title: 'Мещерский 31.19: нить маятника встречает проволоку — наименьший угол для навивания',
+    problem: surf({ ask: 'wire', byWeight: true, m: 1, l: 1, h: w19.h, beta: 30, alpha: a19 }),
+    book: { alphaMin: a19, dT: 2 * 1 * w19.h * (1.5 + w19.cb) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты P = 1, l = 1 м, h = 0,5 м, β = 30°, груз отпущен из покоя при α = α_min. Книга: α = arccos[(h/l)(3/2 + cos β) − 3/2], натяжение возрастает на 2mg(h/l)(3/2 + cos β).',
+  },
+  u3128: {
+    title: 'Мещерский 31.28: движение по винтовой линии на шероховатой винтовой поверхности',
+    problem: surf({ ask: 'helix', a: h28.a, r: h28.r, p: h28.p }),
+    book: { kNeed: h28.a / h28.r / Math.sqrt(1 + h28.p ** 2 / (1 + (h28.a / h28.r) ** 2)), v: Math.sqrt(G * h28.r * h28.p) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты a = 0,1 м, r₀ = 0,5 м, f′(r₀) = 0,4. Книга: tg α − k√(1 + f′²(r₀)cos²α) = 0, tg α = a/r₀; v = √(g r₀ f′(r₀)).',
+  },
+  u3118: {
+    title: 'Мещерский 31.18: на сколько укоротить маятник на высоте 10 км',
+    problem: surf({ ask: 'alt', H: 10000, Re: 6370e3 }),
+    book: { ratio: 0.00313 },
+    relTol: 0.002,
+    note: 'R = 6370 км, H = 10 км. Книга: на 0,00313l.',
+  },
+} satisfies Record<string, SurfPreset>;
+export type SurfPresetKey = keyof typeof SURF_PRESETS;
+
+/* ---------- составные задачи (§31) ---------- */
+
+export interface StagePreset {
+  title: string;
+  problem: StageProblem;
+  /** Ответ: h, hMin, l, T, S, rpm, hM, v, t, tanT, q (1/см). */
+  book: Record<string, number>;
+  relTol: number;
+  note: string;
+}
+const stage = (o: Partial<StageProblem>): StageProblem => ({ byWeight: false, m: 1, g: G, ask: 'loop', r: 1, alpha: 45, h: 0, f: 0, vy: 0, beta: 45, H: 1, s: 1, phi0: 60, v0: 0, ...o });
+// Мещерский 31.12: P = 1, H = 1 м, h = 0,1 м.
+const p12 = { H: 1, h: 0.1 };
+const k12 = Math.sqrt(2 * G * (p12.H + p12.h)) / p12.h;
+const T12 = (Math.PI / 2 + Math.atan(p12.h / (2 * Math.sqrt(p12.H * (p12.H + p12.h))))) / k12;
+
+export const STAGE_PRESETS = {
+  g314: {
+    title: 'Мещерский 31.4: разомкнутая петля — высота пуска и наименьшая высота',
+    problem: stage({ ask: 'loop', r: 1, alpha: 30 }),
+    book: { h: 1 + Math.cos(rad(30)) + 1 / (2 * Math.cos(rad(30))), hMin: 1 + Math.SQRT2 },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты r = 1 м, α = 30°. Книга: h = r(1 + cos α + 1/(2cos α)); h_min при α = 45°.',
+  },
+  g3111: {
+    title: 'Мещерский 31.11: дальность полёта лыжника с трамплина',
+    problem: stage({ ask: 'jump', alpha: 30, h: 9, f: 0.08, vy: 1, beta: 45 }),
+    book: { l: 47.4 },
+    relTol: 0.002,
+    note: 'α = 30°, h = 9 м, f = 0,08, толчок vᵧ = 1 м/с, линия приземления под 45°. Книга: l = 47,4 м.',
+  },
+  g3112: {
+    title: 'Мещерский 31.12: время сжатия пружины упавшим грузом и импульс упругой силы',
+    problem: stage({ ask: 'plate', byWeight: true, m: 1, H: p12.H, h: p12.h }),
+    book: { T: T12, S: 1 * (T12 + Math.sqrt((2 * p12.H) / G)) },
+    relTol: 1e-6,
+    note: 'Задача в общем виде; взяты P = 1, H = 1 м, h = 0,1 м. Книга: T = (π/2 − α)/k, S = P(T + √(2H/g)), tg α = −h/(2√(H(H + h))), k = √(2g(H + h))/h.',
+  },
+  g3113: {
+    title: 'Мещерский 31.13: наименьшая угловая скорость разорвавшегося маховика',
+    problem: stage({ ask: 'fly', s: 280, r: 1.75 }),
+    book: { rpm: 286 },
+    relTol: 0.002,
+    note: 's = 280 м, R = 1,75 м, сопротивления воздуха нет; конечное положение на том же уровне. Книга: 286 об/мин.',
+  },
+  g3117: {
+    title: 'Мещерский 31.17: полёт груза по параболе после ослабления нити',
+    problem: stage({ ask: 'slack', r: 0.5, phi0: 60, v0: -3.5 }),
+    book: { hM: 0.25, v: 1.57, tanT: Math.sqrt(3), q: 0.08, t: 0.55 },
+    relTol: 0.01,
+    note: 'Нить 50 см, φ₀ = 60°, v₀ = 350 см/с вниз. Книга: M на 25 см выше O, v₁ = 157 см/с; парабола y = x√3 − 0,08x² (см); время полёта 0,55 с.',
+  },
+} satisfies Record<string, StagePreset>;
+export type StagePresetKey = keyof typeof STAGE_PRESETS;
+
+/* ---------- теоремы об импульсе и о моменте количества движения (§28) ---------- */
+
+export interface ImpulsePreset {
+  title: string;
+  problem: ImpulseProblem;
+  /** Ответ: t, s, v1, F, f, P (вес), p (давление), Sx, Sy, S, Fm, n2, T, phi, Tsync, k, n. */
+  book: Record<string, number>;
+  relTol: number;
+  note: string;
+}
+const imp = (o: Partial<ImpulseProblem>): ImpulseProblem => ({ byWeight: false, m: 1, g: G, ask: 'line', find: 't', v0: 0, v1: 0, t: 1, F: 0, f: 0, alpha: 0, s: 0, A: 0, a0: 0, a1: 0, dt: 0, v: 1, T: 1, psi: 180, r1: 1, n1: 1, r2: 1, R: 1, u0: 1, a: 0.1, l1: 1, l2: 1, ...o });
+const h14 = { R: 1, u0: 1, a: 0.1, t: 5 };
+
+export const IMPULSE_PRESETS = {
+  i281: {
+    title: 'Мещерский 28.1: время торможения и тормозной путь поезда',
+    problem: imp({ find: 't', byWeight: true, m: 1, f: 0.1, v0: 20, v1: 0 }),
+    book: { t: 20.4, s: 204 },
+    relTol: 0.002,
+    note: 'Сопротивление 0,1 веса (взято как f = 0,1 на горизонтали), v₀ = 72 км/ч. Книга: 20,4 с; 204 м.',
+  },
+  i282: {
+    title: 'Мещерский 28.2: время спуска тела по шероховатой наклонной плоскости',
+    problem: imp({ find: 'tpath', byWeight: true, m: 1, alpha: -30, f: 0.2, s: 39.2 }),
+    book: { t: 5 },
+    relTol: 0.012,
+    note: 'α = 30° (спуск: α = −30°), f = 0,2, путь 39,2 м, без начальной скорости. Книга: T = 5 с; расчёт 4,945 с (с g = 9,8 — 4,948) — в книге округлено.',
+  },
+  i283: {
+    title: 'Мещерский 28.3: сила тяги тепловоза на подъёме',
+    problem: imp({ find: 'F', byWeight: true, m: 400, alpha: (Math.atan(0.006) * 180) / Math.PI, f: 0.005, v0: 15, v1: 12.5, t: 50 }),
+    book: { F: 2.36 },
+    relTol: 0.002,
+    note: 'Вес 400 т, подъём tg α = 0,006, f = 0,005, скорость с 54 до 45 км/ч за 50 с. Книга: 2,36 т.',
+  },
+  i285: {
+    title: 'Мещерский 28.5: вес состава по показанию динамометра',
+    problem: imp({ find: 'm', byWeight: true, m: 1, F: 100.8, f: 0.02, v0: 0, v1: 16, t: 120 }),
+    book: { P: 3000 },
+    relTol: 0.001,
+    note: 'Среднее показание 100,8 т за 2 мин, скорость 57,6 км/ч = 16 м/с из покоя, f = 0,02. Книга: 3000 т.',
+  },
+  i286: {
+    title: 'Мещерский 28.6: коэффициент трения заторможенного автомобиля',
+    problem: imp({ find: 'f', byWeight: true, m: 1, v0: 20, v1: 0, t: 6 }),
+    book: { f: 0.34 },
+    relTol: 0.002,
+    note: 'v = 72 км/ч, остановка через 6 с. Книга: f = 0,34.',
+  },
+  i287: {
+    title: 'Мещерский 28.7: среднее давление пороховых газов в стволе винтовки',
+    problem: imp({ find: 'F', byWeight: true, m: 0.02, v0: 0, v1: 650, t: 0.00095, A: 150 }),
+    book: { p: 9.31 },
+    relTol: 0.002,
+    note: 'Пуля 20 Г = 0,02 кГ, v = 650 м/с за 0,00095 с, сечение 150 мм² — давление в кГ/мм². Книга: 9,31 кГ/мм² (расчёт 9,30).',
+  },
+  i2811: {
+    title: 'Мещерский 28.11: скорость саней, разгоняемых толчками',
+    problem: imp({ find: 'v1', byWeight: true, m: 80, F: 2, f: 0.01, v0: 0, t: 15 }),
+    book: { v1: 2.2 },
+    relTol: 0.005,
+    note: 'Мальчик 40 кГ и сани 40 кГ, толчок 2 кГ·с каждую секунду — как средняя сила 2 кГ, f = 0,01, 15 с. Книга: 2,2 м/с.',
+  },
+  i289: {
+    title: 'Мещерский 28.9: импульс равнодействующей сил, действующих на снаряд',
+    problem: imp({ ask: 'vec', byWeight: true, m: 100, v0: 500, a0: 60, v1: 200, a1: 0 }),
+    book: { Sx: -510, Sy: -4410 },
+    relTol: 0.002,
+    note: 'v₀ = 500 м/с под 60°, в наивысшей точке v₁ = 200 м/с горизонтально, вес 100 кГ. Книга: Sx = −510 кГ·с, Sy = −4410 кГ·с.',
+  },
+  i2812: {
+    title: 'Мещерский 28.12: импульс сил за полупериод равномерного движения по окружности',
+    problem: imp({ ask: 'circle', m: 0.005, v: 0.2, T: 4, psi: 180 }),
+    book: { S: 0.002, Fm: 0.001 },
+    relTol: 1e-6,
+    note: 'm = 5 г, v = 20 см/с, оборот за 4 с. Книга: S = 200 дин·с = 0,002 Н·с, F = 100 дин = 0,001 Н — по конечной скорости.',
+  },
+  i284: {
+    title: 'Мещерский 28.4: гирька на нити, втягиваемой в трубку, — новое число оборотов',
+    problem: imp({ ask: 'area', r1: 1, n1: 120, r2: 0.5 }),
+    book: { n2: 480 },
+    relTol: 1e-9,
+    note: 'Радиус окружности уменьшается вдвое, 120 об/мин. Книга: 480 об/мин.',
+  },
+  i2814: {
+    title: 'Мещерский 28.14: шарик на нити, втягиваемой в отверстие, — движение и натяжение',
+    problem: imp({ ask: 'hole', byWeight: true, m: 1, R: h14.R, u0: h14.u0, a: h14.a, t: h14.t }),
+    book: { phi: (h14.u0 * h14.t) / (h14.R - h14.a * h14.t), T: (1 * h14.u0 ** 2 * h14.R ** 2) / (G * (h14.R - h14.a * h14.t) ** 3) },
+    relTol: 1e-9,
+    note: 'Задача в общем виде; взяты p = 1, R = 1 м, v₀ = 1 м/с, a = 0,1 м/с, t = 5 с. Книга: r = R − at, φ = v₀t/(R − at), T = pv₀²R²/(g(R − at)³).',
+  },
+  i2813: {
+    title: 'Мещерский 28.13: когда два маятника одновременно вернутся в исходное положение',
+    problem: imp({ ask: 'sync', l1: 0.9, l2: 0.4 }),
+    book: { k: 3, n: 2, Tsync: 2 * 2 * Math.PI * Math.sqrt(0.9 / G) },
+    relTol: 1e-9,
+    note: 'Задача в общем виде; взяты l₁ = 0,9 м, l₂ = 0,4 м: √(l₁/l₂) = 3/2. Книга: √(l₁/l₂) = k/n — несократимая дробь, T = kT₂ = nT₁.',
+  },
+} satisfies Record<string, ImpulsePreset>;
+export type ImpulsePresetKey = keyof typeof IMPULSE_PRESETS;
