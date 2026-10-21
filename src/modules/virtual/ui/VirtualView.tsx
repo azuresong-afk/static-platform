@@ -16,6 +16,9 @@ import { VIRTUAL_PRESETS, type VirtualPresetKey } from '../presets';
 import { virtualDoc } from '../text/solution';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
+import { ModeSwitch } from '../../../shared/machines/MachineView';
+import type { MachineStore } from '../../../shared/machines/store';
+import { VIRTUAL_MACHINE_PRESETS } from '../machines';
 
 const WHY: Record<Exclude<VirtualResult, { ok: true }>['why'], string> = {
   empty: 'Схема пуста — соберите конструкцию во вкладке «Балки и рамы».',
@@ -29,7 +32,7 @@ const WHY: Record<Exclude<VirtualResult, { ok: true }>['why'], string> = {
 
 const noGrid = (svg: string) => svg.replace(/<defs>.*?<\/defs>/, '').replace(/<rect width="\d+" height="\d+" fill="url\(#cm\)"\/>/, '');
 
-export function VirtualView({ chrome, frames }: { chrome: Chrome; frames: FramesStore }) {
+export function VirtualView({ chrome, frames, ms }: { chrome: Chrome; frames: FramesStore; ms: MachineStore }) {
   const st = useSyncExternalStore(frames.subscribe, frames.get);
   const nt = useMemo(() => new Set(st.nt), [st.nt]);
   const a = useMemo(() => analyze(st.s, { notTarget: nt }), [st.s, nt]);
@@ -62,10 +65,11 @@ export function VirtualView({ chrome, frames }: { chrome: Chrome; frames: Frames
             </p>
           </div>
           <div className="topright">
+            <ModeSwitch ms={ms} base="Конструкция из «Балок и рам»" />
             <label className="preset">
               Готовая задача
-              <select id="vwpreset" value={presetKey} onChange={(e) => load(e.target.value as VirtualPresetKey)}>
-                <PresetOptions items={taskEntries(VIRTUAL_PRESETS)} />
+              <select id="vwpreset" value={presetKey} onChange={(e) => (e.target.value in VIRTUAL_MACHINE_PRESETS ? ms.loadPreset(e.target.value) : load(e.target.value as VirtualPresetKey))}>
+                <PresetOptions items={[...taskEntries(VIRTUAL_PRESETS), ...taskEntries(VIRTUAL_MACHINE_PRESETS)]} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>

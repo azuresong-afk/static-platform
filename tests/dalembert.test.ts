@@ -117,6 +117,15 @@ describe('вращение под действием пары (Яблонски�
     for (const k of ['XA', 'YA', 'ZA', 'XB', 'YB'] as const) expect(g.total[k]).toBeCloseTo(r.total[k], 9);
     expect(solveShaft({ ...base, drive: { M: 60, t: 2, omega0: 3 } }).omega).toBeCloseTo(3 + r.omega, 12);
   });
+  it('момент задан углом поворота (Д.16): ω² = ω₀² + 2εφ, при том же положении те же реакции, что и по времени', () => {
+    const r = solveShaft(base);
+    const phi = (r.eps * 4) / 2; // φ = ετ²/2 за τ = 2 с из состояния покоя, рад
+    const byAngle = solveShaft({ ...base, drive: { M: 60, t: 0, omega0: 0, angle: (phi * 180) / Math.PI } });
+    expect(byAngle.omega).toBeCloseTo(r.omega, 9);
+    for (const k of ['XA', 'YA', 'ZA', 'XB', 'YB'] as const) expect(byAngle.total[k]).toBeCloseTo(r.total[k], 8);
+    expect(solveShaft({ ...base, drive: { M: -60, t: 0, omega0: 3, angle: 3000 } }).ok).toBe(false);
+    expect(solveShaft({ ...base, drive: { M: 60, t: 0, omega0: 0, angle: -1 } }).ok).toBe(false);
+  });
   it('уравнение моментов относительно оси x через A (как в книге): 3Y_B + G·y_C + J_yz·ω² = 0, а относительно y: 3X_B + J_yz·ε = 0', () => {
     const r = solveShaft(base);
     expect(3 * r.total.YB + r.M * 9.81 * r.C[1] + r.Jyz * r.omega ** 2).toBeCloseTo(0, 8);
