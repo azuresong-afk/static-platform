@@ -4,6 +4,7 @@ import { taskEntries } from '../../shared/tasks';
 import { OSC_PRESETS, type OscPresetKey } from './presets';
 import { OscStore, OSC_MODULE } from './ui/store';
 import { OscView } from './ui/OscView';
+import { OSC_EXTRA_PRESETS, type OscExtraKey } from './extraPresets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -38,7 +39,7 @@ export function createOscModule(): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
-    tasks: taskEntries(OSC_PRESETS),
-    loadTask: (k) => store.loadPreset(k as OscPresetKey),
+    tasks: taskEntries({ ...OSC_PRESETS, ...OSC_EXTRA_PRESETS }),
+    loadTask: (k) => store.loadPreset(k as OscPresetKey | OscExtraKey),
   };
 }

@@ -1,4 +1,8 @@
 /** Состояние вкладки «Удар и колебания»: задача, отмена и повтор, готовые задачи, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
+import { OSC_ASKS } from '../model/extra';
+import { OSC_EXTRA_PRESETS, type OscExtraKey } from '../extraPresets';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -20,9 +24,11 @@ export type ElemNum = 'c' | 'ang' | 'la' | 'lb' | 'E' | 'l' | 'A' | 'J' | 'a' | 
 
 export interface OscState {
   problem: OscProblem;
+  extra: ExtraProblem;
+  view: XView;
   inv: Inverse;
   title: string;
-  preset: OscPresetKey | 'custom';
+  preset: OscPresetKey | OscExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -30,6 +36,8 @@ export interface OscState {
 }
 interface Snap {
   problem: OscProblem;
+  extra: ExtraProblem;
+  view: XView;
   inv: Inverse;
   title: string;
   preset: OscState['preset'];
@@ -163,6 +171,8 @@ export class OscStore {
   constructor(opts: { preset?: OscPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm324';
     this.st = {
+      extra: structuredClone(OSC_EXTRA_PRESETS.x3210.problem),
+      view: 'main',
       problem: copy(OSC_PRESETS[k].problem),
       inv: presetInv(k),
       title: OSC_PRESETS[k].title,
@@ -182,7 +192,14 @@ export class OscStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, inv: this.st.inv, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({
+    problem: this.st.problem,
+    extra: this.st.extra,
+    view: this.st.view,
+    inv: this.st.inv,
+    title: this.st.title,
+    preset: this.st.preset,
+  });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -200,10 +217,17 @@ export class OscStore {
     this.commit();
     this.edit(fn);
   }
-  loadPreset = (k: OscPresetKey) => {
+  loadPreset = (k: OscPresetKey | OscExtraKey) => {
     this.commit();
-    this.set({ problem: copy(OSC_PRESETS[k].problem), inv: presetInv(k), title: OSC_PRESETS[k].title, preset: k });
+    if (k in OSC_EXTRA_PRESETS) {
+      const e = OSC_EXTRA_PRESETS[k as OscExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    const m = k as OscPresetKey;
+    this.set({ problem: copy(OSC_PRESETS[m].problem), inv: presetInv(m), view: 'main', title: OSC_PRESETS[m].title, preset: k });
   };
+  /** Второй экран (пункт 28): колебательные системы §29, 32, 39. */
+  xhost = extraHost(OSC_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   /* Числа. */
   typeTop = (k: TopNum, v: number) => {
     this.touch(`top:${k}`);
@@ -309,7 +333,7 @@ export class OscStore {
   projectTitle = () => this.st.title;
   exportProject = (now = new Date()) => ({
     name: projectFileName(this.st.title, now),
-    text: writeEnvelope(OSC_MODULE, this.st.title, { problem: this.st.problem, inv: this.st.inv }, now),
+    text: writeEnvelope(OSC_MODULE, this.st.title, { problem: this.st.problem, inv: this.st.inv, extra: this.st.extra, view: this.st.view }, now),
   });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
@@ -317,13 +341,14 @@ export class OscStore {
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== OSC_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseOsc(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, OSC_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     const ie: string[] = [];
-    const inv = parseInv(env.raw.inv, ie);
+    const inv = r.ok ? parseInv(env.raw.inv, ie) : this.st.inv;
     if (ie.length) return (this.notify(head + ie.slice(0, 4).join(' '), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Удар и колебания';
-    this.set({ problem: r.problem, inv, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, inv, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

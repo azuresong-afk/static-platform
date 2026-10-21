@@ -30,6 +30,11 @@ import {
 import { OSC_PRESETS, type OscPresetKey } from '../presets';
 import { oscDoc, unitsOf } from '../text/solution';
 import type { OscStore } from './store';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { OSC_ASKS } from '../model/extra';
+import { OSC_EXTRA_PRESETS, type OscExtraKey } from '../extraPresets';
+
+const ALL_PRESETS = { ...OSC_PRESETS, ...OSC_EXTRA_PRESETS };
 
 const ORIENT: [Orient, string][] = [
   ['v', 'вертикально (ось x вниз)'],
@@ -85,6 +90,25 @@ const KINDS: [ElemKind, string][] = [
 const fmtRoot = (x: number) => String(Number(x.toPrecision(6)));
 
 export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={OSC_ASKS}
+        presets={ALL_PRESETS}
+        prefix="o"
+        heading="Удар и колебания: шкивы, дуга, натяг, два этапа, качающееся тело"
+        lede="Колебательные системы, которые не сводятся к грузу на пружине: стержень на шкивах (жёсткость из сил трения), груз на дуге окружности, пружина с предварительным натягом, сила в крайнем положении (два этапа), стержень на трёх пружинах, полная механическая энергия, полудиск и полушар на плоскости."
+        mainLabel="груз на упругом элементе"
+        tabName="Удар и колебания"
+      />
+    );
+  return <OscViewMain chrome={chrome} store={store} />;
+}
+
+function OscViewMain({ chrome, store }: { chrome: Chrome; store: OscStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const iv = st.inv;
@@ -120,8 +144,8 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="opreset" value={st.preset} onChange={(ev) => store.loadPreset(ev.target.value as OscPresetKey)}>
-                <PresetOptions items={taskEntries(OSC_PRESETS)} />
+              <select id="opreset" value={st.preset} onChange={(ev) => store.loadPreset(ev.target.value as OscPresetKey | OscExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -175,6 +199,11 @@ export function OscView({ chrome, store }: { chrome: Chrome; store: OscStore }) 
         )}
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <div className="segbtns">
+              <button type="button" id="oto-extra" onClick={() => store.xhost.setView('extra')}>
+                Шкивы, дуга, натяг, два этапа, качающееся тело →
+              </button>
+            </div>
             <h2>Единицы</h2>
             <div className="cgpar cg0">
               <label className="sfield">
