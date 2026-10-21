@@ -579,7 +579,7 @@ async function main() {
   await p.press('#mc-Pt', 'Tab');
   const kn13 = await p.innerText('#mcsolution');
   check(!kn13.includes('совпадает с ответом книги') && (await p.innerText('.top h1')).includes('силы инерции в машинах'), 'число изменено — задача своя, ответа книги нет');
-  await p.keyboard.press('Control+z');
+  await p.click('.hist button[title^="Отменить"]');
   check((await p.innerText('#mcsolution')).includes('совпадает с ответом книги'), 'отмена возвращает число в режиме «машины»');
   await p.selectOption('#mckind', 'wedgedyn');
   check((await p.innerText('#mcsolution')).includes('w₁') && (await p.locator('#mcparams input').count()) === 3, 'тип задачи меняет числа: клин между пластинами');
@@ -587,10 +587,10 @@ async function main() {
   const [dlK] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
   const kmText = await (await dlK.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
   check(JSON.parse(kmText).module === 'dalembert' && JSON.parse(kmText).machine.id === 'crane', 'файл режима «машины»');
-  const kmSol = await p.innerText('#mcsolution');
+  const kmSol = await p.innerText('#mcsolution .ans');
   await tab('frames');
   await openText('kn.json', kmText, 'ok');
-  check((await p.getAttribute('[data-tab="dalembert"]', 'aria-selected')) === 'true' && (await p.innerText('#mcsolution')) === kmSol, 'файл режима «машины» открывается в своей вкладке без потерь');
+  check((await p.getAttribute('[data-tab="dalembert"]', 'aria-selected')) === 'true' && (await p.innerText('#mcsolution .ans')) === kmSol, 'файл режима «машины» открывается в своей вкладке без потерь');
   await p.click('#mc-mode-base');
   check((await p.locator('#dsvg').count()) === 1, 'переключатель возвращает основной режим вкладки');
   await p.selectOption('#ddrive', 'couple');
