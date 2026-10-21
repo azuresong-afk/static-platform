@@ -259,7 +259,7 @@ export interface HarmResult {
   vMax: number;
   aMax: number;
   /** Режим: закон задан формулой или найден по периоду, фазе и начальному положению. */
-  mode: 'law' | 'par';
+  mode: 'law' | 'par' | 'xv';
   curve: { t: number; x: number }[];
 }
 
@@ -274,14 +274,32 @@ const wrapPi = (a: number) => {
 
 export function solveHarm(pr: KinProblem): HarmResult {
   const errors: string[] = [];
-  const mode: 'law' | 'par' = pstr(pr, 'src', 'law') === 'par' ? 'par' : 'law';
+  const src = pstr(pr, 'src', 'law');
+  const mode: 'law' | 'par' | 'xv' = src === 'par' ? 'par' : src === 'xv' ? 'xv' : 'law';
   const blank: HarmResult = { ok: false, errors, law: null, a0: 0, a: 0, k: 0, T: 0, f: 0, eps: 0, x0: 0, v0: 0, vMax: 0, aMax: 0, mode, curve: [] };
   let a0: number,
     a: number,
     k: number,
     eps: number,
     lawE: Expr | null = null;
-  if (mode === 'par') {
+  if (mode === 'xv') {
+    // Две пары (x, v) при x = a₀ + a sin(kt + ε): v² = k²(a² − (x − a₀)²) — линейно по k² и a²k².
+    const x1 = pnum(pr, 'x1', 'x₁', errors),
+      v1 = pnum(pr, 'v1', 'v₁', errors),
+      x2 = pnum(pr, 'x2', 'x₂', errors),
+      v2 = pnum(pr, 'v2', 'v₂', errors);
+    a0 = pnum(pr, 'a0', 'центр колебаний a₀', errors, 0);
+    if (errors.length) return blank;
+    const d1 = x1 - a0,
+      d2 = x2 - a0;
+    const den = d2 * d2 - d1 * d1;
+    const k2 = (v1 * v1 - v2 * v2) / den;
+    if (!(Math.abs(den) > 1e-12) || !(k2 > 0)) return { ...blank, errors: ['По этим данным колебание не определено: нужно v₁² − v₂² и x₂² − x₁² одного знака, x₁² ≠ x₂².'] };
+    k = Math.sqrt(k2);
+    a = Math.sqrt(d1 * d1 + (v1 * v1) / k2);
+    // Фаза по двум значениям не определяется (нужен момент времени): принимаем ε = 0.
+    eps = 0;
+  } else if (mode === 'par') {
     // Заданы: период T (или k), начальная фаза ε, начальное положение x₀ и центр a₀ → амплитуда.
     const T = pnum(pr, 'T', 'период T', errors);
     eps = pnum(pr, 'eps', 'начальная фаза ε', errors);

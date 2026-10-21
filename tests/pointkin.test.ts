@@ -7,7 +7,7 @@ import { solveLin } from '../src/modules/pointkin/model/uniform';
 import { solveAny } from '../src/modules/pointkin/ui/solve';
 import { KinStore, parseKin } from '../src/modules/pointkin/ui/store';
 
-const EXT_MODES: KinProblem['mode'][] = ['path', 'integ', 'harm', 'shot', 'cam'];
+const EXT_MODES: KinProblem['mode'][] = ['path', 'integ', 'harm', 'shot', 'cam', 'comp', 'conv'];
 const tol = (v: number, rel?: number) => {
   if (rel) return rel * Math.abs(v) + 1e-12;
   const s = String(Math.abs(v));
@@ -41,14 +41,24 @@ describe('Мещерский §10–12', () => {
         rho: r.rho ?? Infinity,
         alphaV: r.vAngles?.[0] ?? NaN,
         alphaA: r.aAngles?.[0] ?? NaN,
-        vr: c?.v[0] ?? NaN,
-        vphi: c?.v[1] ?? NaN,
+        vr: c?.v[0] ?? r.polar?.vr ?? NaN,
+        vphi: c?.v[1] ?? r.polar?.vphi ?? NaN,
         v3: c?.v[2] ?? NaN,
         ar: c?.a[0] ?? NaN,
         aphi: c?.a[1] ?? NaN,
         a3: c?.a[2] ?? NaN,
+        h_r: r.hodo?.r ?? NaN,
+        h_phi: r.hodo?.phi ?? NaN,
+        h_z: r.hodo?.z ?? NaN,
+        h_vr: r.hodo?.vr ?? NaN,
+        h_vphi: r.hodo?.vphi ?? NaN,
+        h_vz: r.hodo?.vz ?? NaN,
       };
-      for (const [k, book] of Object.entries((p as { book?: Record<string, number> }).book ?? {})) expect(Math.abs(got[k] - book), `${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(tol(book, rel));
+      for (const [k, book] of Object.entries((p as { book?: Record<string, number> }).book ?? {})) {
+        // Угол направления скорости — по модулю полного оборота.
+        const g = k === 'h_phi' ? got[k] + 2 * Math.PI * Math.round((book - got[k]) / (2 * Math.PI)) : got[k];
+        expect(Math.abs(g - book), `${k}: ${g} против ${book}`).toBeLessThanOrEqual(tol(book, rel));
+      }
     });
   it('12.29: ρ₀ = ∞', () => expect(solveKin(KIN_PRESETS.k1229.problem as KinProblem).rho).toBeNull());
   it('12.32: радиус кривизны кардиоиды при t = 0 равен 4a/3', () => {
