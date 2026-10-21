@@ -1,0 +1,690 @@
+/**
+ * Чертёж конструкции и расчётной схемы (перенос renderSVG() прототипа).
+ * Чистая функция: возвращает разметку SVG и параметры раскладки (масштаб, начало координат,
+ * положения размерных надписей) — они нужны интерфейсу для перетаскивания, двойного щелчка и правки размеров.
+ * Разметка совпадает с прототипом (проверяется golden-тестами).
+ */
+import { REFS, TYPES, loadAngle, quadOf, segAngle } from '../model/constants';
+import { fmt, r1 } from '../../../shared/format';
+import { distGeom, pathNodes, resolve, type Geom, type PointItem } from '../model/geometry';
+import type { Seg, Structure } from '../model/types';
+import type { Action, Model } from '../solver/model';
+import type { Solution } from '../solver/solve';
+import { STATUS } from '../text/labels';
+
+export const W = 1000;
+
+export type View = 'construct' | 'schema';
+
+export interface Layout {
+  W: number;
+  H: number;
+  /** Пикселей на метр. */
+  SC: number;
+  OX: number;
+  OY: number;
+  MAXY: number;
+  /** Центр размерной надписи участка (для поля правки длины). */
+  dimPos: Record<string, [number, number]>;
+}
+
+export interface Drawing {
+  svg: string;
+  viewBox: string;
+  layout: Layout;
+}
+
+/** Экранные координаты точки чертежа. */
+export const toScreen = (L: Layout, x: number, y: number): [number, number] => [L.OX + x * L.SC, L.OY + (L.MAXY - y) * L.SC];
+
+type Sym = { L: string; S: string };
+const ssym = (o: Sym, extra = '') =>
+  `<tspan font-style="italic">${o.L}</tspan>${o.S ? `<tspan dy="5" font-size="12">${o.S}</tspan><tspan dy="-5">${extra}</tspan>` : `<tspan>${extra}</tspan>`}`;
+
+function head(hx: number, hy: number, ux: number, uy: number, cls: string) {
+  const s = 12,
+    w = 4.6,
+    bx = hx - ux * s,
+    by = hy - uy * s;
+  return `<polygon points="${r1(hx)},${r1(hy)} ${r1(bx - uy * w)},${r1(by + ux * w)} ${r1(bx + uy * w)},${r1(by - ux * w)}" class="${cls}-f"/>`;
+}
+function arrowLine(tx: number, ty: number, hx: number, hy: number, cls: string, dash?: boolean) {
+  const dx = hx - tx,
+    dy = hy - ty,
+    len = Math.hypot(dx, dy) || 1,
+    ux = dx / len,
+    uy = dy / len;
+  return (
+    `<line x1="${r1(tx)}" y1="${r1(ty)}" x2="${r1(hx - ux * 10)}" y2="${r1(hy - uy * 10)}" class="${cls}"${dash ? ' stroke-dasharray="7 5"' : ''}/>` +
+    head(hx, hy, ux, uy, cls)
+  );
+}
+function forceArrow(px: number, py: number, ang: number, side: number[], cls: string, dash: boolean, label: string, tcls: string, len = 72, gap = 7) {
+  const t = (ang * Math.PI) / 180,
+    ux = Math.cos(t),
+    uy = -Math.sin(t);
+  const out = ux * side[0] + uy * side[1] > 0;
+  const a = [px + side[0] * gap, py + side[1] * gap],
+    b = [px + side[0] * (gap + len), py + side[1] * (gap + len)];
+  const s = out ? arrowLine(a[0], a[1], b[0], b[1], cls, dash) : arrowLine(b[0], b[1], a[0], a[1], cls, dash);
+  if (Math.abs(side[1]) < 0.2) {
+    const mx = px + side[0] * (gap + len / 2);
+    return s + `<text x="${r1(mx)}" y="${r1(py - 14)}" text-anchor="middle" class="t ${tcls}">${label}</text>`;
+  }
+  const lx = px + side[0] * (gap + len + 18),
+    ly = py + side[1] * (gap + len + 18) + 6;
+  const anchor = Math.abs(side[0]) > 0.5 ? (side[0] > 0 ? 'start' : 'end') : 'middle';
+  return s + `<text x="${r1(lx + (anchor === 'start' ? -6 : anchor === 'end' ? 6 : 0))}" y="${r1(ly)}" text-anchor="${anchor}" class="t ${tcls}">${label}</text>`;
+}
+function momentArc(px: number, py: number, r: number, ccw: boolean, cls: string, label: string, tcls: string, dash?: boolean) {
+  const P = (a: number) => [px + r * Math.cos((a * Math.PI) / 180), py - r * Math.sin((a * Math.PI) / 180)];
+  const a0 = ccw ? -35 : 215,
+    a1 = ccw ? 215 : -35,
+    [x0, y0] = P(a0),
+    [x1, y1] = P(a1),
+    t = (a1 * Math.PI) / 180;
+  const [ux, uy] = ccw ? [-Math.sin(t), -Math.cos(t)] : [Math.sin(t), Math.cos(t)];
+  return (
+    `<path d="M${r1(x0)} ${r1(y0)} A${r} ${r} 0 1 ${ccw ? 0 : 1} ${r1(x1 - ux * 8)} ${r1(y1 - uy * 8)}" class="${cls}"${dash ? ' stroke-dasharray="6 4"' : ''}/>` +
+    head(x1 + ux * 3, y1 + uy * 3, ux, uy, cls) +
+    `<text x="${r1(px + r + 8)}" y="${r1(py + r + 14)}" class="t ${tcls}">${label}</text>`
+  );
+}
+function ground(cx: number, y: number, w: number) {
+  let s = `<line x1="${cx - w / 2}" y1="${y}" x2="${cx + w / 2}" y2="${y}" class="sup"/>`;
+  for (let x = cx - w / 2 + 6; x <= cx + w / 2 + 1; x += 8) s += `<line x1="${x}" y1="${y}" x2="${x - 7}" y2="${y + 8}" class="hatch"/>`;
+  return s;
+}
+function drawSupport(it: PointItem, px: number, py: number) {
+  let inner = '';
+  if (it.type === 'pin') inner = `<polygon points="${px},${py + 5} ${px - 16},${py + 34} ${px + 16},${py + 34}" class="sup"/>` + ground(px, py + 34, 50);
+  if (it.type === 'roller')
+    inner = `<polygon points="${px},${py + 5} ${px - 14},${py + 29} ${px + 14},${py + 29}" class="sup"/><circle cx="${px - 7}" cy="${py + 34}" r="4.5" class="hinge"/><circle cx="${px + 7}" cy="${py + 34}" r="4.5" class="hinge"/>${ground(px, py + 39, 48)}`;
+  if (it.type === 'rod')
+    inner = `<line x1="${px}" y1="${py}" x2="${px}" y2="${py + 82}" class="sup" stroke-width="2.4"/><circle cx="${px}" cy="${py + 82}" r="4.5" class="hinge"/>${ground(px, py + 87, 40)}`;
+  // Опора с трением: тело касается шероховатой поверхности (частая штриховка), подпись f.
+  if (it.type === 'rough') {
+    inner = `<line x1="${px - 36}" y1="${py + 3}" x2="${px + 36}" y2="${py + 3}" class="sup" stroke-width="2.4"/>`;
+    for (let x = px - 32; x <= px + 36; x += 5) inner += `<line x1="${x}" y1="${py + 3}" x2="${x - 7}" y2="${py + 11}" class="hatch"/>`;
+  }
+  // Скользящая заделка: втулка (две направляющие вдоль, перпендикулярно реакции) со штриховкой снаружи.
+  if (it.type === 'slide') {
+    for (const dy of [-7, 7]) {
+      inner += `<line x1="${px - 22}" y1="${py + dy}" x2="${px + 22}" y2="${py + dy}" class="sup" stroke-width="2.4"/>`;
+      for (let x = px - 18; x <= px + 22; x += 8) inner += `<line x1="${x}" y1="${py + dy}" x2="${x - 6}" y2="${py + dy + Math.sign(dy) * 7}" class="hatch"/>`;
+    }
+  }
+  if (it.type === 'fixed') {
+    inner = `<line x1="${px - 40}" y1="${py}" x2="${px + 40}" y2="${py}" class="sup" stroke-width="2.4"/>`;
+    for (let x = px - 36; x <= px + 40; x += 8) inner += `<line x1="${x}" y1="${py}" x2="${x - 9}" y2="${py + 9}" class="hatch"/>`;
+  }
+  return `<g transform="rotate(${r1(90 - (it.angle as number))} ${r1(px)} ${r1(py)})">${inner}</g>`;
+}
+
+interface Iv {
+  s: Seg;
+  lo: number;
+  hi: number;
+  y?: number;
+  x?: number;
+  row?: number;
+}
+function pack(intervals: Iv[]) {
+  const rows: Iv[][] = [];
+  intervals
+    .sort((a, b) => a.lo - b.lo)
+    .forEach((iv) => {
+      let r = rows.findIndex((row) => row.every((o) => iv.lo >= o.hi - 1e-9 || iv.hi <= o.lo + 1e-9));
+      if (r < 0) {
+        rows.push([]);
+        r = rows.length - 1;
+      }
+      rows[r].push(iv);
+      iv.row = r;
+    });
+  return rows.length;
+}
+
+export interface DrawOptions {
+  view: View;
+  sel: string | null;
+}
+
+export function renderDrawing(s: Structure, m: Model, sol: Solution, opts: DrawOptions): Drawing {
+  const { items } = resolve(s);
+  const G: Geom = m.g;
+  const schema = opts.view === 'schema',
+    solved = sol.status === 'ok';
+  const w = m.w,
+    h = m.h;
+  const hs: Iv[] = [],
+    vl: Iv[] = [],
+    vr: Iv[] = [];
+  s.segs.forEach((q) => {
+    const A = G.pos[q.a],
+      B = G.pos[q.b];
+    if (q.dir === 'r' || q.dir === 'l') hs.push({ s: q, lo: Math.min(A[0], B[0]), hi: Math.max(A[0], B[0]), y: A[1] });
+    else if (q.dir === 'u' || q.dir === 'd') (A[0] > w / 2 + 1e-9 ? vr : vl).push({ s: q, lo: Math.min(A[1], B[1]), hi: Math.max(A[1], B[1]), x: A[0] });
+  });
+  const nH = pack(hs),
+    nL = pack(vl),
+    nR = pack(vr);
+  const xsDistinct = new Set(m.pts.map((p) => p.x)).size,
+    totalRow = hs.length > 1 && xsDistinct > 2 && nH === 1;
+  const mL = vl.length ? 130 + 28 * nL : 110,
+    mR = vr.length ? 130 + 28 * nR : 110,
+    top = 115;
+  const aw = W - mL - mR,
+    ah = 340;
+  let SC = Math.min(w > 1e-9 ? aw / w : Infinity, h > 1e-9 ? ah / h : Infinity);
+  if (!isFinite(SC)) SC = 100;
+  const OX = mL + (aw - w * SC) / 2,
+    OY = top,
+    MAXY = h;
+  const X = (x: number) => OX + x * SC,
+    Y = (y: number) => OY + (MAXY - y) * SC;
+  const sp = (id: string): [number, number] => [X(G.pos[id][0]), Y(G.pos[id][1])];
+  const yD = Y(0) + 118,
+    rowsH = nH + (totalRow ? 1 : 0);
+  const H = Math.max(450, Math.round(yD + 30 * Math.max(rowsH - 1, 0) + 110));
+  const dimPos: Layout['dimPos'] = {};
+  const o: string[] = [];
+  o.push(
+    `<defs><pattern id="mm" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" class="g1"/></pattern><pattern id="cm" width="50" height="50" patternUnits="userSpaceOnUse"><rect width="50" height="50" fill="url(#mm)"/><path d="M50 0H0V50" class="g2"/></pattern></defs>`,
+  );
+  o.push(`<rect width="${W}" height="${H}" fill="var(--sheet)"/><rect width="${W}" height="${H}" fill="url(#cm)"/><rect x="12" y="12" width="${W - 24}" height="${H - 24}" class="frame"/>`);
+  // размеры
+  const tick = (x: number, y: number) => `<line x1="${r1(x - 5)}" y1="${r1(y + 5)}" x2="${r1(x + 5)}" y2="${r1(y - 5)}" class="dim" stroke-width="1.6"/>`;
+  hs.forEach((iv) => {
+    const yy = yD + 30 * iv.row!,
+      xa = X(iv.lo),
+      xb = X(iv.hi),
+      yn = Y(iv.y!),
+      cx = (xa + xb) / 2,
+      wpx = xb - xa;
+    o.push(
+      `<line x1="${r1(xa)}" y1="${r1(yn + 8)}" x2="${r1(xa)}" y2="${r1(yy + 6)}" class="ext"/><line x1="${r1(xb)}" y1="${r1(yn + 8)}" x2="${r1(xb)}" y2="${r1(yy + 6)}" class="ext"/>`,
+    );
+    o.push(`<line x1="${r1(xa)}" y1="${yy}" x2="${r1(xb)}" y2="${yy}" class="dim"/>` + tick(xa, yy) + tick(xb, yy));
+    const hw = Math.max(14, Math.min(34, wpx / 2));
+    o.push(
+      `<text x="${r1(cx)}" y="${yy - 7}" text-anchor="middle" class="t-dimed"${wpx < 28 ? ' font-size="11"' : ''}>${fmt(iv.s.len, 2)}</text><rect x="${r1(cx - hw)}" y="${yy - 26}" width="${r1(2 * hw)}" height="25" class="dimhit" data-dim="${iv.s.id}"><title>Изменить длину участка</title></rect>`,
+    );
+    dimPos[iv.s.id] = [cx, yy - 12];
+  });
+  if (totalRow) {
+    const yy = yD + 30 * nH;
+    o.push(
+      `<line x1="${r1(X(0))}" y1="${yy}" x2="${r1(X(w))}" y2="${yy}" class="dim"/>` +
+        tick(X(0), yy) +
+        tick(X(w), yy) +
+        `<text x="${r1(X(w / 2))}" y="${yy - 6}" text-anchor="middle" class="t-dim">${fmt(w, 2)}</text>`,
+    );
+  }
+  const vdim = (iv: Iv, xx: number) => {
+    const ya = Y(iv.hi),
+      yb = Y(iv.lo),
+      cy = (ya + yb) / 2,
+      xn = X(iv.x!),
+      hpx = yb - ya,
+      dirOut = xx < xn ? -1 : 1;
+    o.push(
+      `<line x1="${r1(xn + dirOut * 8)}" y1="${r1(ya)}" x2="${r1(xx + dirOut * 6)}" y2="${r1(ya)}" class="ext"/><line x1="${r1(xn + dirOut * 8)}" y1="${r1(yb)}" x2="${r1(xx + dirOut * 6)}" y2="${r1(yb)}" class="ext"/>`,
+    );
+    o.push(`<line x1="${r1(xx)}" y1="${r1(ya)}" x2="${r1(xx)}" y2="${r1(yb)}" class="dim"/>` + tick(xx, ya) + tick(xx, yb));
+    const tx = xx - 7,
+      hh = Math.max(14, Math.min(34, hpx / 2));
+    o.push(
+      `<text x="${r1(tx)}" y="${r1(cy)}" transform="rotate(-90 ${r1(tx)} ${r1(cy)})" text-anchor="middle" class="t-dimed"${hpx < 28 ? ' font-size="11"' : ''}>${fmt(iv.s.len, 2)}</text><rect x="${r1(tx - 19)}" y="${r1(cy - hh)}" width="25" height="${r1(2 * hh)}" class="dimhit" data-dim="${iv.s.id}"><title>Изменить длину участка</title></rect>`,
+    );
+    dimPos[iv.s.id] = [tx - 4, cy];
+  };
+  vl.forEach((iv) => vdim(iv, X(0) - 95 - 28 * iv.row!));
+  vr.forEach((iv) => vdim(iv, X(w) + 95 + 28 * iv.row!));
+  // Наклонные участки: размер вдоль участка (со стороны, дальней от середины рамы) и угол к горизонту
+  // в начале прямого отрезка.
+  const [cxm, cym] = [X(w / 2), Y(h / 2)];
+  s.segs
+    .filter((q) => q.dir === 'a')
+    .forEach((q) => {
+      const [ax, ay] = sp(q.a),
+        [bx, by] = sp(q.b);
+      const L = Math.hypot(bx - ax, by - ay) || 1,
+        ux = (bx - ax) / L,
+        uy = (by - ay) / L;
+      let nx = uy,
+        ny = -ux;
+      if (nx * ((ax + bx) / 2 - cxm) + ny * ((ay + by) / 2 - cym) < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+      // Эпюра распределённой нагрузки рисуется со стороны, откуда нагрузка действует, — размер ставим с другой.
+      const ld = m.dists.find((d) => {
+        const path = pathNodes(G, d.from, d.to);
+        return path.includes(q.a) && path.includes(q.b);
+      });
+      if (ld) {
+        const t = (loadAngle(ld.it.dir, ld.lineAng) * Math.PI) / 180;
+        if (-Math.cos(t) * nx + Math.sin(t) * ny > 0) {
+          nx = -nx;
+          ny = -ny;
+        }
+      }
+      const off = 30,
+        p1 = [ax + nx * off, ay + ny * off],
+        p2 = [bx + nx * off, by + ny * off];
+      o.push(
+        `<line x1="${r1(ax + nx * 8)}" y1="${r1(ay + ny * 8)}" x2="${r1(p1[0] + nx * 6)}" y2="${r1(p1[1] + ny * 6)}" class="ext"/><line x1="${r1(bx + nx * 8)}" y1="${r1(by + ny * 8)}" x2="${r1(p2[0] + nx * 6)}" y2="${r1(p2[1] + ny * 6)}" class="ext"/>`,
+      );
+      const tk = (x: number, y: number) => `<line x1="${r1(x - (ux - nx) * 5)}" y1="${r1(y - (uy - ny) * 5)}" x2="${r1(x + (ux - nx) * 5)}" y2="${r1(y + (uy - ny) * 5)}" class="dim" stroke-width="1.6"/>`;
+      o.push(`<line x1="${r1(p1[0])}" y1="${r1(p1[1])}" x2="${r1(p2[0])}" y2="${r1(p2[1])}" class="dim"/>` + tk(p1[0], p1[1]) + tk(p2[0], p2[1]));
+      // Надпись читается слева направо: угол поворота в пределах ±90°.
+      let rot = (Math.atan2(uy, ux) * 180) / Math.PI;
+      if (rot > 90) rot -= 180;
+      if (rot < -90) rot += 180;
+      const tx = (p1[0] + p2[0]) / 2 + nx * 8,
+        ty = (p1[1] + p2[1]) / 2 + ny * 8,
+        hw = Math.max(14, Math.min(34, L / 2));
+      o.push(
+        `<g transform="rotate(${r1(rot)} ${r1(tx)} ${r1(ty)})"><text x="${r1(tx)}" y="${r1(ty + 5)}" text-anchor="middle" class="t-dimed"${L < 28 ? ' font-size="11"' : ''}>${fmt(q.len, 2)}</text><rect x="${r1(tx - hw)}" y="${r1(ty - 12)}" width="${r1(2 * hw)}" height="24" class="dimhit" data-dim="${q.id}"><title>Изменить длину участка</title></rect></g>`,
+      );
+      dimPos[q.id] = [tx, ty];
+      // Угол к горизонту — если участок не продолжает предыдущий по прямой.
+      const prev = G.parent[q.a];
+      if (prev && prev.dir === 'a' && Math.abs(segAngle(prev) - segAngle(q)) < 1e-9) return;
+      const t = segAngle(q),
+        { alpha } = quadOf(t),
+        h0 = t < 90 || t > 270 ? 0 : 180,
+        R = 30;
+      const P = (d: number, r: number) => [ax + r * Math.cos((d * Math.PI) / 180), ay - r * Math.sin((d * Math.PI) / 180)];
+      // Дуга от горизонтали к участку кратчайшим путём; на экране ось y вниз, поэтому «против часовой» — флаг 0.
+      const delta = ((t - h0 + 540) % 360) - 180,
+        [x0, y0] = P(h0, R),
+        [x1, y1] = P(t, R),
+        sweep = delta > 0 ? 0 : 1,
+        [lx, ly] = P(h0 + delta / 2, R + 16);
+      if (!G.adj[q.a].has(h0 === 0 ? 'r' : 'l')) {
+        const [ex, ey] = P(h0, 52);
+        o.push(`<line x1="${r1(ax)}" y1="${r1(ay)}" x2="${r1(ex)}" y2="${r1(ey)}" class="angref"/>`);
+      }
+      o.push(`<path d="M${r1(x0)} ${r1(y0)} A${R} ${R} 0 0 ${sweep} ${r1(x1)} ${r1(y1)}" class="angarc"/>`);
+      o.push(`<text x="${r1(lx)}" y="${r1(ly + 5)}" text-anchor="middle" class="t-ang">${fmt(alpha, 2)}°</text>`);
+    });
+  // опоры
+  const pointItems = items.filter((it): it is PointItem => it.type !== 'dist');
+  o.push(
+    `<g class="${schema ? 'faint' : ''}">` +
+      pointItems
+        .filter((it) => TYPES[it.type].support)
+        .map((it) => drawSupport(it, X(it.x), Y(it.y)))
+        .join('') +
+      `</g>`,
+  );
+  // распределённая нагрузка
+  const qmax = Math.max(1e-9, ...m.dists.map((d) => Math.max(Math.abs(d.q1), Math.abs(d.q2))));
+  for (const d of m.dists) {
+    const [ax, ay] = sp(d.from),
+      [bx, by] = sp(d.to),
+      t = (loadAngle(d.it.dir, d.lineAng) * Math.PI) / 180,
+      u = [Math.cos(t), -Math.sin(t)],
+      n = [-u[0], -u[1]];
+    const hq = (q: number) => (54 * Math.abs(q)) / qmax,
+      B = 8,
+      pt = (x: number, y: number, k: number) => [x + n[0] * k, y + n[1] * k];
+    const p1 = pt(ax, ay, B),
+      p2 = pt(ax, ay, B + hq(d.q1)),
+      p3 = pt(bx, by, B + hq(d.q2)),
+      p4 = pt(bx, by, B);
+    let s = `<polygon points="${[p1, p2, p3, p4].map((p) => r1(p[0]) + ',' + r1(p[1])).join(' ')}" class="ldfill"/>`;
+    const len = Math.hypot(bx - ax, by - ay),
+      k = Math.max(2, Math.floor(len / 26) + 1);
+    for (let i = 0; i < k; i++) {
+      const f = i / (k - 1),
+        xx = ax + (bx - ax) * f,
+        yy = ay + (by - ay) * f,
+        hh = hq(d.q1 + (d.q2 - d.q1) * f);
+      if (hh > 12) {
+        const [x0, y0] = pt(xx, yy, B + hh),
+          [x1, y1] = pt(xx, yy, B);
+        s += arrowLine(x0, y0, x1, y1, 'ldt');
+      }
+    }
+    const lab = Math.abs(d.q1 - d.q2) < 1e-12 ? ssym({ L: 'q', S: d.S }, ` = ${fmt(d.q1)}`) : ssym({ L: 'q', S: d.S }, ` = ${fmt(d.q1)}…${fmt(d.q2)}`);
+    const [lx, ly] = pt((ax + bx) / 2, (ay + by) / 2, B + Math.max(hq(d.q1), hq(d.q2)) + 10);
+    if (Math.abs(n[0]) > 0.5) {
+      const rx = lx + (n[0] < 0 ? -2 : 14);
+      s += `<text x="${r1(rx)}" y="${r1(ly)}" transform="rotate(-90 ${r1(rx)} ${r1(ly)})" text-anchor="middle" class="t t-ld">${lab}</text>`;
+    } else s += `<text x="${r1(lx)}" y="${r1(ly + (n[1] > 0.5 ? 12 : 0))}" text-anchor="middle" class="t t-ld">${lab}</text>`;
+    o.push(schema ? `<g class="faint">${s}</g>` : s);
+    if (schema) {
+      if (d.split)
+        // Знакопеременная нагрузка: две равнодействующие, каждая со своей стороны.
+        for (const p of d.split.parts) {
+          const tp = (loadAngle(p.dir, d.lineAng) * Math.PI) / 180;
+          o.push(forceArrow(X(p.o.x), Y(p.o.y), p.o.angle, [-Math.cos(tp), Math.sin(tp)], 'ld', false, ssym(p.o, ` = ${fmt(p.Q)}`), 't-ld', 62));
+        }
+      else o.push(forceArrow(X(d.o.x), Y(d.o.y), d.o.angle, n, 'ld', false, ssym(d.o, ` = ${fmt(d.Q)}`), 't-ld', 62));
+    }
+  }
+  // участки
+  s.segs.forEach((q) => {
+    const [x1, y1] = sp(q.a),
+      [x2, y2] = sp(q.b);
+    o.push(`<line x1="${r1(x1)}" y1="${r1(y1)}" x2="${r1(x2)}" y2="${r1(y2)}" class="mem"/>`);
+  });
+  s.segs.forEach((q) => {
+    const [x1, y1] = sp(q.a),
+      [x2, y2] = sp(q.b);
+    o.push(`<line x1="${r1(x1)}" y1="${r1(y1)}" x2="${r1(x2)}" y2="${r1(y2)}" class="memhit" data-segid="${q.id}"><title>Двойной щелчок — добавить точку</title></line>`);
+  });
+  pointItems
+    .filter((it) => it.type === 'pin' || it.type === 'roller' || it.type === 'rod')
+    .forEach((it) => o.push(`<circle cx="${r1(X(it.x))}" cy="${r1(Y(it.y))}" r="4.5" class="hinge"${schema ? ' opacity=".35"' : ''}/>`));
+  // Внутренние шарниры: кружок на стержне (в конструкции без шарниров ничего не добавляется).
+  m.parts.hinges.forEach((h) => {
+    const [hx, hy] = sp(h);
+    const sl = m.parts.slides[h];
+    if (sl != null) {
+      // Скользящая заделка между частями: втулка вдоль направляющей (перпендикулярно нормали sl).
+      const t = (sl * Math.PI) / 180,
+        u = [Math.sin(t), Math.cos(t)],
+        n = [Math.cos(t), -Math.sin(t)];
+      let g = '';
+      for (const k of [-6, 6]) g += `<line x1="${r1(hx - u[0] * 15 + n[0] * k)}" y1="${r1(hy - u[1] * 15 + n[1] * k)}" x2="${r1(hx + u[0] * 15 + n[0] * k)}" y2="${r1(hy + u[1] * 15 + n[1] * k)}" class="sup" stroke-width="2.2"/>`;
+      o.push(`<g class="islide">${g}<title>Скользящая заделка между частями</title></g>`);
+      return;
+    }
+    o.push(`<circle cx="${r1(hx)}" cy="${r1(hy)}" r="6.5" class="hinge ihinge" stroke-width="2"><title>Внутренний шарнир</title></circle>`);
+  });
+  // Отдельные тела и связи между ними (в одной раме ничего не добавляется).
+  const links = resolve(s).structure.links ?? [];
+  const bad = new Set(m.badLinks.map((x) => x.link.id));
+  for (const id of Object.values(m.parts.points)) {
+    const [px, py] = sp(id);
+    o.push(`<circle cx="${r1(px)}" cy="${r1(py)}" r="7" class="bodypt"><title>Тело-точка</title></circle>`);
+  }
+  for (const l of links) {
+    if (l.type === 'thread') {
+      const chain = [l.a, ...(l.via ?? []), l.b].map(sp);
+      o.push(`<polyline points="${chain.map(([x, y]) => r1(x) + ',' + r1(y)).join(' ')}" class="${bad.has(l.id) ? 'badlink' : 'thread'}"><title>Нить</title></polyline>`);
+      for (const [x, y] of chain.slice(1, -1)) o.push(`<circle cx="${r1(x)}" cy="${r1(y)}" r="9" class="pulley"><title>Блок</title></circle><circle cx="${r1(x)}" cy="${r1(y)}" r="2.2" class="bodypt"/>`);
+      continue;
+    }
+    if (l.type === 'hinge') {
+      const [hx, hy] = sp(l.b);
+      o.push(`<circle cx="${r1(hx)}" cy="${r1(hy)}" r="6.5" class="hinge ihinge" stroke-width="2"><title>Шарнир между телами</title></circle>`);
+      continue;
+    }
+    // Касание: линия касательной плоскости, штриховка — со стороны тела точки a (оно давит на тело точки b).
+    // У тела-точки точки касания могут не совпадать: знак касания — посередине, точки соединены пунктиром.
+    const [bx0, by0] = sp(l.b),
+      [ax0, ay0] = sp(l.a);
+    const apart = Math.hypot(bx0 - ax0, by0 - ay0) > 0.5;
+    if (apart) o.push(`<line x1="${r1(ax0)}" y1="${r1(ay0)}" x2="${r1(bx0)}" y2="${r1(by0)}" class="angref"/>`);
+    const [px, py] = apart ? [(ax0 + bx0) / 2, (ay0 + by0) / 2] : [bx0, by0];
+    const t = (l.angle * Math.PI) / 180,
+      n = [Math.cos(t), -Math.sin(t)],
+      u = [Math.sin(t), Math.cos(t)];
+    let g = `<line x1="${r1(px - u[0] * 20)}" y1="${r1(py - u[1] * 20)}" x2="${r1(px + u[0] * 20)}" y2="${r1(py + u[1] * 20)}" class="${bad.has(l.id) ? 'badlink' : 'contact'}"/>`;
+    for (let k = -16; k <= 16; k += l.f > 0 ? 5 : 8) {
+      const x0 = px + u[0] * k,
+        y0 = py + u[1] * k;
+      g += `<line x1="${r1(x0)}" y1="${r1(y0)}" x2="${r1(x0 - n[0] * 7 - u[0] * 4)}" y2="${r1(y0 - n[1] * 7 - u[1] * 4)}" class="hatch"/>`;
+    }
+    o.push(`<g class="icontact">${g}<title>${l.f > 0 ? `Касание с трением, f = ${fmt(l.f)}` : 'Гладкое касание'}</title></g>`);
+  }
+  // нагрузки
+  const loadObj = (id: string): Action | undefined => [...m.knowns, ...m.unkLoads].find((a) => a.itemId === id);
+  const angleMark = (px: number, py: number, it: PointItem & { type: 'force' }) => {
+    const a = +it.alpha || 0;
+    if (Math.abs(a % 180) < 1e-9) return '';
+    const r = REFS[it.ref] || REFS.down,
+      th0 = r.base + 180,
+      sg = it.rot === 'ccw' ? 1 : -1,
+      th1 = th0 + sg * a;
+    const P = (t: number, R: number) => [px + R * Math.cos((t * Math.PI) / 180), py - R * Math.sin((t * Math.PI) / 180)];
+    const R = 34,
+      [x0, y0] = P(th0, R),
+      [x1, y1] = P(th1, R),
+      [lx, ly] = P(th0 + (sg * a) / 2, R + 15);
+    let s = '';
+    if (!G.adj[it.at].has(r.back)) {
+      const [ex, ey] = P(th0, 66);
+      s += `<line x1="${r1(px)}" y1="${r1(py)}" x2="${r1(ex)}" y2="${r1(ey)}" class="angref"/>`;
+    }
+    s += `<path d="M${r1(x0)} ${r1(y0)} A${R} ${R} 0 ${a > 180 ? 1 : 0} ${sg > 0 ? 0 : 1} ${r1(x1)} ${r1(y1)}" class="angarc"/>`;
+    s += `<text x="${r1(lx)}" y="${r1(ly + 5)}" text-anchor="middle" class="t-ang">${it.angleName ? it.angleName + ' = ' : ''}${fmt(a, 2)}°</text>`;
+    return s;
+  };
+  for (const it of pointItems) {
+    if (TYPES[it.type].support) continue;
+    const px = X(it.x),
+      py = Y(it.y),
+      a = loadObj(it.id);
+    if (!a) continue;
+    if (it.type === 'force') {
+      const unk = it.unknown,
+        v = unk && solved ? sol.vals[a.key!] : null;
+      let ang = it.angle as number;
+      if (v != null && v < 0) ang += 180;
+      const lab = ssym(a, unk ? (v != null ? ` = ${fmt(Math.abs(v))}` : ' = ?') : ` = ${fmt(it.F)}`);
+      o.push(angleMark(px, py, it));
+      o.push(
+        forceArrow(
+          px,
+          py,
+          ang,
+          [-Math.cos(((it.angle as number) * Math.PI) / 180), Math.sin(((it.angle as number) * Math.PI) / 180)],
+          unk && v != null ? 'rc' : 'ld',
+          unk && v == null,
+          lab,
+          unk && v != null ? 't-rc' : 't-ld',
+        ),
+      );
+    } else if (it.type === 'weight') {
+      if (schema || G.adj[it.at].has('d')) o.push(forceArrow(px, py, 270, [0, -1], 'ld', false, ssym(a, ` = ${fmt(it.G)}`), 't-ld'));
+      else
+        o.push(
+          `<line x1="${px}" y1="${py + 5}" x2="${px}" y2="${py + 50}" class="ld" stroke-width="1.4"/><rect x="${px - 15}" y="${py + 50}" width="30" height="26" class="ld" fill="var(--sheet)"/><text x="${px + 22}" y="${py + 69}" class="t t-ld">${ssym(a, ` = ${fmt(it.G)}`)}</text>`,
+        );
+    } else if (it.type === 'moment') {
+      const unk = it.unknown,
+        v = unk && solved ? sol.vals[a.key!] : null;
+      let ccw = it.dir === 'ccw';
+      if (v != null && v < 0) ccw = !ccw;
+      const lab = ssym(a, unk ? (v != null ? ` = ${fmt(Math.abs(v))}` : ' = ?') : ` = ${fmt(it.M)}`);
+      o.push(momentArc(px, py, 28, ccw, unk && v != null ? 'rc' : 'ld', lab, unk && v != null ? 't-rc' : 't-ld', unk && v == null));
+    }
+  }
+  // реакции
+  if (schema) {
+    for (const q of m.supports) {
+      const px = X(q.it.x),
+        py = Y(q.it.y),
+        adj = G.adj[q.it.at];
+      for (const u of q.list) {
+        const v = solved ? sol.vals[u.key] : null,
+          lab = ssym(u, v != null ? ` = ${fmt(Math.abs(v))}` : '');
+        if (u.kind === 'm') {
+          let ccw = u.s > 0;
+          if (v != null && v < 0) ccw = !ccw;
+          o.push(momentArc(px, py, 40, ccw, 'rc', lab, 't-rc'));
+          continue;
+        }
+        let ang = u.angle;
+        if (v != null && v < 0) ang += 180;
+        let side: number[];
+        if (u.L === 'X') side = [!adj.has('l') ? -1 : !adj.has('r') ? 1 : -1, 0];
+        else if (u.L === 'Y') side = [0, !adj.has('d') ? 1 : !adj.has('u') ? -1 : 1];
+        else {
+          const t = (u.angle * Math.PI) / 180;
+          side = [-Math.cos(t), Math.sin(t)];
+        }
+        o.push(forceArrow(px, py, ang, side, 'rc', false, lab, 't-rc', u.L === 'X' ? 60 : 72, 7));
+      }
+    }
+    // Силы связей между телами: давление и трение — на тело точки касания b, натяжение — на концы нити.
+    for (const l of m.links) {
+      if (l.link.type === 'contact') {
+        const [px, py] = sp(l.link.b);
+        for (const u of l.list) {
+          const v = solved ? sol.vals[u.key] : null,
+            lab = ssym(u, v != null ? ` = ${fmt(Math.abs(v))}` : '');
+          const t = (u.angle * Math.PI) / 180;
+          o.push(forceArrow(px, py, u.angle + (v != null && v < 0 ? 180 : 0), [-Math.cos(t), Math.sin(t)], 'rc', false, lab, 't-rc', u.L === 'N' ? 64 : 52, 7));
+        }
+        continue;
+      }
+      if (l.link.type !== 'thread') continue;
+      const T = l.list[0],
+        v = solved ? sol.vals[T.key] : null,
+        lab = ssym(T, v != null ? ` = ${fmt(Math.abs(v))}` : '');
+      const chain = [l.link.a, ...(l.link.via ?? []), l.link.b];
+      for (const [at, to] of [
+        [chain[0], chain[1]],
+        [chain[chain.length - 1], chain[chain.length - 2]],
+      ]) {
+        const [px, py] = sp(at),
+          [qx, qy] = sp(to);
+        const ang = (Math.atan2(py - qy, qx - px) * 180) / Math.PI,
+          d = Math.hypot(qx - px, qy - py) || 1;
+        o.push(forceArrow(px, py, ang + (v != null && v < 0 ? 180 : 0), [(qx - px) / d, (qy - py) / d], 'rc', false, lab, 't-rc', Math.min(60, d * 0.45), 7));
+      }
+    }
+  }
+  // имена точек — в самом свободном из восьми направлений
+  const occ: Record<string, number[][]> = {};
+  G.order.forEach((id) => (occ[id] = [...G.adj[id]].map((d) => ({ r: [1, 0], l: [-1, 0], u: [0, -1], d: [0, 1] })[d])));
+  // Наклонные участки тоже занимают направления у своих концов.
+  s.segs
+    .filter((q) => q.dir === 'a')
+    .forEach((q) => {
+      const t = (segAngle(q) * Math.PI) / 180;
+      occ[q.a]?.push([Math.cos(t), -Math.sin(t)]);
+      occ[q.b]?.push([-Math.cos(t), Math.sin(t)]);
+    });
+  for (const it of items) {
+    if (it.type === 'dist') {
+      const g = distGeom(G, it);
+      if (!g.ok) continue;
+      const t = (loadAngle(it.dir, g.ang) * Math.PI) / 180,
+        n = [-Math.cos(t), Math.sin(t)];
+      pathNodes(G, it.from, it.to).forEach((id) => occ[id].push(n));
+      continue;
+    }
+    const t = ((it.angle || 0) * Math.PI) / 180;
+    if (TYPES[it.type].support || it.type === 'force') occ[it.at].push([-Math.cos(t), Math.sin(t)]);
+    if (it.type === 'fixed' || it.type === 'slide') occ[it.at].push([Math.sin(t), Math.cos(t)], [-Math.sin(t), -Math.cos(t)]);
+    if (it.type === 'weight') occ[it.at].push(G.adj[it.at].has('d') ? [0, -1] : [0, 1]);
+    if (it.type === 'moment') occ[it.at].push([0.7, 0.7]);
+  }
+  const cand = [
+    [-1, 1],
+    [1, 1],
+    [-1, -1],
+    [1, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+  ].map(([x, y]) => {
+    const l = Math.hypot(x, y);
+    return [x / l, y / l];
+  });
+  // Связи занимают направления у своих точек: касательная плоскость, ветви нити.
+  for (const l of links) {
+    if (l.type === 'contact') {
+      const t = (l.angle * Math.PI) / 180;
+      for (const id of [l.a, l.b]) occ[id]?.push([Math.sin(t), Math.cos(t)], [-Math.sin(t), -Math.cos(t)], [-Math.cos(t), Math.sin(t)]);
+      continue;
+    }
+    if (l.type === 'hinge') continue;
+    const chain = [l.a, ...(l.via ?? []), l.b];
+    chain.forEach((id, i) => {
+      for (const j of [i - 1, i + 1]) {
+        if (j < 0 || j >= chain.length) continue;
+        const [x0, y0] = G.pos[id],
+          [x1, y1] = G.pos[chain[j]];
+        occ[id]?.push([x1 - x0, -(y1 - y0)]);
+      }
+    });
+  }
+  // Совпадающие точки разных тел: имя следующей — не там, где уже стоит имя предыдущей.
+  const labelled: { x: number; y: number; d: number[] }[] = [];
+  for (const p of m.pts) {
+    for (const q of labelled) if (Math.abs(q.x - p.x) < 1e-9 && Math.abs(q.y - p.y) < 1e-9) occ[p.id].push(q.d, q.d, q.d);
+    let best = cand[0],
+      bs = -2;
+    cand.forEach((c, i) => {
+      const ds = occ[p.id].map((v) => {
+        const l = Math.hypot(v[0], v[1]) || 1;
+        return (c[0] * v[0] + c[1] * v[1]) / l;
+      });
+      const sc = -Math.max(-1, ...ds) - 0.15 * (ds.length ? ds.reduce((a, b) => a + b, 0) / ds.length : 0) - i * 0.01;
+      if (sc > bs + 1e-9) {
+        bs = sc;
+        best = c;
+      }
+    });
+    labelled.push({ x: p.x, y: p.y, d: best });
+    const lx = X(p.x) + best[0] * 24,
+      ly = Y(p.y) + best[1] * 24 + 6,
+      anc = best[0] < -0.3 ? 'end' : best[0] > 0.3 ? 'start' : 'middle';
+    o.push(`<text x="${r1(lx)}" y="${r1(ly)}" text-anchor="${anc}" class="t-pt">${p.name}</text>`);
+  }
+  // выделение и области захвата
+  for (const it of items) {
+    if (it.type === 'dist') {
+      const [ax, ay] = sp(it.from),
+        [bx, by] = sp(it.to),
+        dg = distGeom(G, it),
+        t = (loadAngle(it.dir, dg.ok ? dg.ang : 0) * Math.PI) / 180,
+        n = [-Math.cos(t), Math.sin(t)];
+      const xs = [ax, bx, ax + n[0] * 64, bx + n[0] * 64],
+        ys = [ay, by, ay + n[1] * 64, by + n[1] * 64];
+      const x0 = Math.min(...xs),
+        x1 = Math.max(...xs),
+        y0 = Math.min(...ys),
+        y1 = Math.max(...ys);
+      if (it.id === opts.sel) o.push(`<rect x="${r1(x0 - 6)}" y="${r1(y0 - 6)}" width="${r1(x1 - x0 + 12)}" height="${r1(y1 - y0 + 12)}" class="selring" rx="4"/>`);
+      o.push(`<rect x="${r1(x0)}" y="${r1(y0)}" width="${r1(Math.max(10, x1 - x0))}" height="${r1(Math.max(10, y1 - y0))}" class="hit hitsel" data-pick="${it.id}"/>`);
+      continue;
+    }
+    const px = X(it.x),
+      py = Y(it.y),
+      t = ((it.angle || 0) * Math.PI) / 180;
+    let off = [0, 0];
+    if (TYPES[it.type].support) off = [-Math.cos(t) * (it.type === 'rod' ? 40 : 24), Math.sin(t) * (it.type === 'rod' ? 40 : 24)];
+    else if (it.type === 'force') off = [-Math.cos(t) * 44, Math.sin(t) * 44];
+    else if (it.type === 'weight') off = [0, 58];
+    const hx = px + off[0],
+      hy = py + off[1];
+    if (it.id === opts.sel) o.push(`<circle cx="${r1(hx)}" cy="${r1(hy)}" r="30" class="selring"/>`);
+    o.push(`<circle cx="${r1(hx)}" cy="${r1(hy)}" r="${it.type === 'force' ? 30 : 24}" class="hit" data-drag="${it.id}"/>`);
+  }
+  // штамп
+  const st = STATUS[sol.status],
+    sx = 688,
+    sy = H - 70;
+  o.push(`<rect x="${sx}" y="${sy}" width="300" height="58" class="stamp"/><line x1="${sx}" y1="${sy + 19}" x2="${sx + 300}" y2="${sy + 19}" class="stl"/><line x1="${sx}" y1="${sy + 38}" x2="${sx + 300}" y2="${sy + 38}" class="stl"/><line x1="${sx + 104}" y1="${sy}" x2="${sx + 104}" y2="${sy + 58}" class="stl"/>
+    <text x="${sx + 8}" y="${sy + 14}" class="t-st">Вид</text><text x="${sx + 112}" y="${sy + 14}" class="t-stv">${schema ? 'Расчётная схема' : 'Конструкция'}</text>
+    <text x="${sx + 8}" y="${sy + 33}" class="t-st">Габарит</text><text x="${sx + 112}" y="${sy + 33}" class="t-stv">${h > 1e-9 ? fmt(w, 2) + ' × ' + fmt(h, 2) + ' м' : 'L = ' + fmt(w, 2) + ' м'}, неизвестных: ${sol.n}</text>
+    <text x="${sx + 8}" y="${sy + 52}" class="t-st">Статус</text><text x="${sx + 112}" y="${sy + 52}" class="t-stv ${st[2]}">${st[0]}</text>`);
+  o.push(`<text x="26" y="${H - 24}" class="t-st">Силы — кН, моменты — кН·м, длины — м</text>`);
+  return { svg: o.join(''), viewBox: `0 0 ${W} ${H}`, layout: { W, H, SC, OX, OY, MAXY, dimPos } };
+}
+
+/** Ближайший к экранной точке узел (для перетаскивания элементов). */
+export function nearestNode(L: Layout, g: Geom, p: [number, number]): string {
+  let b = g.order[0],
+    bd = Infinity;
+  g.order.forEach((id) => {
+    const [x, y] = toScreen(L, g.pos[id][0], g.pos[id][1]),
+      d = Math.hypot(x - p[0], y - p[1]);
+    if (d < bd) {
+      bd = d;
+      b = id;
+    }
+  });
+  return b;
+}

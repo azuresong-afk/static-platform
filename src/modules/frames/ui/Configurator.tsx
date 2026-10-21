@@ -1,0 +1,1001 @@
+/** Конфигуратор: участки, опоры, нагрузки, карточки элементов, «Что найти» — как в прототипе. */
+import { useEffect, useState } from 'react';
+import { DGL, LOADDIR, QUADS, REFS, SIDES, normAng, quadOf, segAngle, type Quad } from '../model/constants';
+import { fmt, parseNum } from '../../../shared/format';
+import { distGeom, type Geom } from '../model/geometry';
+import type { Dir, Item, ItemType, LoadDir, SearchUnit } from '../model/types';
+import { searchFields, searchNameOK } from '../model/search';
+import type { SearchResult } from '../solver/search';
+import { paramText } from '../text/search';
+import type { Model } from '../solver/model';
+import { forceCalcText, itemTitle, sizeText } from '../text/labels';
+import { InlineView } from '../../../shared/ui/DocView';
+import { LOAD_ICONS, SUPPORT_ICONS } from './icons';
+import { NumField } from './NumField';
+import { useStore } from './useStore';
+
+/** Для показа в поле: иррациональные длины и углы наклонных участков — с четырьмя знаками. */
+const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+const AXDIRS: Dir[] = ['r', 'l', 'u', 'd'];
+const isQuad = (v: string): v is Quad => v in QUADS;
+
+const nodeLabel = (g: Geom, id: string) => `${g.name[id]} (${fmt(g.pos[id][0], 2)}; ${fmt(g.pos[id][1], 2)})`;
+
+/** Секция видна в полном редакторе и на своих шагах мастера (на шаге 5 — все). */
+function useStepVisible(steps: number[]) {
+  const [st] = useStore();
+  return !st.wiz.on || st.wiz.step >= 5 || steps.includes(st.wiz.step);
+}
+
+function Segments({ model }: { model: Model }) {
+  const [st, store] = useStore();
+  const g = model.g;
+  const n = st.s.segs.length;
+  return (
+    <div id="segs">
+      {g.segOrder.map((s) => {
+        const name = `${g.name[s.a]}–${g.name[s.b]}`;
+        const qd = s.dir === 'a' ? quadOf(segAngle(s)) : null;
+        const len = (
+          <NumField
+            value={qd ? r4(s.len) : s.len}
+            data={{ 'data-seg': s.id }}
+            unit="м"
+            label={`Длина участка ${name}`}
+            onValue={(v) => (isNaN(v) || v <= 0 || v > 1000 ? false : store.typeSegLen(s.id, v))}
+            onBlur={() => store.endSession('seg:' + s.id)}
+          />
+        );
+        return (
+          <div className="segrow" key={s.id}>
+            <span className="segname">{name}</span>
+            <select
+              className="dirsel"
+              data-segdir={s.id}
+              value={qd ? qd.quad : s.dir}
+              aria-label={`Направление участка ${name}`}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (isQuad(v)) store.setSegDir(s.id, 'a', QUADS[v].ang(qd ? qd.alpha : 30));
+                else store.setSegDir(s.id, v as Dir);
+              }}
+            >
+              {AXDIRS.map((d) => (
+                <option key={d} value={d}>
+                  {DGL[d]}
+                </option>
+              ))}
+              {(Object.keys(QUADS) as Quad[]).map((k) => (
+                <option key={k} value={k} title={`под углом, ${QUADS[k].name}`} data-port-only="">
+                  {QUADS[k].glyph}
+                </option>
+              ))}
+            </select>
+            {qd ? (
+              <div className="seglen">
+                {len}
+                <NumField
+                  value={r4(qd.alpha)}
+                  data={{ 'data-segang': s.id }}
+                  unit="°"
+                  label={`Угол участка ${name} к горизонту`}
+                  onValue={(v) => (isNaN(v) || v <= 0 || v >= 90 ? false : store.typeSegAng(s.id, QUADS[qd.quad].ang(v)))}
+                  onBlur={() => store.endSession('segang:' + s.id)}
+                />
+              </div>
+            ) : (
+              len
+            )}
+            <button type="button" className="mini" data-split={s.id} title="Поставить новую точку посередине участка" onClick={() => store.splitSeg(s.id, s.len / 2)}>
+              Разделить
+            </button>
+            {n > 1 ? (
+              <button type="button" className="del" data-segdel={s.id} aria-label="Убрать участок" title="Убрать участок" onClick={() => store.removeSeg(s.id)}>
+                ×
+              </button>
+            ) : (
+              <span />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AddSegment({ g }: { g: Geom }) {
+  const [, store] = useStore();
+  const last = g.order[g.order.length - 1];
+  const [from, setFrom] = useState(last);
+  const [dir, setDir] = useState<Dir | Quad>('u');
+  const [len, setLen] = useState('2');
+  const [alpha, setAlpha] = useState('30');
+  const [byXY, setByXY] = useState(false);
+  const [dx, setDx] = useState('4');
+  const [dy, setDy] = useState('3');
+  const [bad, setBad] = useState(false);
+  // Точка пропала (или появилась новая схема) — берём последнюю, как прототип.
+  const fromId = g.order.includes(from) ? from : last;
+  useEffect(() => {
+    if (fromId !== from) setFrom(fromId);
+  }, [fromId, from]);
+  const occupied = g.adj[fromId] || new Set<Dir>();
+  // Выбранное направление занято — берём первое свободное из вверх/вниз/вправо/влево и запоминаем его (как прототип).
+  const curDir = !isQuad(dir) && occupied.has(dir) ? ((['u', 'd', 'r', 'l'] as Dir[]).find((d) => !occupied.has(d)) ?? dir) : dir;
+  const quad = isQuad(curDir) ? curDir : null;
+  const xy = quad !== null && byXY;
+  if (curDir !== dir) setDir(curDir);
+  const DN: Record<Dir, string> = { r: 'вправо', l: 'влево', u: 'вверх', d: 'вниз' };
+  return (
+    <div className="addseg">
+      <div className="asrow">
+        <label className="field">
+          <span>Новый участок от точки</span>
+          <select id="asFrom" value={fromId} onChange={(e) => setFrom(e.target.value)}>
+            {g.order.map((id) => (
+              <option key={id} value={id}>
+                {nodeLabel(g, id)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="field">
+          <span>Направление</span>
+          <div className="quick">
+            {(['r', 'l', 'u', 'd'] as Dir[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                data-asdir={d}
+                aria-label={DN[d]}
+                disabled={occupied.has(d)}
+                aria-pressed={d === curDir ? 'true' : 'false'}
+                onClick={() => setDir(d)}
+              >
+                {DGL[d]}
+              </button>
+            ))}
+            {(Object.keys(QUADS) as Quad[]).map((k) => (
+              <button key={k} type="button" data-asdir={k} data-port-only="" aria-label={`под углом, ${QUADS[k].name}`} aria-pressed={k === curDir ? 'true' : 'false'} onClick={() => setDir(k)}>
+                {QUADS[k].glyph}
+              </button>
+            ))}
+          </div>
+        </div>
+        {!xy && (
+          <label className="field">
+            <span>Длина</span>
+            <div className="inp">
+              <input id="asLen" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={len} onChange={(e) => setLen(e.target.value)} />
+              <em>м</em>
+            </div>
+          </label>
+        )}
+      </div>
+      {quad && (
+        <div className="asrow asincl">
+          <div className="seg" role="group" aria-label="Как задать наклонный участок">
+            <button type="button" id="asByAng" aria-pressed={!byXY} onClick={() => setByXY(false)}>
+              по углу
+            </button>
+            <button type="button" id="asByXY" aria-pressed={byXY} onClick={() => setByXY(true)}>
+              по проекциям
+            </button>
+          </div>
+          {byXY ? (
+            <>
+              <label className="field">
+                <span>по горизонтали</span>
+                <div className="inp">
+                  <input id="asDx" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={dx} onChange={(e) => setDx(e.target.value)} />
+                  <em>м</em>
+                </div>
+              </label>
+              <label className="field">
+                <span>по вертикали</span>
+                <div className="inp">
+                  <input id="asDy" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={dy} onChange={(e) => setDy(e.target.value)} />
+                  <em>м</em>
+                </div>
+              </label>
+            </>
+          ) : (
+            <label className="field">
+              <span>угол α к горизонту</span>
+              <div className="inp">
+                <input id="asAng" type="text" inputMode="decimal" className={bad ? 'bad' : undefined} value={alpha} onChange={(e) => setAlpha(e.target.value)} />
+                <em>°</em>
+              </div>
+            </label>
+          )}
+        </div>
+      )}
+      <button
+        type="button"
+        id="asGo"
+        className="addbtn"
+        onClick={() => {
+          if (!quad) {
+            const v = parseNum(len);
+            const invalid = isNaN(v) || v <= 0 || v > 1000;
+            setBad(invalid);
+            store.addSeg(fromId, curDir as Dir, v);
+            return;
+          }
+          // Знаки проекций — по выбранной четверти.
+          const sx = quad === 'ur' || quad === 'dr' ? 1 : -1,
+            sy = quad === 'ur' || quad === 'ul' ? 1 : -1;
+          if (byXY) {
+            const x = parseNum(dx),
+              y = parseNum(dy);
+            const invalid = !(x > 0 && y > 0 && Math.hypot(x, y) <= 1000);
+            setBad(invalid);
+            if (!invalid) store.addSegXY(fromId, sx * x, sy * y);
+            return;
+          }
+          const v = parseNum(len),
+            a = parseNum(alpha);
+          const invalid = isNaN(v) || v <= 0 || v > 1000 || !(a > 0 && a < 90);
+          setBad(invalid);
+          if (!invalid) store.addSeg(fromId, 'a', v, QUADS[quad].ang(a));
+        }}
+      >
+        Добавить участок
+      </button>
+    </div>
+  );
+}
+
+/** Внутренние шарниры: доступны в точках, где сходятся хотя бы два участка. */
+function Hinges({ model }: { model: Model }) {
+  const [st, store] = useStore();
+  const g = model.g;
+  const inner = g.order.filter((id) => g.rays[id].length >= 2);
+  const hinge = new Set(st.s.nodes.filter((n) => n.hinge).map((n) => n.id));
+  return (
+    <div data-port-only="">
+      <div className="sub">
+        Внутренние шарниры{' '}
+        {model.parts.count > 1 && <span className="lentotal">частей: {model.parts.count}</span>}
+      </div>
+      {inner.length ? (
+        <div className="targets" id="hinges">
+          {inner.map((id) => (
+            <label className="chip" key={id} title="Шарнир соединяет участки, но позволяет им поворачиваться друг относительно друга">
+              <input type="checkbox" data-hinge={id} checked={hinge.has(id)} onChange={(e) => store.setHinge(id, e.target.checked)} />
+              <span className="v">{g.name[id]}</span>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="empty">Шарнир можно поставить в точке между участками — сначала разделите участок.</p>
+      )}
+      {inner.length > 0 && (
+        <>
+          <div className="sub">Скользящие заделки между частями</div>
+          <div className="targets" id="slidejoints">
+            {inner.map((id) => {
+              const n = st.s.nodes.find((x) => x.id === id);
+              const on = n?.slide != null;
+              // По умолчанию направляющая — вдоль первого участка в точке (втулка), нормаль — поперёк него.
+              const def = Math.round((((g.rays[id][0] ?? 0) + 90) % 360) * 1000) / 1000;
+              return (
+                <span key={id} className="chip" title="Части скользят друг относительно друга вдоль направляющей, но не поворачиваются: передаются сила поперёк направляющей и момент">
+                  <input type="checkbox" data-slide={id} aria-label={`Скользящая заделка в точке ${g.name[id]}`} checked={on} onChange={(e) => store.setSlideJoint(id, e.target.checked ? def : null)} />
+                  <span className="v">{g.name[id]}</span>
+                  {on && (
+                    <NumField value={n!.slide!} unit="°" label="нормаль" data={{ slideang: id }} onValue={(v) => store.setSlideJoint(id, normAng(v))} />
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Выбор точки для тела или связи. */
+function PointSelect({ value, label, g, data, onChange, skip = [] }: { value: string; label: string; g: Geom; data: Record<string, string>; onChange: (id: string) => void; skip?: string[] }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} {...data} onChange={(e) => onChange(e.target.value)}>
+        {g.order
+          .filter((id) => id === value || !skip.includes(id))
+          .map((id) => (
+            <option key={id} value={id}>
+              {nodeLabel(g, id)}
+            </option>
+          ))}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * Отдельные тела и связи между ними: тело ставится от точки другого тела со смещением (0 — касается её),
+ * касание (гладкое или с трением) и нить, в том числе через блоки.
+ */
+function Bodies({ model }: { model: Model }) {
+  const [st, store] = useStore();
+  const g = model.g;
+  const [from, setFrom] = useState('');
+  const [dx, setDx] = useState('0');
+  const [dy, setDy] = useState('0');
+  const fromId = g.order.includes(from) ? from : g.order[g.order.length - 1];
+  const placed = st.s.nodes.filter((n) => n.place);
+  const links = st.s.links ?? [];
+  const bodies = new Set(g.order.map((id) => g.body[id])).size;
+  const end = (k: string) => () => store.endSession(k);
+  return (
+    <div data-port-only="" id="bodies">
+      <div className="sub">
+        Отдельные тела и связи между ними {bodies > 1 && <span className="lentotal">тел: {bodies}</span>}
+      </div>
+      {placed.map((n) => (
+        <div className="bodyrow" key={n.id} data-body={n.id}>
+          <span className="segname">тело {g.name[n.id]}</span>
+          <label className="field">
+            <span>от точки {g.name[n.place!.from]}: Δx</span>
+            <NumField value={n.place!.dx} unit="м" data={{ 'data-bodydx': n.id }} onValue={(v) => store.typeBodyPlace(n.id, v, n.place!.dy)} onBlur={end('place:' + n.id)} />
+          </label>
+          <label className="field">
+            <span>Δy</span>
+            <NumField value={n.place!.dy} unit="м" data={{ 'data-bodydy': n.id }} onValue={(v) => store.typeBodyPlace(n.id, n.place!.dx, v)} onBlur={end('place:' + n.id)} />
+          </label>
+          <button type="button" className="del" data-delbody={n.id} title="Убрать тело с его участками, опорами, нагрузками и связями" onClick={() => store.removeBody(n.id)}>
+            ×
+          </button>
+        </div>
+      ))}
+      <div className="addseg">
+        <div className="asrow bodyadd">
+          <PointSelect value={fromId} label="Новое тело от точки" g={g} data={{ id: 'bodyFrom' }} onChange={setFrom} />
+          <label className="field">
+            <span>Δx, м</span>
+            <div className="inp">
+              <input id="bodyDx" type="text" inputMode="decimal" value={dx} onChange={(e) => setDx(e.target.value)} />
+            </div>
+          </label>
+          <label className="field">
+            <span>Δy, м</span>
+            <div className="inp">
+              <input id="bodyDy" type="text" inputMode="decimal" value={dy} onChange={(e) => setDy(e.target.value)} />
+            </div>
+          </label>
+        </div>
+        <button type="button" className="addbtn" id="bodyGo" onClick={() => store.addBody(fromId, parseNum(dx) || 0, parseNum(dy) || 0)}>
+          Добавить тело
+        </button>
+        <p className="hint">
+          Новое тело — точка; участки из неё строят тело, без участков это тело-точка. Смещение 0 — тело касается выбранной точки: касание ставится сразу.
+        </p>
+      </div>
+      {links.map((l) => {
+        const head = `${l.type === 'contact' ? 'Касание' : l.type === 'hinge' ? 'Шарнир между телами' : 'Нить'} ${g.name[l.a] ?? '?'}–${g.name[l.b] ?? '?'}`;
+        const bad = model.badLinks.find((x) => x.link.id === l.id);
+        return (
+          <div className="item linkcard" key={l.id} data-link={l.id}>
+            <div className="item-head">
+              <span>{head}</span>
+              <button type="button" className="del" data-dellink={l.id} title="Убрать связь" onClick={() => store.removeLink(l.id)}>
+                ×
+              </button>
+            </div>
+            <div className="fields">
+              <PointSelect value={l.a} label={l.type === 'contact' ? 'Опора — точка тела' : l.type === 'hinge' ? 'Точка первого тела' : 'Начало нити'} g={g} data={{ 'data-linka': l.id }} onChange={(id) => store.setLink(l.id, { a: id })} />
+              <PointSelect value={l.b} label={l.type === 'contact' ? 'Опирается точка' : l.type === 'hinge' ? 'Точка второго тела' : 'Конец нити'} g={g} data={{ 'data-linkb': l.id }} onChange={(id) => store.setLink(l.id, { b: id })} />
+              {l.type === 'contact' ? (
+                <>
+                  <label className="field">
+                    <span>Нормаль: давление на тело второй точки</span>
+                    <NumField value={l.angle} unit="°" data={{ 'data-linkang': l.id }} onValue={(v) => store.typeLinkField(l.id, { angle: normAng(v) })} onBlur={end('link:' + l.id + ':angle')} />
+                  </label>
+                  <label className="field">
+                    <span>Коэффициент трения f (0 — гладко)</span>
+                    <NumField value={l.f} data={{ 'data-linkf': l.id }} onValue={(v) => (v < 0 ? false : store.typeLinkField(l.id, { f: v }))} onBlur={end('link:' + l.id + ':f')} />
+                  </label>
+                  <div className="field wide">
+                    <span>Нормаль</span>
+                    <div className="quick">
+                      {[
+                        [90, '↑'],
+                        [270, '↓'],
+                        [0, '→'],
+                        [180, '←'],
+                      ].map(([a, t]) => (
+                        <button key={a} type="button" data-linknormal={a} aria-pressed={Math.abs(l.angle - +a) < 1e-9 ? 'true' : 'false'} onClick={() => store.setLink(l.id, { angle: +a })}>
+                          {t} {a}°
+                        </button>
+                      ))}
+                      {g.segOrder
+                        .filter((q) => q.dir === 'a' && [q.a, q.b].some((x) => x === l.a || x === l.b))
+                        .flatMap((q) =>
+                          [90, -90].map((d) => {
+                            const a = Math.round(normAng(segAngle(q) + d) * 1e9) / 1e9;
+                            return (
+                              <button key={q.id + d} type="button" data-linknormal={a} aria-pressed={Math.abs(l.angle - a) < 1e-6 ? 'true' : 'false'} onClick={() => store.setLink(l.id, { angle: a })}>
+                                ⊥ {g.name[q.a]}–{g.name[q.b]}: {fmt(a, 2)}°
+                              </button>
+                            );
+                          }),
+                        )}
+                    </div>
+                  </div>
+                </>
+              ) : l.type === 'hinge' ? null : (
+                <div className="field wide">
+                  <span>Блоки, через которые перекинута нить</span>
+                  <div className="targets">
+                    {(l.via ?? []).map((id, i) => (
+                      <span className="chip" key={id + i}>
+                        <span className="v">{g.name[id]}</span>
+                        <button type="button" className="del" data-delvia={id} title="Убрать блок" onClick={() => store.setLink(l.id, { via: (l.via ?? []).filter((_, j) => j !== i) })}>
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <select
+                      value=""
+                      data-addvia={l.id}
+                      aria-label="Добавить блок"
+                      onChange={(e) => e.target.value && store.setLink(l.id, { via: [...(l.via ?? []), e.target.value] })}
+                    >
+                      <option value="">+ блок в точке…</option>
+                      {g.order
+                        .filter((id) => id !== l.a && id !== l.b && !(l.via ?? []).includes(id))
+                        .map((id) => (
+                          <option key={id} value={id}>
+                            {nodeLabel(g, id)}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+            {bad && (
+              <p className="msg">
+                {bad.why === 'apart' ? 'Точки не совпадают — касание не учитывается.' : bad.why === 'same' ? 'Обе точки принадлежат одному телу — связь не учитывается.' : 'Соседние точки нити совпадают — нить не учитывается.'}
+              </p>
+            )}
+          </div>
+        );
+      })}
+      <div className="palette">
+        <button type="button" className="pal" data-addlink="contact" onClick={() => store.addLink('contact')}>
+          Касание
+        </button>
+        <button type="button" className="pal" data-addlink="thread" onClick={() => store.addLink('thread')}>
+          Нить
+        </button>
+        <button type="button" className="pal" data-addlink="hinge" title="Шарнир между телами в совпадающих точках: замыкает контур" onClick={() => store.addLink('hinge')}>
+          Шарнир
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Трение в шарнире: флажок, коэффициент, радиус цапфы, куда проворачивается тело, модель круга трения. */
+function PinFriction({ it }: { it: Item & { type: 'pin' } }) {
+  const [, store] = useStore();
+  const fr = it.fr;
+  const set = (patch: Partial<NonNullable<typeof fr>>) => store.setItemField(it.id, 'fr', { ...fr!, ...patch });
+  const type = (patch: Partial<NonNullable<typeof fr>>) => store.typeItemField(it.id, 'fr', { ...fr!, ...patch } as unknown as number);
+  return (
+    <>
+      <label className="chk wide" data-port-only="">
+        <input type="checkbox" data-id={it.id} data-f="fr" checked={!!fr} onChange={(e) => store.setItemField(it.id, 'fr', e.target.checked ? { f: 0.1, r: 0.05, rot: 'ccw' } : undefined)} /> Трение в шарнире (тело проворачивается: предельное равновесие или равномерное вращение)
+      </label>
+      {fr && (
+        <>
+          <label className="field" data-port-only="">
+            <span>Коэффициент трения f</span>
+            <NumField value={fr.f} data={{ 'data-id': it.id, 'data-f': 'fr.f' }} onValue={(v) => (v < 0 ? false : type({ f: v }))} onBlur={() => store.endSession('item:' + it.id + ':fr')} />
+          </label>
+          <label className="field" data-port-only="">
+            <span>Радиус цапфы r</span>
+            <NumField value={fr.r} unit="м" data={{ 'data-id': it.id, 'data-f': 'fr.r' }} onValue={(v) => (v < 0 ? false : type({ r: v }))} onBlur={() => store.endSession('item:' + it.id + ':fr')} />
+          </label>
+          <label className="field" data-port-only="">
+            <span>Тело проворачивается</span>
+            <select data-id={it.id} data-f="fr.rot" value={fr.rot} onChange={(e) => set({ rot: e.target.value as 'cw' | 'ccw' })}>
+              <option value="ccw">против часовой</option>
+              <option value="cw">по часовой</option>
+            </select>
+          </label>
+          <label className="field" data-port-only="">
+            <span>Радиус круга трения</span>
+            <select data-id={it.id} data-f="fr.circle" value={fr.circle ? '1' : ''} onChange={(e) => set({ circle: e.target.value ? true : undefined })}>
+              <option value="">ρ = f·r (приработанный подшипник)</option>
+              <option value="1">ρ = r·f/√(1 + f²) (касание по линии)</option>
+            </select>
+          </label>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Каток на наклонном участке: реакция перпендикулярно участку — в одну или другую сторону. */
+function NormalButtons({ it, model }: { it: Item & { type: 'roller' | 'rough' }; model: Model }) {
+  const [, store] = useStore();
+  const g = model.g;
+  const segs = g.segOrder.filter((q) => q.dir === 'a' && (q.a === it.at || q.b === it.at));
+  if (!segs.length) return null;
+  return (
+    <div className="field wide">
+      <span>Реакция перпендикулярно участку</span>
+      <div className="quick">
+        {segs.flatMap((q) =>
+          [90, -90].map((d) => {
+            const a = Math.round(normAng(segAngle(q) + d) * 1e9) / 1e9;
+            return (
+              <button key={q.id + d} type="button" data-normal={a} aria-pressed={it.side === 'tilt' && Math.abs((it.angle ?? 0) - a) < 1e-6 ? 'true' : 'false'} onClick={() => store.setRollerAngle(it.id, a)}>
+                ⊥ {g.name[q.a]}–{g.name[q.b]}: {fmt(a, 2)}°
+              </button>
+            );
+          }),
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Palette({ items, icons, portOnly = [] }: { items: [ItemType, string][]; icons: Record<string, React.ReactNode>; portOnly?: ItemType[] }) {
+  const [, store] = useStore();
+  return (
+    <div className="palette">
+      {items.map(([t, label]) => (
+        <button key={t} className="pal" type="button" data-add={t} {...(portOnly.includes(t) ? { 'data-port-only': '' } : {})} onClick={() => store.addItem(t)}>
+          {icons[t]}
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NodeSelect({ it, f, label, g }: { it: Item; f: 'at' | 'from' | 'to'; label: string; g: Geom }) {
+  const [, store] = useStore();
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select data-id={it.id} data-f={f} value={(it as unknown as Record<string, string>)[f]} onChange={(e) => store.setItemField(it.id, f, e.target.value)}>
+        {g.order.map((id) => (
+          <option key={id} value={id}>
+            {nodeLabel(g, id)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Field({ it, f, label, unit, disabled }: { it: Item; f: string; label: string; unit: string; disabled?: boolean }) {
+  const [, store] = useStore();
+  const key = 'item:' + it.id + ':' + f;
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <NumField
+        value={(it as unknown as Record<string, number>)[f] ?? 0}
+        data={{ 'data-id': it.id, 'data-f': f }}
+        unit={unit}
+        disabled={disabled}
+        onValue={(v) => store.typeItemField(it.id, f, v)}
+        onBlur={() => store.endSession(key)}
+      />
+    </label>
+  );
+}
+
+function Select<T extends string>({ it, f, label, options, wide }: { it: Item; f: string; label: string; options: [T, string][]; wide?: boolean }) {
+  const [, store] = useStore();
+  return (
+    <label className={wide ? 'field wide' : 'field'}>
+      <span>{label}</span>
+      <select data-id={it.id} data-f={f} value={(it as unknown as Record<string, string>)[f]} onChange={(e) => store.setItemField(it.id, f, e.target.value)}>
+        {options.map(([v, t]) => (
+          <option key={v} value={v}>
+            {t}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Check({ it, label }: { it: Item & { unknown: boolean }; label: string }) {
+  const [, store] = useStore();
+  return (
+    <label className="chk">
+      <input type="checkbox" data-id={it.id} data-f="unknown" checked={it.unknown} onChange={(e) => store.setItemField(it.id, 'unknown', e.target.checked)} /> {label}
+    </label>
+  );
+}
+
+/** Обозначение угла: в решении угол пишется буквой, значение вводится в поле угла. */
+function AngleName({ it }: { it: Item & { angleName?: string } }) {
+  const [, store] = useStore();
+  return (
+    <label className="field" data-port-only="">
+      <span>Обозначение угла</span>
+      <select data-id={it.id} data-f="angleName" value={it.angleName ?? ''} onChange={(e) => store.setItemField(it.id, 'angleName', e.target.value || undefined)}>
+        <option value="">— число</option>
+        {['α', 'β', 'γ', 'φ', 'ψ', 'θ'].map((l) => (
+          <option key={l} value={l}>
+            {l}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+const sideOptions = (tilt: boolean): [string, string][] => [
+  ...Object.entries(SIDES).map(([k, s]) => [k, s.name] as [string, string]),
+  ...(tilt ? [['tilt', 'наклонная, задать угол'] as [string, string]] : []),
+];
+
+function ItemCard({ it, model }: { it: Item; model: Model }) {
+  const [st, store] = useStore();
+  const g = model.g;
+  let fields: React.ReactNode = null;
+  const P = it.type !== 'dist' ? <NodeSelect it={it} f="at" label="Точка" g={g} /> : null;
+  switch (it.type) {
+    case 'fixed':
+      fields = (
+        <>
+          {P}
+          <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(false)} />
+        </>
+      );
+      break;
+    case 'pin':
+      fields = (
+        <>
+          {P}
+          <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(false)} />
+          <PinFriction it={it} />
+        </>
+      );
+      break;
+    case 'roller':
+      fields = (
+        <>
+          {P}
+          <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(true)} />
+          {it.side === 'tilt' && <Field it={it} f="angle" label="Угол реакции к оси x" unit="°" />}
+          <NormalButtons it={it} model={model} />
+          <label className="chk wide" data-port-only="">
+            <input type="checkbox" data-id={it.id} data-f="oneSided" checked={!!it.oneSided} onChange={(e) => store.setItemField(it.id, 'oneSided', e.target.checked || undefined)} /> Односторонняя связь: опора может только давить (отрыв, опрокидывание)
+          </label>
+          {it.side === 'tilt' && <AngleName it={it} />}
+        </>
+      );
+      break;
+    case 'slide':
+      fields = (
+        <>
+          {P}
+          <Select
+            it={it}
+            f="side"
+            label="Направляющая"
+            options={[
+              ['below', 'горизонтальная, R вверх'],
+              ['above', 'горизонтальная, R вниз'],
+              ['left', 'вертикальная, R вправо'],
+              ['right', 'вертикальная, R влево'],
+              ['tilt', 'наклонная, задать угол R'],
+            ]}
+          />
+          {it.side === 'tilt' && <Field it={it} f="angle" label="Угол реакции к оси x" unit="°" />}
+          {it.side === 'tilt' && <AngleName it={it} />}
+          <p className="calc wide">Сечение смещается только вдоль направляющей и не поворачивается: реакция R по нормали к ней и момент M.</p>
+        </>
+      );
+      break;
+    case 'rough':
+      fields = (
+        <>
+          {P}
+          <Select it={it} f="side" label="Опорная поверхность" options={sideOptions(true)} />
+          {it.side === 'tilt' && <Field it={it} f="angle" label="Угол нормали к оси x" unit="°" />}
+          {it.side === 'tilt' && <AngleName it={it} />}
+          <NormalButtons it={it} model={model} />
+          <Field it={it} f="f" label="Коэффициент трения f" unit="" />
+          <Field it={it} f="k" label="Трение качения k (0 — нет)" unit="м" />
+        </>
+      );
+      break;
+    case 'rod':
+      fields = (
+        <>
+          {P}
+          <Field it={it} f="angle" label="Угол стержня к оси x" unit="°" />
+          <AngleName it={it} />
+        </>
+      );
+      break;
+    case 'force':
+      fields = (
+        <>
+          {P}
+          <Field it={it} f="F" label="Модуль F" unit="кН" disabled={it.unknown} />
+          <Field it={it} f="alpha" label="Угол α" unit="°" />
+          <AngleName it={it} />
+          <Select it={it} f="ref" label="Отсчёт от направления" options={Object.entries(REFS).map(([k, r]) => [k, r.name] as [string, string])} />
+          <Select
+            it={it}
+            f="rot"
+            label="Отсчитывать угол"
+            options={[
+              ['ccw', 'против часовой'],
+              ['cw', 'по часовой'],
+            ]}
+          />
+          <div className="field">
+            <span>Без угла</span>
+            <div className="quick">
+              {(
+                [
+                  ['down', '↓'],
+                  ['up', '↑'],
+                  ['right', '→'],
+                  ['left', '←'],
+                ] as const
+              ).map(([k, s]) => (
+                <button key={k} type="button" data-dirq={k} data-id={it.id} aria-label={`Сила ${REFS[k].short}`} onClick={() => store.setForceDir(it.id, k)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="calc" data-calc={it.id}>{forceCalcText(it)}</div>
+          <Check it={it} label="Модуль неизвестен — найти" />
+        </>
+      );
+      break;
+    case 'weight':
+      fields = (
+        <>
+          {P}
+          <Field it={it} f="G" label="Вес G" unit="кН" />
+        </>
+      );
+      break;
+    case 'moment':
+      fields = (
+        <>
+          {P}
+          <Field it={it} f="M" label="Момент M" unit="кН·м" disabled={it.unknown} />
+          <Select
+            it={it}
+            f="dir"
+            wide
+            label="Направление"
+            options={[
+              ['ccw', 'против часовой стрелки'],
+              ['cw', 'по часовой стрелке'],
+            ]}
+          />
+          <Check it={it} label="Величина неизвестна — найти" />
+        </>
+      );
+      break;
+    case 'dist': {
+      const dg = distGeom(g, it);
+      const dirs: LoadDir[] = !dg.ok ? ['down', 'up', 'right', 'left'] : dg.axis === 'h' ? ['down', 'up'] : dg.axis === 'v' ? ['right', 'left'] : ['nd', 'nu', 'down', 'up', 'right', 'left'];
+      fields = (
+        <>
+          <NodeSelect it={it} f="from" label="От точки" g={g} />
+          <NodeSelect it={it} f="to" label="До точки" g={g} />
+          <Field it={it} f="q1" label="q в начале" unit="кН/м" />
+          <Field it={it} f="q2" label="q в конце" unit="кН/м" />
+          <Select it={it} f="dir" wide label="Нагрузка направлена" options={dirs.map((d) => [d, LOADDIR[d].name] as [string, string])} />
+          {!dg.ok && <p className="calc s-bad">{g.inclined ? 'Точки должны лежать на одной прямой по раме.' : 'Точки должны лежать на одном прямом участке (горизонтальном или вертикальном).'}</p>}
+        </>
+      );
+      break;
+    }
+  }
+  const sup = it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough' || it.type === 'slide';
+  return (
+    <div className={'item' + (it.id === st.sel ? ' sel' : '')} data-item={it.id} data-kind={sup ? 'sup' : 'load'} onClick={() => store.select(it.id)}>
+      <div className="item-head">
+        <span data-head={it.id}>{model.labels[it.id] && <InlineView c={itemTitle(model.labels[it.id])} />}</span>
+        <button
+          type="button"
+          className="del"
+          data-del={it.id}
+          aria-label="Удалить элемент"
+          onClick={(e) => {
+            e.stopPropagation();
+            store.deleteItem(it.id);
+          }}
+        >
+          ×
+        </button>
+      </div>
+      <div className="fields">{fields}</div>
+    </div>
+  );
+}
+
+/** Поиск положения равновесия: параметр, промежуток, поля-формулы и найденные корни. */
+function SearchPanel({ search, pick }: { search?: SearchResult; pick?: number | null }) {
+  const [st, store] = useStore();
+  const sr = st.s.search;
+  const fields = searchFields(st.s);
+  const end = (k: string) => () => store.endSession(k);
+  return (
+    <div data-port-only="" id="searchpanel">
+      <div className="sub">Положение равновесия</div>
+      <label className="chk">
+        <input type="checkbox" id="searchOn" checked={!!sr} onChange={(e) => store.setSearchOn(e.target.checked)} /> Искать положение: неизвестен угол или размер, а не нагрузка
+      </label>
+      {sr && (
+        <>
+          <div className="fields">
+            <label className="field">
+              <span>Обозначение параметра</span>
+              <div className="inp">
+                <input
+                  type="text"
+                  id="searchName"
+                  value={sr.name}
+                  className={searchNameOK(sr.name) ? undefined : 'bad'}
+                  onChange={(e) => store.typeSearch({ name: e.target.value.trim() })}
+                  onBlur={end('search:name')}
+                />
+              </div>
+            </label>
+            <label className="field">
+              <span>Единица</span>
+              <select id="searchUnit" value={sr.unit} onChange={(e) => store.setSearch({ unit: e.target.value as SearchUnit })}>
+                <option value="deg">угол, °</option>
+                <option value="m">длина, м</option>
+                <option value="">без единицы</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Искать от</span>
+              <NumField value={sr.min} data={{ id: 'searchMin' }} onValue={(v) => store.typeSearch({ min: v })} onBlur={end('search:min')} />
+            </label>
+            <label className="field">
+              <span>до</span>
+              <NumField value={sr.max} data={{ id: 'searchMax' }} onValue={(v) => store.typeSearch({ max: v })} onBlur={end('search:max')} />
+            </label>
+          </div>
+          {sr.bind.map((b, i) => (
+            <div className="bodyrow" key={i} data-bind={i}>
+              <select aria-label="Поле" data-bindfield={i} value={b.ref + ':' + b.field} onChange={(e) => {
+                const [ref, field] = e.target.value.split(':');
+                store.setBind(i, { ref, field });
+              }}>
+                {!fields.some((f) => f.ref === b.ref && f.field === b.field) && <option value={b.ref + ':' + b.field}>(поля нет в схеме)</option>}
+                {fields.map((f) => (
+                  <option key={f.ref + ':' + f.field} value={f.ref + ':' + f.field}>
+                    {f.label}{f.unit ? `, ${f.unit}` : ''}
+                  </option>
+                ))}
+              </select>
+              <span>=</span>
+              <div className="inp">
+                <input type="text" aria-label="Формула" data-bindexpr={i} value={b.expr} onChange={(e) => store.setBind(i, { expr: e.target.value }, true)} onBlur={end('bind:' + i)} />
+              </div>
+              <button type="button" className="del" data-delbind={i} title="Убрать формулу" onClick={() => store.removeBind(i)}>
+                ×
+              </button>
+            </div>
+          ))}
+          <button type="button" className="addbtn" id="addBind" onClick={store.addBind}>
+            Задать поле формулой
+          </button>
+          <p className="hint">
+            Поля схемы (длины, углы, смещения тел, нагрузки) задаются формулами от параметра {sr.name}: например, «2 sin {sr.name}», «90 − {sr.name}/2». Тригонометрия — в градусах: sin 30 = 0,5, arccos 0,5 = 60.
+          </p>
+          {search && search.points.length > 0 && (
+            <div className="targets" id="searchRoots">
+              {search.points.map((pt, i) => (
+                <button key={i} type="button" className="chip" data-root={i} aria-pressed={i === pick ? 'true' : 'false'} onClick={() => store.setPick(i)}>
+                  <span className="v">{sr.name}</span> = {paramText(pt.p, sr.unit)}
+                  {pt.kind === 'root' && !pt.ok ? ' ✗' : pt.stable === true ? ' устойч.' : pt.stable === false ? ' неустойч.' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Targets({ model }: { model: Model }) {
+  const [st, store] = useStore();
+  if (!model.unknowns.length) return <div className="targets"><span className="empty">Искомые появятся, когда вы добавите опоры или отметите неизвестную нагрузку.</span></div>;
+  return (
+    <div className="targets" id="targets">
+      {model.unknowns.map((u) => (
+        <label className="chip" key={u.key}>
+          <input type="checkbox" data-target={u.key} checked={!st.nt.includes(u.key)} onChange={(e) => store.setTarget(u.key, e.target.checked)} />
+          <InlineView c={[{ t: 'sym', L: u.L, S: u.S }]} />
+        </label>
+      ))}
+    </div>
+  );
+}
+
+export function Configurator({ model, search, pick }: { model: Model; search?: SearchResult; pick?: number | null }) {
+  const [st] = useStore();
+  const show1 = useStepVisible([1]),
+    show2 = useStepVisible([2]),
+    show3 = useStepVisible([3]),
+    show23 = useStepVisible([2, 3]),
+    show4 = useStepVisible([4]);
+  return (
+    <section className="panel" aria-label="Конфигуратор">
+      <h2>Конфигуратор</h2>
+      <div hidden={!show1}>
+        <div className="sub">
+          Участки конструкции <span className="lentotal">{sizeText(model)}</span>
+        </div>
+        <Segments model={model} />
+        <AddSegment g={model.g} />
+        <p className="msg" id="segmsg" role="status" key={st.msg.seq}>
+          {st.msg.text}
+        </p>
+        <Hinges model={model} />
+        <Bodies model={model} />
+      </div>
+      <div hidden={!show2}>
+        <div className="sub">Опоры</div>
+        <Palette
+          icons={SUPPORT_ICONS}
+          items={[
+            ['fixed', 'Заделка'],
+            ['pin', 'Шарнир'],
+            ['roller', 'Каток'],
+            ['rod', 'Стержень'],
+            ['rough', 'Трение'],
+            ['slide', 'Скольз. заделка'],
+          ]}
+          portOnly={['rough', 'slide']}
+        />
+      </div>
+      <div hidden={!show3}>
+        <div className="sub">Нагрузки</div>
+        <Palette
+          icons={LOAD_ICONS}
+          items={[
+            ['force', 'Сила'],
+            ['weight', 'Груз'],
+            ['moment', 'Момент'],
+            ['dist', 'Распред.'],
+          ]}
+        />
+      </div>
+      <div hidden={!show23}>
+        <div className="sub">Элементы на балке</div>
+        <div className="items" id="items">
+          {st.s.items.length ? (
+            st.s.items.map((it) => <ItemCard key={it.id} it={it} model={model} />)
+          ) : (
+            <p className="empty">На конструкции пока ничего нет. Добавьте опоры и нагрузки кнопками выше.</p>
+          )}
+        </div>
+      </div>
+      <div hidden={!show4}>
+        <div className="sub">Что найти</div>
+        <Targets model={model} />
+        <SearchPanel search={search} pick={pick} />
+      </div>
+    </section>
+  );
+}
+

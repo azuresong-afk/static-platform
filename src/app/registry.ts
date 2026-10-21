@@ -1,0 +1,52 @@
+/** Разделы приложения: готовые и запланированные по дорожной карте (src/app/roadmap.ts). */
+import { createAxialModule } from '../modules/axial';
+import { createBendingModule } from '../modules/bending';
+import { createFrameDiagModule } from '../modules/framediag';
+import { createVirtualModule } from '../modules/virtual';
+import { createLagrangeModule } from '../modules/lagrange';
+import { createVibModule } from '../modules/vibration';
+import { createHamModule } from '../modules/hamilton';
+import { createCompositeModule } from '../modules/composite';
+import { createVesselModule } from '../modules/vessels';
+import { createTorsionModule } from '../modules/torsion';
+import { createFatigueModule } from '../modules/fatigue';
+import { createFramesModule } from '../modules/frames';
+import { createSectionsModule } from '../modules/sections';
+import { createSpaceModule } from '../modules/space';
+import { createBodyModule } from '../modules/spacebody';
+import { createCentroidModule } from '../modules/centroid';
+import { createConvModule } from '../modules/converging';
+import { createInertiaModule } from '../modules/inertia';
+import { createEnergyModule } from '../modules/energy';
+import { createRotationModule } from '../modules/rotation';
+import { createDalembertModule } from '../modules/dalembert';
+import { createImpactModule } from '../modules/impact';
+import { createVarMassModule } from '../modules/varmass';
+import { createOrbitModule } from '../modules/orbit';
+import { createPointModule } from '../modules/pointdyn';
+import { createMcModule } from '../modules/masscenter';
+import { createPlaneBodyModule } from '../modules/planebody';
+import { createKinModule } from '../modules/pointkin';
+import { createGearModule } from '../modules/gears';
+import { createMechModule } from '../modules/mechanism';
+import { createRelModule } from '../modules/relative';
+import { createFixedPointModule } from '../modules/fixedpoint';
+import { createGyroModule } from '../modules/gyro';
+import { createTrussModule } from '../modules/truss';
+import { createGraphStatModule } from '../modules/graphstat';
+import { createCentrodesModule } from '../modules/centrodes';
+import { createOscModule } from '../modules/oscillation';
+import { createRodsModule } from '../modules/rods';
+import { ConventionsStore } from '../shared/conventions';
+import type { PlannedModule, StatikaModule } from './module';
+import { ROADMAP } from './roadmap';
+
+export function createModules(): StatikaModule[] {
+  const frames = createFramesModule();
+  const conventions = new ConventionsStore();
+  return [frames, createTrussModule(), createGraphStatModule(), createBodyModule(), createCentroidModule(), createConvModule(), createInertiaModule(), createEnergyModule(), createRotationModule(), createGyroModule(), createDalembertModule(), createImpactModule(), createVarMassModule(), createOrbitModule(), createPointModule(), createMcModule(), createPlaneBodyModule(), createOscModule(), createKinModule(), createGearModule(), createMechModule(), createCentrodesModule(), createFixedPointModule(), createRelModule(), createVirtualModule(frames.store), createLagrangeModule(), createVibModule(), createHamModule(), createBendingModule(frames.store, conventions), createFrameDiagModule(frames.store, conventions), createSectionsModule(frames.store, conventions), createAxialModule(), createRodsModule(), createSpaceModule(conventions), createCompositeModule(), createVesselModule(), createTorsionModule(), createFatigueModule()];
+}
+
+export const PLANNED: PlannedModule[] = ROADMAP.flatMap((b) => b.items)
+  .filter((i) => i.status !== 'done')
+  .map((i) => ({ id: i.id, tab: i.title }));

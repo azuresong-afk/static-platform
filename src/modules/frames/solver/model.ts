@@ -1,0 +1,577 @@
+/**
+ * Расчётная модель: неизвестные реакции, известные нагрузки, равнодействующие распределённых
+ * нагрузок и уравнения-кандидаты. Аналог buildModel() прототипа без HTML.
+ */
+import { OPPLOAD, REFS, loadAngle } from '../model/constants';
+import { dirOf, type RefAxis } from '../../../shared/format';
+import { normAng } from '../model/constants';
+import { distGeom, pathNodes, partsOf, resolve, roman, type Geom, type Parts, type PointItem, type Pt } from '../model/geometry';
+import type { DistItem, ForceItem, Link, LoadDir, MomentItem, PinItem, Structure, SupportItem, SupportType } from '../model/types';
+import { makeEq, type Eq } from './equations';
+
+/** Обозначение: буква и индекс (X с индексом A, F с индексом 2…). */
+export interface Sym {
+  L: string;
+  S: string;
+}
+
+/** Силовой фактор: сила (kind f) или пара (kind m). Неизвестный — с key, известный — с val. */
+export interface Action extends Sym {
+  kind: 'f' | 'm';
+  key?: string;
+  val?: number;
+  x: number;
+  y: number;
+  /** Единичный вектор положительного направления силы. */
+  dx: number;
+  dy: number;
+  /** Угол положительного направления к оси x, град. */
+  angle: number;
+  /** Пара: +1 — против часовой, −1 — по часовой. */
+  s: number;
+  /** От какой оси пользователь отсчитывал угол (для записи sin/cos). */
+  refAxis?: RefAxis;
+  itemId: string;
+  /** Для реакций — тип опоры. */
+  support?: SupportType;
+  /** Для неизвестных нагрузок — исходный элемент. */
+  item?: ForceItem | MomentItem;
+  /** Номер жёсткой части, на которую действует фактор (для конструкции без шарниров — 0). */
+  part?: number;
+  /** Обозначение угла и его значение, как их ввёл пользователь (для записи sin α вместо sin 60°). */
+  angleName?: string;
+  userAngle?: number;
+  /**
+   * Взаимная реакция во внутреннем соединении: действует на часть on, на часть from — в обратную сторону.
+   * slide — соединение скользящей заделкой (сила по нормали к направляющей и момент), иначе — шарнир (X, Y).
+   */
+  hinge?: { node: string; name: string; on: number; from: number; slide?: boolean };
+  /** Сила связи между телами (касание, нить): её силы на все тела — в Model.linkActs, link — номер в Model.links. */
+  link?: { index: number; kind: 'contact' | 'thread' | 'hinge' };
+}
+export type Unknown = Action & { key: string };
+export type Known = Action & { val: number };
+
+export interface SupportInfo {
+  it: PointItem & SupportItem;
+  /** Имя точки опоры. */
+  P: string;
+  list: Unknown[];
+}
+
+export interface DistInfo {
+  it: DistItem;
+  /** Начало и конец куска нагрузки (обычно совпадают с it.from, it.to; шарнир делит нагрузку на куски). */
+  from: string;
+  to: string;
+  /** Часть конструкции, на которую действует кусок. */
+  part: number;
+  /** Кусок нагрузки, разделённой шарнирами: номер и общее число кусков. */
+  piece: { index: number; of: number } | null;
+  q1: number;
+  q2: number;
+  /** Длина участка под нагрузкой (у наклонного — по его оси). */
+  l: number;
+  /** Прямая под нагрузкой: горизонтальная, вертикальная или наклонная, и её угол к оси x (−90°; 90°]. */
+  axis: 'h' | 'v' | 'a';
+  lineAng: number;
+  /** Равнодействующая. */
+  Q: number;
+  /** Доля длины от начала до точки приложения Q. */
+  f: number;
+  /** Расстояние от начала до точки приложения Q. */
+  d: number;
+  S: string;
+  o: Known;
+  /**
+   * Нагрузка меняет знак на участке: эпюра делится в нуле (на расстоянии l1 от начала) на два треугольника.
+   * Тогда Q, f, d, o относятся к первому треугольнику, а обе равнодействующие — в parts.
+   */
+  split: { l1: number; parts: [DistPart, DistPart] } | null;
+}
+
+/** Треугольник эпюры знакопеременной нагрузки. */
+export interface DistPart {
+  /** Интенсивность на краю, где треугольник максимален (со знаком). */
+  q: number;
+  /** Длина треугольника. */
+  l: number;
+  /** Модуль равнодействующей. */
+  Q: number;
+  /** Расстояние от начала участка до точки приложения. */
+  d: number;
+  /** Направление равнодействующей. */
+  dir: LoadDir;
+  o: Known;
+}
+
+
+/** Связь между телами в расчёте. */
+export interface LinkInfo {
+  link: Link;
+  /** Имена точек a и b и блоков. */
+  A: string;
+  B: string;
+  via: string[];
+  /** Неизвестные: у касания — давление N и сила трения Fтр (если f > 0), у нити — натяжение T. */
+  list: Unknown[];
+  /** Касание: часть точки b (на неё давление N направлено под углом нормали) и часть точки a. */
+  on: number;
+  from: number;
+  /** Части, на которые действует связь (у нити — части точек a, блоков и b). */
+  parts: number[];
+  /** Коэффициент трения касания (у нити 0). */
+  f: number;
+  /** Касание тела-точки, точки которого не совпадают (положение тела-точки условно). */
+  apart?: boolean;
+}
+
+/** Связь, которая не учтена: точки касания не совпадают, точки одного тела, участок нити нулевой длины. */
+export interface BadLink {
+  link: Link;
+  why: 'apart' | 'same' | 'zero';
+}
+
+export interface BadDist {
+  it: DistItem;
+  S: string;
+  why: 'zero' | 'line';
+}
+
+/** Что показать в заголовке карточки элемента. */
+export interface ItemLabel {
+  type: SupportItem['type'] | 'force' | 'weight' | 'moment' | 'dist';
+  /** Индекс нагрузки (пусто, если нагрузка этого типа одна). */
+  S: string;
+  /** Точка приложения / опоры. */
+  P?: string;
+}
+
+export interface Point {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+}
+
+export interface Model {
+  g: Geom;
+  pts: Point[];
+  unknowns: Unknown[];
+  knowns: Known[];
+  supports: SupportInfo[];
+  dists: DistInfo[];
+  badDists: BadDist[];
+  unkLoads: Unknown[];
+  labels: Record<string, ItemLabel>;
+  byKey: Record<string, Unknown>;
+  /**
+   * Уравнения-кандидаты в порядке предпочтения. Без шарниров: моменты относительно опорных точек, ΣFx, ΣFy,
+   * моменты относительно остальных точек. С шарнирами: сначала те же уравнения для каждой части
+   * (моменты относительно опор и шарниров части), затем — для всей конструкции.
+   */
+  cands: Eq[];
+  /** Разбиение на жёсткие части по внутренним шарнирам. */
+  parts: Parts;
+  /** Связи между телами (касания и нити) и силы, которыми они действуют на каждую часть. */
+  links: LinkInfo[];
+  linkActs: Action[];
+  badLinks: BadLink[];
+  /** Односторонние связи, принятые неработающими (их силы равны нулю, см. перебор случаев в analyze). */
+  offLinks: Link[];
+  /** Имена точек каждой части. */
+  partNames: string[][];
+  /** Шарниры с трением (предельное состояние): момент трения связан с давлением на ось. */
+  pinFr: PinFr[];
+  /** Габарит, м. */
+  w: number;
+  h: number;
+}
+
+/** Шарнир с трением: ключи реакций X, Y и момента трения M; ρ — радиус круга трения, M = ρ·√(X² + Y²). */
+export interface PinFr {
+  M: string;
+  X: string;
+  Y: string;
+  rho: number;
+  it: PinItem;
+  P: string;
+}
+
+export interface ModelOptions {
+  /** Связи (идентификаторы), которые не учитываются: односторонние связи, принятые неработающими. */
+  off?: ReadonlySet<string>;
+}
+
+export function buildModel(s: Structure, opts: ModelOptions = {}): Model {
+  const { g, items, structure } = resolve(s);
+  const parts = partsOf(s, g);
+  const carrier = (id: string) => parts.nodeParts[id]?.[0] ?? 0;
+  const segPartBetween = (u: string, v: string) => {
+    const q = s.segs.find((x) => (x.a === u && x.b === v) || (x.a === v && x.b === u));
+    return q ? parts.segPart[q.id] : 0;
+  };
+  const carrierOfPath = (path: string[]) => (path.length > 1 ? segPartBetween(path[0], path[1]) : carrier(path[0]));
+  const pts = g.order.map((id) => ({ id, name: g.name[id], x: g.pos[id][0], y: g.pos[id][1] }));
+  const cnt = { force: 0, weight: 0, moment: 0, dist: 0 };
+  items.forEach((it) => {
+    if (it.type in cnt) cnt[it.type as keyof typeof cnt]++;
+  });
+  const idx = { force: 0, weight: 0, moment: 0, dist: 0 };
+  const unknowns: Unknown[] = [],
+    knowns: Known[] = [],
+    supports: SupportInfo[] = [],
+    dists: DistInfo[] = [],
+    badDists: BadDist[] = [],
+    unkLoads: Unknown[] = [],
+    labels: Record<string, ItemLabel> = {},
+    used = new Set<string>(),
+    pinFr: PinFr[] = [];
+  const mkKey = (k: string) => {
+    let kk = k;
+    while (used.has(kk)) kk += "'";
+    used.add(kk);
+    return kk;
+  };
+  for (const it of items) {
+    if (it.type === 'fixed' || it.type === 'pin' || it.type === 'roller' || it.type === 'rod' || it.type === 'rough' || it.type === 'slide') {
+      const P = g.name[it.at],
+        list: Unknown[] = [];
+      const add = (letter: string, props: Pick<Action, 'kind'> & Partial<Action>) => {
+        const base = letter + '_' + P;
+        const key = mkKey(base);
+        const u: Unknown = {
+          dx: 0,
+          dy: 0,
+          angle: 0,
+          s: 0,
+          ...props,
+          key,
+          L: letter,
+          S: P + key.slice(base.length),
+          itemId: it.id,
+          support: it.type,
+          x: it.x,
+          y: it.y,
+          part: carrier(it.at),
+        };
+        unknowns.push(u);
+        list.push(u);
+      };
+      if (it.type === 'fixed' || it.type === 'pin') {
+        add('X', { kind: 'f', dx: 1, dy: 0, angle: 0 });
+        add('Y', { kind: 'f', dx: 0, dy: 1, angle: 90 });
+      }
+      if (it.type === 'fixed') add('M', { kind: 'm', s: 1 });
+      if (it.type === 'pin' && it.fr) {
+        // Момент трения в шарнире: направлен против проворачивания тела, величина M_тр = ρ·√(X² + Y²) ≥ 0.
+        add('Mтр', { kind: 'm', s: it.fr.rot === 'ccw' ? -1 : 1 });
+        const f = Math.max(0, +it.fr.f || 0),
+          r = Math.max(0, +it.fr.r || 0);
+        pinFr.push({ M: list[2].key, X: list[0].key, Y: list[1].key, rho: it.fr.circle ? (r * f) / Math.sqrt(1 + f * f) : f * r, it, P });
+      }
+      if (it.type === 'roller' || it.type === 'rod') {
+        const angle = it.angle as number;
+        const named = it.angleName && (it.type === 'rod' || it.side === 'tilt') ? { angleName: it.angleName, userAngle: angle } : {};
+        add(it.type === 'roller' ? 'R' : 'S', { kind: 'f', ...dirOf(angle), angle, ...named });
+      }
+      if (it.type === 'slide') {
+        // Скользящая заделка: реакция по нормали к направляющей (как у катка) и реактивный момент (как у заделки).
+        const angle = it.angle as number;
+        const named = it.angleName && it.side === 'tilt' ? { angleName: it.angleName, userAngle: angle } : {};
+        add('R', { kind: 'f', ...dirOf(angle), angle, ...named });
+        add('M', { kind: 'm', s: 1 });
+      }
+      if (it.type === 'rough') {
+        // Нормальная реакция — по углу поверхности, сила трения — вдоль поверхности (нормаль, повёрнутая на −90°),
+        // момент сопротивления качению — против часовой стрелки.
+        const angle = it.angle as number,
+          ta = (((angle - 90) % 360) + 360) % 360;
+        const named = it.angleName && it.side === 'tilt' ? { angleName: it.angleName, userAngle: angle } : {};
+        add('N', { kind: 'f', ...dirOf(angle), angle, ...named });
+        add('Fтр', { kind: 'f', ...dirOf(ta), angle: ta });
+        if ((it.k ?? 0) > 0) add('Mк', { kind: 'm', s: 1 });
+      }
+      supports.push({ it, P, list });
+      labels[it.id] = { type: it.type, S: '', P };
+      continue;
+    }
+    const t = it.type;
+    const i = ++idx[t];
+    const S = cnt[t] > 1 ? String(i) : '';
+    if (it.type === 'force') {
+      const angle = it.angle as number;
+      const o: Action = {
+        L: 'F',
+        S,
+        kind: 'f',
+        x: it.x,
+        y: it.y,
+        ...dirOf(angle),
+        angle,
+        s: 0,
+        refAxis: (REFS[it.ref] || REFS.down).axis,
+        itemId: it.id,
+        item: it,
+        part: carrier(it.at),
+        ...(it.angleName ? { angleName: it.angleName, userAngle: +it.alpha || 0 } : {}),
+      };
+      if (it.unknown) {
+        const u = { ...o, key: mkKey('F' + S) };
+        unknowns.push(u);
+        unkLoads.push(u);
+      } else knowns.push({ ...o, val: +it.F });
+      labels[it.id] = { type: t, S, P: g.name[it.at] };
+    } else if (it.type === 'weight') {
+      knowns.push({ L: 'G', S, kind: 'f', x: it.x, y: it.y, dx: 0, dy: -1, angle: 270, s: 0, refAxis: 'h', val: +it.G, itemId: it.id, part: carrier(it.at) });
+      labels[it.id] = { type: t, S, P: g.name[it.at] };
+    } else if (it.type === 'moment') {
+      const o: Action = { L: 'M', S, kind: 'm', x: it.x, y: it.y, dx: 0, dy: 0, angle: 0, s: it.dir === 'ccw' ? 1 : -1, itemId: it.id, item: it, part: carrier(it.at) };
+      if (it.unknown) {
+        const u = { ...o, key: mkKey('M' + (S || '*')) };
+        unknowns.push(u);
+        unkLoads.push(u);
+      } else knowns.push({ ...o, val: +it.M });
+      labels[it.id] = { type: t, S, P: g.name[it.at] };
+    } else {
+      labels[it.id] = { type: t, S };
+      const dg = distGeom(g, it);
+      if (!dg.ok) {
+        badDists.push({ it, S, why: dg.why });
+        continue;
+      }
+      const addPiece = (from: string, to: string, P0: Pt, P1: Pt, l: number, q1: number, q2: number, S: string, part: number, piece: DistInfo['piece']) => {
+        const ang = loadAngle(it.dir, dg.ang);
+        const force = (L: string, val: number, dist: number, a: number): Known => {
+          const t = l > 0 ? dist / l : 0;
+          return {
+            L,
+            S,
+            kind: 'f',
+            x: P0[0] + (P1[0] - P0[0]) * t,
+            y: P0[1] + (P1[1] - P0[1]) * t,
+            ...dirOf(a),
+            angle: a,
+            s: 0,
+            refAxis: 'h',
+            val,
+            itemId: it.id,
+            part,
+          };
+        };
+        if (q1 * q2 < 0 && Math.abs(q1) > 1e-12 && Math.abs(q2) > 1e-12) {
+          // Нагрузка меняет знак: делим эпюру в нуле на два треугольника, у каждого своя равнодействующая.
+          // (В прототипе здесь была одна сила; при q1 = −q2 она равна нулю и пара сил терялась — баг №2.)
+          const l1 = (l * q1) / (q1 - q2),
+            l2 = l - l1;
+          const tri = (L: string, q: number, len: number, d: number): DistPart => {
+            const dir = q > 0 ? it.dir : OPPLOAD[it.dir];
+            const Q = (Math.abs(q) * len) / 2;
+            return { q, l: len, Q, d, dir, o: force(L, Q, d, loadAngle(dir, dg.ang)) };
+          };
+          const halves: [DistPart, DistPart] = [tri('Q′', q1, l1, l1 / 3), tri('Q″', q2, l2, l1 + (2 * l2) / 3)];
+          halves.forEach((p) => knowns.push(p.o));
+          dists.push({ it, from, to, part, piece, q1, q2, l, axis: dg.axis, lineAng: dg.ang, Q: halves[0].Q, f: halves[0].d / l, d: halves[0].d, S, o: halves[0].o, split: { l1, parts: halves } });
+          return;
+        }
+        const Q = ((q1 + q2) / 2) * l,
+          f = Math.abs(q1 + q2) < 1e-12 ? 0.5 : (q1 + 2 * q2) / (3 * (q1 + q2));
+        const o = force('Q', Q, f * l, ang);
+        knowns.push(o);
+        dists.push({ it, from, to, part, piece, q1, q2, l, axis: dg.axis, lineAng: dg.ang, Q, f, d: f * l, S, o, split: null });
+      };
+      // Шарниры внутри нагруженного участка делят нагрузку на куски — по одному на каждую часть.
+      const path = pathNodes(g, it.from, it.to);
+      const cuts = path.map((_, i) => i).filter((i) => i > 0 && i < path.length - 1 && parts.hinges.includes(path[i]));
+      if (!cuts.length) addPiece(it.from, it.to, dg.P, dg.Q, dg.len, +it.q1, +it.q2, S, carrierOfPath(path), null);
+      else {
+        const bounds = [0, ...cuts, path.length - 1];
+        const along = (id: string) => Math.hypot(g.pos[id][0] - dg.P[0], g.pos[id][1] - dg.P[1]);
+        const qAt = (id: string) => +it.q1 + ((+it.q2 - +it.q1) * along(id)) / dg.len;
+        for (let k = 0; k + 1 < bounds.length; k++) {
+          const a = path[bounds[k]],
+            b = path[bounds[k + 1]];
+          const part = segPartBetween(path[bounds[k]], path[bounds[k] + 1]);
+          addPiece(a, b, g.pos[a], g.pos[b], Math.abs(along(b) - along(a)), qAt(a), qAt(b), [S, roman(part)].filter(Boolean).join(','), part, {
+            index: k,
+            of: bounds.length - 1,
+          });
+        }
+      }
+    }
+  }
+  // Взаимные реакции во внутренних шарнирах: на часть j действуют X, Y; на первую часть шарнира — −X, −Y.
+  const hingeActs: Action[] = [];
+  for (const h of parts.hinges) {
+    const P = g.name[h],
+      ps = parts.nodeParts[h],
+      [x, y] = g.pos[h];
+    const sa = parts.slides[h];
+    for (let j = 1; j < ps.length; j++) {
+      const S = ps.length === 2 ? P : P + j;
+      if (sa != null) {
+        // Скользящая заделка между частями: взаимная сила по нормали к направляющей и взаимный момент.
+        const hinge = { node: h, name: P, on: ps[j], from: ps[0], slide: true };
+        const d = dirOf(sa);
+        const R: Unknown = { key: mkKey('R_' + S), L: 'R', S, kind: 'f', x, y, ...d, angle: sa, s: 0, itemId: 'hinge:' + h, part: ps[j], hinge };
+        const Mm: Unknown = { key: mkKey('M_' + S), L: 'M', S, kind: 'm', x, y, dx: 0, dy: 0, angle: 0, s: 1, itemId: 'hinge:' + h, part: ps[j], hinge };
+        unknowns.push(R, Mm);
+        hingeActs.push(R, { ...R, dx: -d.dx, dy: -d.dy, angle: (sa + 180) % 360, part: ps[0] }, Mm, { ...Mm, s: -1, part: ps[0] });
+        continue;
+      }
+      const hinge = { node: h, name: P, on: ps[j], from: ps[0] };
+      for (const [L, dx, dy, angle] of [
+        ['X', 1, 0, 0],
+        ['Y', 0, 1, 90],
+      ] as const) {
+        const u: Unknown = { key: mkKey(L + '_' + S), L, S, kind: 'f', x, y, dx, dy, angle, s: 0, itemId: 'hinge:' + h, part: ps[j], hinge };
+        unknowns.push(u);
+        hingeActs.push(u, { ...u, dx: -dx, dy: -dy, angle: angle + 180, part: ps[0] });
+      }
+    }
+  }
+  // Связи между телами: касания (давление по нормали и трение вдоль касательной) и нити (натяжение вдоль ветвей).
+  const links: LinkInfo[] = [],
+    linkActs: Action[] = [],
+    badLinks: BadLink[] = [],
+    offLinks: Link[] = [];
+  const nThreads = (structure.links ?? []).filter((l) => l.type === 'thread').length;
+  for (const l of structure.links ?? []) {
+    if (opts.off?.has(l.id)) {
+      offLinks.push(l);
+      continue;
+    }
+    const A = g.name[l.a],
+      B = g.name[l.b];
+    const index = links.length;
+    if (l.type === 'hinge') {
+      const [ax, ay] = g.pos[l.a],
+        [bx, by] = g.pos[l.b];
+      const on = carrier(l.b),
+        from = carrier(l.a);
+      if (Math.hypot(bx - ax, by - ay) > 1e-6 || on === from) {
+        badLinks.push({ link: l, why: on === from ? 'same' : 'apart' });
+        continue;
+      }
+      const list: Unknown[] = [];
+      for (const [L, angle] of [
+        ['X', 0],
+        ['Y', 90],
+      ] as const) {
+        const u: Unknown = { key: mkKey(L + '_' + B), L, S: B, kind: 'f', x: bx, y: by, ...dirOf(angle), angle, s: 0, itemId: 'link:' + l.id, part: on, link: { index, kind: 'hinge' } };
+        unknowns.push(u);
+        list.push(u);
+        linkActs.push(u, { ...u, x: ax, y: ay, ...dirOf(angle + 180), angle: angle + 180, part: from });
+      }
+      links.push({ link: l, A, B, via: [], list, on, from, parts: [on, from], f: 0 });
+      continue;
+    }
+    if (l.type === 'contact') {
+      const [ax, ay] = g.pos[l.a],
+        [bx, by] = g.pos[l.b];
+      const on = carrier(l.b),
+        from = carrier(l.a);
+      if (on === from) {
+        badLinks.push({ link: l, why: 'same' });
+        continue;
+      }
+      // Точки касания должны совпадать; у тела-точки положение условно — там допускаем и несовпадающие.
+      const apart = Math.hypot(bx - ax, by - ay) > 1e-6;
+      if (apart && !(on in parts.points) && !(from in parts.points)) {
+        badLinks.push({ link: l, why: 'apart' });
+        continue;
+      }
+      const f = Math.max(0, +l.f || 0);
+      const list: Unknown[] = [];
+      // Индекс — точка касания; если тело в этой точке касается нескольких тел, — обе точки (N_AB).
+      const SB = (structure.links ?? []).filter((x) => x.type === 'contact' && x.b === l.b).length > 1 ? A + B : B;
+      const add = (L: string, angle: number, extra: Partial<Action> = {}) => {
+        const d = dirOf(angle);
+        const base = L + '_' + SB,
+          key = mkKey(base);
+        const u: Unknown = { key, L, S: SB + key.slice(base.length), kind: 'f', x: bx, y: by, ...d, angle, s: 0, itemId: 'link:' + l.id, part: on, link: { index, kind: 'contact' }, ...extra };
+        const back = (angle + 180) % 360;
+        unknowns.push(u);
+        list.push(u);
+        linkActs.push(u, { ...u, x: ax, y: ay, ...dirOf(back), angle: back, part: from });
+      };
+      const angle = normAng(+l.angle || 0);
+      add('N', angle, l.angleName ? { angleName: l.angleName, userAngle: angle } : {});
+      if (f > 0) add('Fтр', normAng(angle - 90));
+      links.push({ link: l, A, B, via: [], list, on, from, parts: [on, from], f, ...(apart ? { apart } : {}) });
+      continue;
+    }
+    const chain = [l.a, ...(l.via ?? []), l.b];
+    if (chain.some((id, i) => i > 0 && Math.hypot(g.pos[id][0] - g.pos[chain[i - 1]][0], g.pos[id][1] - g.pos[chain[i - 1]][1]) < 1e-9)) {
+      badLinks.push({ link: l, why: 'zero' });
+      continue;
+    }
+    const ps = chain.map(carrier);
+    if (new Set(ps).size < 2) {
+      badLinks.push({ link: l, why: 'same' });
+      continue;
+    }
+    const S = nThreads > 1 ? A + B : '';
+    const key = mkKey('T' + (S ? '_' + S : ''));
+    let T: Unknown | null = null;
+    for (let i = 0; i + 1 < chain.length; i++) {
+      const [x0, y0] = g.pos[chain[i]],
+        [x1, y1] = g.pos[chain[i + 1]];
+      const ang = normAng((Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI),
+        back = normAng(ang + 180);
+      const act: Unknown = { key, L: 'T', S, kind: 'f', x: x0, y: y0, ...dirOf(ang), angle: ang, s: 0, itemId: 'link:' + l.id, part: ps[i], link: { index, kind: 'thread' } };
+      if (!T) T = act;
+      linkActs.push(act, { ...act, x: x1, y: y1, ...dirOf(back), angle: back, part: ps[i + 1] });
+    }
+    unknowns.push(T!);
+    links.push({ link: l, A, B, via: (l.via ?? []).map((id) => g.name[id]), list: [T!], on: ps[ps.length - 1], from: ps[0], parts: [...new Set(ps)], f: 0 });
+  }
+  const byKey: Record<string, Unknown> = {};
+  unknowns.forEach((u) => (byKey[u.key] = u));
+  const external: Action[] = [...unknowns.filter((u) => !u.hinge && !u.link), ...knowns];
+  const supIds = [...new Set(supports.map((q) => q.it.at))];
+  // Касание тела-точки с несовпадающими точками: силы взаимодействия не на одной прямой, и моменты внешних сил
+  // для всей системы не равны нулю — для неё берём только проекции.
+  const anyApart = links.some((l) => l.apart);
+  const wholeEqs = (actions: Action[]) => {
+    const mEq = (id: string) => makeEq('m', g.name[id], g.pos[id], actions);
+    if (anyApart) return [makeEq('x', null, null, actions), makeEq('y', null, null, actions)];
+    return [
+      ...supIds.map(mEq),
+      makeEq('x', null, null, actions),
+      makeEq('y', null, null, actions),
+      ...g.order.filter((id) => !supIds.includes(id)).map(mEq),
+    ];
+  };
+  let cands: Eq[];
+  if (parts.count === 1) cands = wholeEqs(external);
+  else {
+    cands = [];
+    const linkPts = new Set((structure.links ?? []).flatMap((l) => (l.type === 'thread' ? [l.a, l.b, ...(l.via ?? [])] : [l.a, l.b])));
+    for (let p = 0; p < parts.count; p++) {
+      const acts = [...external.filter((a) => a.part === p), ...hingeActs.filter((a) => a.part === p), ...linkActs.filter((a) => a.part === p)];
+      const nodes = g.order.filter((id) => parts.nodeParts[id].includes(p));
+      // Тело-точка: только два уравнения проекций.
+      if (p in parts.points) {
+        cands.push(makeEq('x', null, null, acts, p), makeEq('y', null, null, acts, p));
+        continue;
+      }
+      const key = nodes.filter((id) => supIds.includes(id) || parts.hinges.includes(id) || linkPts.has(id));
+      const mEq = (id: string) => makeEq('m', g.name[id], g.pos[id], acts, p);
+      cands.push(...key.map(mEq), makeEq('x', null, null, acts, p), makeEq('y', null, null, acts, p), ...nodes.filter((id) => !key.includes(id)).map(mEq));
+    }
+    cands.push(...wholeEqs(external));
+  }
+  const partNames = Array.from({ length: parts.count }, (_, p) => g.order.filter((id) => parts.nodeParts[id].includes(p)).map((id) => g.name[id]));
+  const w = Math.max(...pts.map((p) => p.x)),
+    h = Math.max(...pts.map((p) => p.y));
+  return { g, pts, unknowns, knowns, supports, dists, badDists, unkLoads, labels, byKey, cands, parts, partNames, w, h, links, linkActs, badLinks, offLinks, pinFr };
+}
+
+/** Сумма независимых уравнений равновесия всех частей. */
+export const eqCount = (m: Model): number => m.parts.dof.reduce((a, b) => a + b, 0);
+
+/** Односторонние неизвестные связей между телами: давление касания и натяжение нити (должны быть ≥ 0). */
+export const oneSidedKeys = (m: Model): string[] => oneSidedLinks(m).map((l) => l.list[0].key);
+/** Односторонние связи между телами: касания и нити (шарнир — двусторонняя связь). */
+export const oneSidedLinks = (m: Model): LinkInfo[] => m.links.filter((l) => l.link.type !== 'hinge');

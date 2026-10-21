@@ -1,0 +1,2 @@
+import { inlineText, type Doc } from '../../src/shared/doc';
+export const docText = (d: Doc) => d.steps.map((s) => '## ' + s.title + '\n' + s.blocks.map((b) => b.k === 'p' ? inlineText(b.c) : b.k === 'eq' ? b.lines.map((l) => '  ' + inlineText(l.c)).join('\n') : b.k === 'ul' ? b.items.map((i) => ' - ' + inlineText(i)).join('\n') : b.k === 'badge' ? '[' + b.text + ']' : b.rows.map((r) => ' * ' + inlineText(r.val) + ' — ' + r.note).join('\n')).join('\n')).join('\n\n');
