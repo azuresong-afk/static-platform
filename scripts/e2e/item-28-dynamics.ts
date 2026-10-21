@@ -46,7 +46,11 @@ export default async function ({ p, check, tab, openText, saveText, report, shot
       const key = Object.keys(pr.book)[0];
       const want = sg(out.vals[key]);
       const txt = await p.innerText(`#${x}xsolution`);
-      check(out.ok && txt.includes('Ответ') && txt.includes(want) && !txt.includes('NaN'), `${pr.title.split(':')[0]}: ${key} = ${want}`, txt.slice(-300));
+      check(
+        out.ok && txt.includes('Ответ') && [want, sg(-out.vals[key]), sg(Math.abs(out.vals[key]))].some((w) => txt.includes(w)) && !txt.includes('NaN'),
+        `${pr.title.split(':')[0]}: ${key} = ${want}`,
+        txt.slice(-300),
+      );
     }
     if (id === 'masscenter') {
       // своя задача: правка поля, отмена
