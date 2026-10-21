@@ -14,7 +14,8 @@
     "golden": "tsx scripts/capture-golden.ts",
     "compare:ui": "tsx scripts/compare-ui.ts",
     "e2e:files": "tsx scripts/e2e-files.ts",
-    "bundle": "tsx scripts/bundle.ts"
+    "bundle": "tsx scripts/bundle.ts",
+    "totals": "vitest run tests/totals.test.ts"
   },
   "dependencies": {
     "react": "^19.3.0",

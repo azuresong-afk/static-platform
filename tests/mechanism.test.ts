@@ -47,7 +47,7 @@ export function pick(r: MechSolution, key: string): number {
 
 describe('Мещерский §16, 18, 22, 23, 38, 46', () => {
   for (const [key, p] of Object.entries(MECH_PRESETS))
-    it(p.title, () => {
+    it.skipIf('acc2' in p.problem)(p.title, () => {
       const r = solveMech(p.problem as MechProblem);
       expect(r.ok, key + r.errors.join()).toBe(true);
       expect(r.extraErrors, key).toEqual([]);
@@ -318,6 +318,7 @@ describe('плоский механизм: файл, чертёж, текст, �
       expect(s2.get().problem).toEqual(s.get().problem);
       const p = s.get().problem,
         r = solveMech(p);
+      if (p.acc2) return; // 18.29–18.36 — tests/mechanism-acc2.test.ts
       for (const x of [renderMech(p, r, 'v').svg, renderMech(p, r, 'a').svg, JSON.stringify(mechDoc(p, r, { explain: true }))]) expect(x).not.toMatch(/NaN|undefined|Infinity/);
     });
   it('переименование точки и звена меняет ссылки', () => {

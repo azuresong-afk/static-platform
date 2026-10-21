@@ -9,6 +9,8 @@ import type { EarthKin } from '../model/earth';
 import { EQ_STR, type EqProblem, type EqStrKey } from '../model/eq';
 import type { Plane, RelProblem } from '../model/rel';
 import { TRI_VECS, type TriItem, type TriProblem, type TriVec } from '../model/tri';
+import { COND_KINDS, condDefaults, type CondKind, type CondProblem } from '../model/cond';
+import { COND0, COND_PRESETS, type CondPresetKey } from '../presets-cond';
 import {
   EARTH0,
   EARTH_PRESETS,
@@ -29,8 +31,8 @@ export const REL_STR = ['phi', 'xe', 'ye', 'ze', 'x', 'y', 'z', 'ang', 'R', 's']
 export type RelStrKey = (typeof REL_STR)[number];
 export const EARTH_NUM = ['lat', 'h', 'R', 'omega', 'vE', 'vN', 'vh', 'v', 'k', 'dE', 'dN', 'dh'] as const;
 export type EarthNumKey = (typeof EARTH_NUM)[number];
-export type RelMode = 'body' | 'earth' | 'tri' | 'eq';
-export type AnyRelKey = RelPresetKey | EarthPresetKey | TriPresetKey | EqPresetKey;
+export type RelMode = 'body' | 'earth' | 'tri' | 'eq' | 'cond';
+export type AnyRelKey = RelPresetKey | EarthPresetKey | TriPresetKey | EqPresetKey | CondPresetKey;
 export type EqNumKey = 't' | 't1' | 't2';
 export type TriKey = TriVec | 'v2' | 'e2' | 'r2';
 
@@ -40,6 +42,7 @@ export interface RelState {
   earth: EarthKin;
   tri: TriProblem;
   eq: EqProblem;
+  cond: CondProblem;
   title: string;
   preset: AnyRelKey | 'custom';
   show: 'v' | 'a';
@@ -54,6 +57,7 @@ interface Snap {
   earth: EarthKin;
   tri: TriProblem;
   eq: EqProblem;
+  cond: CondProblem;
   title: string;
   preset: RelState['preset'];
 }
@@ -75,6 +79,14 @@ export function parseTri(raw: unknown): TriProblem | null {
   const [v, e, r, v2, e2, r2] = its as TriItem[];
   const shared = TRI_VECS.includes(raw.shared as TriVec) ? (raw.shared as TriVec) : 'v';
   return { what: raw.what as TriProblem['what'], compass: raw.compass === true, v, e, r, c: { mod: raw.c.mod, dir: raw.c.dir }, two: raw.two === true, shared, v2, e2, r2 };
+}
+
+export function parseCond(raw: unknown): CondProblem | null {
+  if (!isObj(raw) || !COND_KINDS.some((k) => k[0] === raw.kind) || !isObj(raw.p)) return null;
+  const kind = raw.kind as CondKind;
+  const p = condDefaults(kind);
+  for (const k of Object.keys(p)) if (typeof raw.p[k] === 'string') p[k] = (raw.p[k] as string).slice(0, 60);
+  return { kind, p };
 }
 
 export function parseEq(raw: unknown): EqProblem | null {
@@ -102,7 +114,7 @@ export class RelStore {
   private listeners = new Set<() => void>();
   private hist = new History<Snap>();
   constructor(opts: { preset?: AnyRelKey; explain?: boolean } = {}) {
-    this.st = { mode: 'body', problem: copy(REL_PRESETS.r2327.problem as RelProblem), earth: copy(EARTH0), tri: copy(TRI0), eq: copy(EQ0), title: '', preset: 'r2327', show: 'a', canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { mode: 'body', problem: copy(REL_PRESETS.r2327.problem as RelProblem), earth: copy(EARTH0), tri: copy(TRI0), eq: copy(EQ0), cond: copy(COND0), title: '', preset: 'r2327', show: 'a', canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
     this.st = { ...this.st, ...this.presetPatch(opts.preset ?? 'r2327') };
   }
   /** Данные готовой задачи: режим и задача этого режима (остальные режимы не меняются). */
@@ -110,6 +122,10 @@ export class RelStore {
     if (k in EARTH_PRESETS) {
       const p = EARTH_PRESETS[k as EarthPresetKey];
       return { mode: 'earth', earth: copy(p.problem), title: p.title, preset: k };
+    }
+    if (k in COND_PRESETS) {
+      const p = COND_PRESETS[k as CondPresetKey];
+      return { mode: 'cond', cond: copy(p.problem), title: p.title, preset: k };
     }
     if (k in EQ_PRESETS) {
       const p = EQ_PRESETS[k as EqPresetKey];
@@ -131,7 +147,7 @@ export class RelStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ mode: this.st.mode, problem: this.st.problem, earth: this.st.earth, tri: this.st.tri, eq: this.st.eq, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ mode: this.st.mode, problem: this.st.problem, earth: this.st.earth, tri: this.st.tri, eq: this.st.eq, cond: this.st.cond, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -181,6 +197,20 @@ export class RelStore {
     if (dir === this.st.eq.dir) return;
     this.commit();
     this.set({ eq: { ...this.st.eq, dir } });
+  };
+  /* сложение скоростей с условием */
+  typeCond = (k: string, s: string) => {
+    this.touch(`c:${k}`);
+    this.set({ cond: { ...this.st.cond, p: { ...this.st.cond.p, [k]: s.slice(0, 60) } } });
+  };
+  setCondKind = (kind: CondKind) => {
+    if (kind === this.st.cond.kind) return;
+    this.commit();
+    this.set({ cond: { kind, p: condDefaults(kind) } });
+  };
+  setCondPick = (k: string, s: string) => {
+    this.commit();
+    this.set({ cond: { ...this.st.cond, p: { ...this.st.cond.p, [k]: s } } });
   };
   /* треугольник скоростей */
   private editTri(fn: (t: TriProblem) => void) {
@@ -233,23 +263,24 @@ export class RelStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(REL_MODULE, this.st.title, { mode: this.st.mode, problem: this.st.problem, earth: this.st.earth, tri: this.st.tri, eq: this.st.eq }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(REL_MODULE, this.st.title, { mode: this.st.mode, problem: this.st.problem, earth: this.st.earth, tri: this.st.tri, eq: this.st.eq, cond: this.st.cond }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== REL_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     // Файлы до режимов «Земля» и «треугольник» — только problem.
-    const mode: RelMode = env.raw.mode === 'earth' || env.raw.mode === 'tri' || env.raw.mode === 'eq' ? env.raw.mode : 'body';
+    const mode: RelMode = env.raw.mode === 'earth' || env.raw.mode === 'tri' || env.raw.mode === 'eq' || env.raw.mode === 'cond' ? env.raw.mode : 'body';
     const r = parseRel(env.raw.problem);
     const earth = env.raw.earth == null ? copy(EARTH0) : parseEarth(env.raw.earth);
     const tri = env.raw.tri == null ? copy(TRI0) : parseTri(env.raw.tri);
     if (!r.ok && mode === 'body') return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
     const eqp = env.raw.eq == null ? copy(EQ0) : parseEq(env.raw.eq);
-    if (!earth || !tri || !eqp || (mode !== 'body' && env.raw.problem != null && !r.ok)) return (this.notify(head + 'данные задачи неполные.', 'bad'), false);
+    const condp = env.raw.cond == null ? copy(COND0) : parseCond(env.raw.cond);
+    if (!earth || !tri || !eqp || !condp || (mode !== 'body' && env.raw.problem != null && !r.ok)) return (this.notify(head + 'данные задачи неполные.', 'bad'), false);
     this.commit();
     const title = env.title ?? 'Сложное движение точки';
-    this.set({ mode, problem: r.ok ? r.problem : copy(REL0), earth, tri, eq: eqp, title, preset: 'custom' });
+    this.set({ mode, problem: r.ok ? r.problem : copy(REL0), earth, tri, eq: eqp, cond: condp, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

@@ -1,0 +1,20 @@
+/* Раздел «Плоский механизм»: кнопки режима «ω и ε по ускорениям двух точек». */
+.linkbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #2457c5);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.icon-btn {
+  align-self: end;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+  border: 1px solid var(--line, #c9ccd3);
+  background: var(--sheet, #fff);
+  color: inherit;
+  cursor: pointer;
+}

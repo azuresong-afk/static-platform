@@ -2,6 +2,7 @@
 import { LawField } from '../../../shared/ui/LawField';
 import { Num } from '../../../shared/ui/Num';
 import { camPrep } from '../model/cam';
+import { COMP_FIELDS, COMP_KINDS, compDefaults, compKind } from '../model/comp';
 import type { KinProblem } from '../model/kin';
 import type { KinNumKey, KinStore, KinStrKey } from './store';
 
@@ -115,26 +116,76 @@ export function ExtFields({ pr, store }: Props) {
   }
   if (m === 'harm') {
     const par = P(pr, 'src') === 'par';
+    const xv = P(pr, 'src') === 'xv';
     return (
       <>
         <Pick
           id="kp-src"
           label="Что задано"
-          value={par ? 'par' : 'law'}
+          value={par ? 'par' : xv ? 'xv' : 'law'}
           items={[
             ['law', 'закон движения x(t) — найти параметры колебания'],
             ['par', 'период, фаза и начальное положение — найти амплитуду'],
+            ['xv', 'скорости при двух положениях — найти амплитуду и частоту'],
           ]}
           onChange={(x) => store.setP('src', x)}
         />
         <div className="cgpar cg0">
-          {par ? [Q('T', 'период T, с'), Q('eps', 'начальная фаза ε, рад'), Q('x0', 'начальное положение x₀'), Q('a0', 'центр колебаний a₀')] : L('x', 'x(t)')}
+          {xv
+            ? [Q('x1', 'положение x₁'), Q('v1', 'скорость v₁ в x₁'), Q('x2', 'положение x₂'), Q('v2', 'скорость v₂ в x₂'), Q('a0', 'центр колебаний a₀')]
+            : par
+              ? [Q('T', 'период T, с'), Q('eps', 'начальная фаза ε, рад'), Q('x0', 'начальное положение x₀'), Q('a0', 'центр колебаний a₀')]
+              : L('x', 'x(t)')}
           {N('t1', 'график: от t₁')}
           {N('t2', 'до t₂ (если t₂ ≤ t₁ — два периода)')}
         </div>
         <p className="empty">
           x = a₀ + a·sin(kt + ε), a &gt; 0, k &gt; 0, −π &lt; ε ≤ π. Подойдёт и сумма колебаний одной частоты: «2cos(πt + π/2) + 3cos(πt + π)».
         </p>
+      </>
+    );
+  }
+  if (m === 'comp') {
+    const kind = compKind(pr);
+    return (
+      <>
+        <Pick id="kp-kind" label="Задача" value={kind} items={COMP_KINDS} onChange={(x) => store.setPs(compDefaults(x as typeof kind))} />
+        <div className="cgpar cg0">
+          {COMP_FIELDS[kind].map(([k, label]) => Q(k, label, kind === 'when'))}
+          {(kind === 'drops' || kind === 'pow') && N('t', 'момент t')}
+          {kind === 'when' && [N('t1', 'искать от t₁'), N('t2', 'до t₂ (если t₂ ≤ t₁ — от 0 до 10)')]}
+        </div>
+        <p className="empty">Единицы — любые согласованные: если путь в метрах, а время в минутах, ответ получится в м/мин и м/мин².</p>
+      </>
+    );
+  }
+  if (m === 'conv') {
+    const sys = P(pr, 'sys') === 'polar' ? 'polar' : P(pr, 'sys') === 'sph' ? 'sph' : 'cyl';
+    return (
+      <>
+        <Pick
+          id="kp-sys"
+          label="Перейти к координатам"
+          value={sys}
+          items={[
+            ['polar', 'полярным: r, φ (плоское движение)'],
+            ['cyl', 'цилиндрическим: r, φ, z'],
+            ['sph', 'сферическим: r, φ (долгота), θ (широта)'],
+          ]}
+          onChange={(x) => store.setP('sys', x)}
+        />
+        <div className="cgpar cg0">
+          {L('x', 'x(t)')}
+          {L('y', 'y(t)')}
+          {sys !== 'polar' && L('z', 'z(t)')}
+          {Q('rb', 'r(t) по книге — для сверки (пусто — не сверять)', true)}
+          {Q('pb', 'φ(t) по книге', true)}
+          {sys !== 'polar' && Q('zb', sys === 'sph' ? 'θ(t) по книге' : 'z(t) по книге', true)}
+          {N('t', 'момент t')}
+          {N('t1', 'таблица и графики: от t₁')}
+          {N('t2', 'до t₂ (если t₂ ≤ t₁ — от 0 до max(t, 1))')}
+        </div>
+        <p className="empty">Приложение пересчитывает координаты и сверяет с формулами, найденными вами (или книгой): наибольшее отклонение по промежутку.</p>
       </>
     );
   }

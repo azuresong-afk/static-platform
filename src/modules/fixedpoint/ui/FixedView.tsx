@@ -8,11 +8,14 @@ import { Num } from '../../../shared/ui/Num';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
+import { renderCalc } from '../draw/calc';
 import { renderEuler, renderScheme, renderScrew } from '../draw/fixedpoint';
 import { BODY, SEQS, seqOf, solveEuler, type Ax, type Seq } from '../model/euler';
 import { LEN, LIMITS, solveScheme, type InputKind, type LenUnit, type PointKind, type RateUnit } from '../model/scheme';
+import { CALC_FIELDS, CALC_KINDS, solveCalc, type CalcKind } from '../model/calc';
 import { SCREW_LIMITS, solveScrew } from '../model/screw';
 import { FP_PRESETS, type FpMode, type FpPresetKey } from '../presets';
+import { calcDoc } from '../text/calc';
 import { eulerDoc, schemeDoc, screwDoc } from '../text/solution';
 import type { FpStore } from './store';
 
@@ -59,6 +62,10 @@ export function FixedView({ chrome, store }: { chrome: Chrome; store: FpStore })
       const r = solveEuler(s.euler);
       return { fig: renderEuler(s.euler, r), doc: eulerDoc(s.euler, r, { explain: st.explain }) };
     }
+    if (s.mode === 'calc') {
+      const r = solveCalc(s.calc);
+      return { fig: renderCalc(r), doc: calcDoc(s.calc, r, { explain: st.explain }) };
+    }
     const r = solveScrew(s.screw);
     return { fig: renderScrew(s.screw, r), doc: screwDoc(s.screw, r, { explain: st.explain }) };
   }, [s, st.explain]);
@@ -93,7 +100,9 @@ export function FixedView({ chrome, store }: { chrome: Chrome; store: FpStore })
       ? 'Плоскость осей: x — вправо, y — вверх, z — на нас.'
       : s.mode === 'euler'
         ? 'Оси Oξηζ неподвижны, Oxyz связаны с телом.'
-        : 'Вращения и поступательные движения тела в данный момент.';
+        : s.mode === 'calc'
+          ? (CALC_KINDS.find((k) => k.kind === s.calc.kind)?.hint ?? '')
+          : 'Вращения и поступательные движения тела в данный момент.';
 
   return (
     <>
@@ -148,6 +157,7 @@ export function FixedView({ chrome, store }: { chrome: Chrome; store: FpStore })
                 <option value="scheme">сложение вращений: схема в плоскости осей</option>
                 <option value="euler">углы Эйлера и кинематические формулы Эйлера</option>
                 <option value="screw">вращения и поступательные движения — винт</option>
+                <option value="calc">задачи по формулам: Земля, гироскоп, Кардан, поворот</option>
               </select>
             </label>
             {s.mode === 'scheme' && (
@@ -489,6 +499,34 @@ export function FixedView({ chrome, store }: { chrome: Chrome; store: FpStore })
                 </p>
               </>
             )}
+            {s.mode === 'calc' && (
+              <>
+                <label className="field">
+                  <span>Задача</span>
+                  <select id="fpckind" value={s.calc.kind} onChange={(e) => store.setCalcKind(e.target.value as CalcKind)}>
+                    {CALC_KINDS.map((k) => (
+                      <option key={k.kind} value={k.kind}>
+                        {k.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="cgpar" id="fpcalc">
+                  {CALC_FIELDS[s.calc.kind].map((fl) => (
+                    <Num
+                      key={fl.key}
+                      id={`fp-c-${fl.key}`}
+                      label={fl.unit ? `${fl.label}, ${fl.unit}` : fl.label}
+                      value={s.calc.p[fl.key]}
+                      neg={fl.neg}
+                      zero
+                      onType={(v) => store.typeCalc(fl.key, v)}
+                      onEnd={end(`c:${fl.key}`)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
             {s.mode === 'screw' && (
               <>
                 <label className="field">
@@ -606,7 +644,9 @@ export function FixedView({ chrome, store }: { chrome: Chrome; store: FpStore })
         <section className="pr-sec pr-figs">
           <figure>
             <svg viewBox={out.fig.viewBox} dangerouslySetInnerHTML={{ __html: out.fig.svg }} />
-            <figcaption>{s.mode === 'scheme' ? 'Схема в плоскости осей' : s.mode === 'euler' ? 'Оси в момент t₁' : 'Движения тела'}</figcaption>
+            <figcaption>
+              {s.mode === 'scheme' ? 'Схема в плоскости осей' : s.mode === 'euler' ? 'Оси в момент t₁' : s.mode === 'calc' ? 'Результат' : 'Движения тела'}
+            </figcaption>
           </figure>
         </section>
         <section className="pr-sec">

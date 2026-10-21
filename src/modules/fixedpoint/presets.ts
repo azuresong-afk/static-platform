@@ -11,18 +11,24 @@
  */
 import type { EulerProblem } from './model/euler';
 import type { InputKind, PointKind, RateUnit, SBody, SchemeProblem, SContact, SInput, SPoint } from './model/scheme';
+import { calcDefaults, type CalcKind, type CalcProblem } from './model/calc';
 import type { ScrewItem, ScrewProblem } from './model/screw';
 
-export type FpMode = 'scheme' | 'euler' | 'screw';
+export type FpMode = 'scheme' | 'euler' | 'screw' | 'calc';
 export interface FpState {
   mode: FpMode;
   scheme: SchemeProblem;
   euler: EulerProblem;
   screw: ScrewProblem;
+  calc: CalcProblem;
 }
 export interface FpPreset {
   title: string;
-  problem: { mode: 'scheme'; scheme: SchemeProblem } | { mode: 'euler'; euler: EulerProblem } | { mode: 'screw'; screw: ScrewProblem };
+  problem:
+    | { mode: 'scheme'; scheme: SchemeProblem }
+    | { mode: 'euler'; euler: EulerProblem }
+    | { mode: 'screw'; screw: ScrewProblem }
+    | { mode: 'calc'; calc: CalcProblem };
   book?: Record<string, number>;
   relTol?: number;
   note?: string;
@@ -78,6 +84,12 @@ export const tr = (x: number, y: number, z: number): ScrewItem => ({ kind: 'tr',
 export const screw = (o: Partial<ScrewProblem>): ScrewProblem => ({ unit: 'm', items: [], points: [], ...o });
 const S = (o: Partial<SchemeProblem>) => ({ mode: 'scheme' as const, scheme: scheme(o) });
 const Eu = (o: Partial<EulerProblem>) => ({ mode: 'euler' as const, euler: euler(o) });
+/** Задача по формулам: вид и числа (остальные — по умолчанию). */
+export const calc = (kind: CalcKind, p: Record<string, number> = {}): CalcProblem => {
+  const d = calcDefaults(kind);
+  return { kind, p: { ...d.p, ...p } };
+};
+const C = (kind: CalcKind, p: Record<string, number> = {}) => ({ mode: 'calc' as const, calc: calc(kind, p) });
 const W = (o: Partial<ScrewProblem>) => ({ mode: 'screw' as const, screw: screw(o) });
 
 /* ---------- формулы книги для задач в общем виде (§20) ---------- */
@@ -746,6 +758,103 @@ export const FP_PRESETS = {
     book: { W: 0, 'vx:O': -12, 'vy:O': 12, 'vz:O': -8 },
     relTol: 1e-9,
     note: 'a = 2 м, ω₁ = ω₄ = 6 с⁻¹ (ось z и вертикальное ребро x = y = a, навстречу), ω₂ = ω₃ = 4 с⁻¹ (верхние рёбра вдоль y, навстречу). Книга: поступательное движение, v_x = −12, v_y = 12, v_z = −8 (в книге — «см/с»; при a = 2 м и ω в с⁻¹ это м/с).',
+  },
+  m1913: {
+    title: 'Мещерский 19.13: ω и мгновенная ось по скоростям двух точек',
+    problem: C('inv', { x1: 0, y1: 0, z1: 2, vx1: 1, vy1: 2, vz1: 0, x2: 0, y2: 1, z2: 2, dx2: -2, dy2: 2, dz2: -1 }),
+    book: { wx: -1, wy: 0.5, wz: 3, w: 3.2 },
+    relTol: 0.001,
+    note: 'M₁(0, 0, 2): v₁ = (1; 2; 0) м/с; M₂(0, 1, 2): косинусы направления v₂ равны −2/3, 2/3, −1/3 (вводятся как −2; 2; −1). Книга: мгновенная ось x + 2y = 0, 3x + z = 0, ω = 3,2 с⁻¹ (точно √10,25 = 3,2016: книга округлила). Направление ω — из условия ω × OM₁ = v₁.',
+  },
+  m209: {
+    title: 'Мещерский 20.9–20.10: скорость точки на Земле — φ̇, λ̇ и трёхгранник Дарбу',
+    problem: C('earth', { R: 6371, U: 7.292, phi: 55, vE: 200, vN: 100, rho: 0, dvE: 0, dvN: 0 }),
+    book: {
+      dphi: (1e5 * 100) / 6.371e6,
+      dlam: (1e5 * 200) / (6.371e6 * cos(55 * D)),
+      wxi: (-1e5 * 100) / 6.371e6,
+      weta: 1e5 * (7.292e-5 + 200 / (6.371e6 * cos(55 * D))) * cos(55 * D),
+      wzeta: 1e5 * (7.292e-5 + 200 / (6.371e6 * cos(55 * D))) * sin(55 * D),
+    },
+    relTol: 1e-9,
+    note: 'Книга даёт формулы: φ̇ = v_N/R, λ̇ = v_E/(R cos φ); ω_ξ = −φ̇, ω_η = (U + λ̇) cos φ, ω_ζ = (U + λ̇) sin φ — числа (φ = 55°, v_E = 200 м/с, v_N = 100 м/с, R = 6371 км, U = 7,292·10⁻⁵ с⁻¹) выбраны для примера. Положительные v_E и v_N: φ̇ направлена на запад, λ̇ — по оси Земли с юга на север (как в ответе книги).',
+  },
+  m2011: {
+    title: 'Мещерский 20.11–20.12: трёхгранник Дарбу по курсу и по абсолютной скорости',
+    problem: C('earth', { R: 6371, U: 7.292, phi: 55, vE: 200, vN: 100, rho: 500, dvE: 0, dvN: 0 }),
+    book: {
+      psi: deg(Math.atan2(200, 100)),
+      wx: 1e5 * 7.292e-5 * cos(55 * D) * cos(Math.atan2(200, 100)),
+      wy: 1e5 * (7.292e-5 * cos(55 * D) * sin(Math.atan2(200, 100)) + hypot(200, 100) / 6.371e6),
+      wz: 1e5 * (7.292e-5 * sin(55 * D) + hypot(200, 100) / 5e5),
+      Vabs: hypot(200 + 6.371e6 * 7.292e-5 * cos(55 * D), 100),
+      wx0: 0,
+      wy0: (1e5 * hypot(200 + 6.371e6 * 7.292e-5 * cos(55 * D), 100)) / 6.371e6,
+    },
+    relTol: 1e-9,
+    note: '20.11: ось x вдоль скорости относительно Земли, курс ψ — угол от севера: ω_x = U cos φ cos ψ, ω_y = U cos φ sin ψ + v/R, ω_z = U sin φ + v/ρ (ρ — радиус геодезической кривизны траектории). 20.12: ось x⁰ вдоль абсолютной скорости V = √((v_E + RU cos φ)² + v_N²): ω_x⁰ = 0, ω_y⁰ = V/R, ω_z⁰ = (U + λ̇) sin φ + θ̇ (производные скорости — поля «ускорение»; здесь нулевые). Числа — пример.',
+  },
+  m2013: {
+    title: 'Мещерский 20.13–20.14: гироскоп направления в кардановом подвесе',
+    problem: C('gyro', { R: 6371, U: 7.292, phi: 55, alpha: 30, beta: 20, da: 0, db: 0, vE: 0, vN: 0 }),
+    book: {
+      cxi: sin(30 * D) * cos(20 * D),
+      ceta: cos(30 * D) * cos(20 * D),
+      czeta: sin(20 * D),
+      wx: -1e5 * 7.292e-5 * cos(55 * D) * sin(30 * D),
+      wy: 1e5 * 7.292e-5 * (cos(55 * D) * cos(30 * D) * sin(20 * D) - sin(55 * D) * cos(20 * D)),
+      wz: 1e5 * 7.292e-5 * (cos(55 * D) * cos(30 * D) * cos(20 * D) + sin(55 * D) * sin(20 * D)),
+    },
+    relTol: 1e-9,
+    note: 'Книга: направляющие косинусы оси z — (sin α cos β, cos α cos β, sin β) по осям ξ (восток), η (север), ζ (зенит); при неподвижном подвесе ω_x = β̇ − U cos φ sin α, ω_y = α̇ cos β + U(cos φ cos α sin β − sin φ cos β), ω_z = α̇ sin β + U(cos φ cos α cos β + sin φ sin β). При v_N, v_E ≠ 0 (20.14) U заменяется на U + v_E/(R cos φ), и добавляются члены −(v_N/R) cos α, −(v_N/R) sin α sin β. Числа — пример: φ = 55°, α = 30°, β = 20°, α̇ = β̇ = 0.',
+  },
+  m2014: {
+    title: 'Мещерский 20.14: гироскоп на движущемся основании (v_N, v_E)',
+    problem: C('gyro', { R: 6371, U: 7.292, phi: 55, alpha: 30, beta: 20, da: 0, db: 0, vE: 200, vN: 100 }),
+    book: {
+      wx: -1e5 * (7.292e-5 + 200 / (6.371e6 * cos(55 * D))) * cos(55 * D) * sin(30 * D) - (1e5 * 100 * cos(30 * D)) / 6.371e6,
+      wy:
+        1e5 * (7.292e-5 + 200 / (6.371e6 * cos(55 * D))) * (cos(55 * D) * cos(30 * D) * sin(20 * D) - sin(55 * D) * cos(20 * D)) -
+        (1e5 * 100 * sin(30 * D) * sin(20 * D)) / 6.371e6,
+      wz: 1e5 * (7.292e-5 + 200 / (6.371e6 * cos(55 * D))) * (cos(55 * D) * cos(30 * D) * cos(20 * D) + sin(55 * D) * sin(20 * D)),
+    },
+    relTol: 1e-9,
+    note: 'Те же формулы с поправками на скорость подвеса: v_E = 200 м/с, v_N = 100 м/с. Числа — пример.',
+  },
+  m2524: {
+    title: 'Мещерский 25.24: шарнир Кардана — Гука',
+    problem: C('cardan', { alpha: 60, phi: 90, w1: 1 }),
+    book: { c1: 2, c2: 0.5, c: 2 },
+    relTol: 1e-9,
+    note: 'α = 60°. Книга: 1) ω₁/ω₂ = 1/cos α = 2 (вилка ABF горизонтальна, CDG вертикальна); 2) ω₁/ω₂ = cos α = 0,5. Общая формула ω₁/ω₂ = (1 − sin²α cos²φ)/cos α даёт оба случая при φ = 90° и φ = 0°.',
+  },
+  m2514t: {
+    title: 'Мещерский 25.14: угловые скорости колёс на повороте по v и ρ',
+    problem: C('turn', { v: 36, rho: 5, l: 2, R: 0.5, k: 2 }),
+    book: { w1: 24, w2: 16, wC: 20, wr: 8 },
+    relTol: 1e-9,
+    note: 'v = 36 км/ч, ρ = 5 м, l = 2 м, R = 0,5 м, R₀/r = 2. Угловые скорости колёс находятся здесь (раньше их приходилось считать до схемы): ω₁ = v(ρ + l/2)/(ρR) = 24 с⁻¹, ω₂ = 16 с⁻¹; коробка ω_C = 20 с⁻¹, сателлит ω_r = 8 с⁻¹ — как в ответе книги.',
+  },
+  m2528: {
+    title: 'Мещерский 25.28: чистое вращение при v₁ = v₂ cos α — положение оси',
+    problem: W({ unit: 'm', items: [rot(0, 2, 0), tr(0, 1.5 - 3 * cos(PI / 3), -3 * sin(PI / 3))], points: [{ name: 'O', x: 0, y: 0, z: 0 }] }),
+    book: { vmin: 0, ax: (-3 * sin(PI / 3)) / 2 },
+    relTol: 1e-9,
+    note: 'ω₁ = 2 с⁻¹ вдоль y, v₂ = 3 м/с под α = 60° к y, v₁ = v₂ cos α = 1,5 м/с: относительная поступательная скорость вдоль y равна v₁ − v₂ cos α = 0, остаётся v₂ sin α поперёк. Книга: чистое вращение вокруг оси ∥ y на расстоянии v₂ sin α/ω₁ = 1,3 м по перпендикуляру; наименьшая скорость равна нулю — проверка условия.',
+  },
+  m2017b: {
+    title: 'Мещерский 20.17: a = −1/2 — неподвижный аксоид есть плоскость Oxy',
+    problem: Eu({ seq: 'zxz', q1: 'π/2 − 1,5t', q2: 'π/3', q3: '3t', t1: 0.25 }),
+    book: {
+      wF0: ((3 * sqrt(3)) / 2) * cos(-0.375),
+      wF1: ((3 * sqrt(3)) / 2) * sin(-0.375),
+      wF2: 0,
+      eF0: -((-0.5 * 9 * sqrt(3)) / 2) * sin(-0.375),
+      eF1: ((-0.5 * 9 * sqrt(3)) / 2) * cos(-0.375),
+      eF2: 0,
+    },
+    relTol: 1e-9,
+    note: 'a = −1/2 (ψ = π/2 − 1,5t при n = 3 с⁻¹): ω_z = n(a + 1/2) = 0, ω лежит в плоскости Oxy — неподвижный аксоид вырождается в плоскость. Значение a выводится из ω_z = 0, не подбирается.',
   },
 } satisfies Record<string, FpPreset>;
 

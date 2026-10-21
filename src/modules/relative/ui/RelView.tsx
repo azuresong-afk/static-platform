@@ -20,6 +20,11 @@ import { solveTri, TRI_VECS, type TriProblem, type TriVec } from '../model/tri';
 import { EARTH_PRESETS, EQ_PRESETS, REL_PRESETS, TRI_PRESETS } from '../presets';
 import { earthDoc } from '../text/earth';
 import { eqDoc } from '../text/eq';
+import { renderCond } from '../draw/cond';
+import { solveCond } from '../model/cond';
+import { COND_PRESETS } from '../presets-cond';
+import { condDoc } from '../text/cond';
+import { CondEditor } from './CondEditor';
 import { relDoc } from '../text/solution';
 import { triDoc } from '../text/tri';
 import type { AnyRelKey, EarthNumKey, EqNumKey, RelMode, RelStore, RelStrKey, TriKey } from './store';
@@ -35,6 +40,10 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
       const r = solveEarthKin(st.earth);
       return { draw: (sh: 'v' | 'a') => renderEarth(st.earth, r, sh), doc: earthDoc(st.earth, r, o) };
     }
+    if (st.mode === 'cond') {
+      const r = solveCond(st.cond);
+      return { draw: () => renderCond(st.cond, r), doc: condDoc(st.cond, r, o) };
+    }
     if (st.mode === 'eq') {
       const r = solveEq(st.eq);
       return {
@@ -48,12 +57,12 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
     }
     const r = solveRel(pr);
     return { draw: (sh: 'v' | 'a') => renderRel(pr, r, sh), doc: relDoc(pr, r, o) };
-  }, [st.mode, st.earth, st.tri, st.eq, pr, st.explain]);
+  }, [st.mode, st.earth, st.tri, st.eq, st.cond, pr, st.explain]);
   const fig = out.draw(st.show),
     figA = out.draw('a'),
     figV = out.draw('v'),
     doc = out.doc;
-  const tasks = [...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(TRI_PRESETS), ...taskEntries(EQ_PRESETS)];
+  const tasks = [...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(TRI_PRESETS), ...taskEntries(EQ_PRESETS), ...taskEntries(COND_PRESETS)];
 
   return (
     <>
@@ -80,7 +89,7 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
         <Notice notice={st.notice} onClose={store.closeNotice} />
         <section className="sheet" aria-label="Схема">
           <div className="bar">
-            <div className="seg" role="group" aria-label="Что показать" hidden={st.mode === 'tri' || st.mode === 'eq'}>
+            <div className="seg" role="group" aria-label="Что показать" hidden={st.mode === 'tri' || st.mode === 'eq' || st.mode === 'cond'}>
               <button type="button" id="rshow-v" aria-pressed={st.show === 'v'} onClick={() => store.setShow('v')}>
                 Скорости
               </button>
@@ -112,9 +121,10 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
                 <option value="earth">движение относительно вращающейся Земли</option>
                 <option value="tri">треугольник скоростей: обратная задача</option>
                 <option value="eq">уравнения сложного движения и траектория</option>
+                <option value="cond">сложение скоростей с условием: вымпел, встреча, ветер, переправа…</option>
               </select>
             </label>
-            {st.mode === 'body' ? <Editor store={store} pr={pr} /> : st.mode === 'eq' ? <EqEditor store={store} p={st.eq} /> : st.mode === 'earth' ? <EarthEditor store={store} p={st.earth} /> : <TriEditor store={store} p={st.tri} />}
+            {st.mode === 'body' ? <Editor store={store} pr={pr} /> : st.mode === 'cond' ? <CondEditor store={store} p={st.cond} /> : st.mode === 'eq' ? <EqEditor store={store} p={st.eq} /> : st.mode === 'earth' ? <EarthEditor store={store} p={st.earth} /> : <TriEditor store={store} p={st.tri} />}
           </section>
           <section className="panel" aria-label="Решение">
             <div className="sol-head">
@@ -139,10 +149,10 @@ export function RelView({ chrome, store }: { chrome: Chrome; store: RelStore }) 
           <figure>
             <svg viewBox={figV.viewBox} dangerouslySetInnerHTML={{ __html: figV.svg }} />
             <figcaption>
-              {st.mode === 'eq' ? 'Траектория' : st.mode === 'tri' ? (st.tri.what === 'v' ? 'Треугольник скоростей' : 'Сложение ускорений') : 'Скорости'}
+              {st.mode === 'cond' ? 'Чертёж' : st.mode === 'eq' ? 'Траектория' : st.mode === 'tri' ? (st.tri.what === 'v' ? 'Треугольник скоростей' : 'Сложение ускорений') : 'Скорости'}
             </figcaption>
           </figure>
-          {st.mode !== 'tri' && st.mode !== 'eq' && (
+          {st.mode !== 'tri' && st.mode !== 'eq' && st.mode !== 'cond' && (
             <figure>
               <svg viewBox={figA.viewBox} dangerouslySetInnerHTML={{ __html: figA.svg }} />
               <figcaption>Ускорения</figcaption>

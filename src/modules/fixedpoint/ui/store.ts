@@ -15,8 +15,9 @@ import {
   type SInput,
   type SPoint,
 } from '../model/scheme';
+import { CALC_FIELDS, calcDefaults, type CalcKind, type CalcProblem } from '../model/calc';
 import { SCREW_LIMITS, type ScrewItem, type ScrewPoint, type ScrewProblem } from '../model/screw';
-import { euler, FP_PRESETS, screw, type FpMode, type FpPresetKey, type FpState } from '../presets';
+import { calc, euler, FP_PRESETS, screw, type FpMode, type FpPresetKey, type FpState } from '../presets';
 
 export const FIXEDPOINT_MODULE = 'fixedpoint';
 const UNITS: LenUnit[] = ['m', 'cm', 'mm'];
@@ -49,7 +50,9 @@ const DEF: FpState = {
   scheme: copy((FP_PRESETS.m195.problem as { scheme: SchemeProblem }).scheme),
   euler: euler({ seq: 'zxz', q1: '0,5t', q2: 'π/6', q3: '3t', t1: 1, mx: 0, my: 10, mz: 0 }),
   screw: screw({ items: [{ kind: 'rot', x: 0, y: 0, z: 2, px: 0, py: 0, pz: 0 }], points: [{ name: 'M', x: 1, y: 0, z: 0 }] }),
+  calc: calc('inv'),
 };
+const CKINDS: CalcKind[] = ['inv', 'earth', 'gyro', 'cardan', 'turn'];
 
 export function presetState(k: FpPresetKey, base: FpState = DEF): FpState {
   const t = FP_PRESETS[k].problem;
@@ -57,7 +60,8 @@ export function presetState(k: FpPresetKey, base: FpState = DEF): FpState {
   s.mode = t.mode;
   if (t.mode === 'scheme') s.scheme = copy(t.scheme);
   else if (t.mode === 'euler') s.euler = copy(t.euler);
-  else s.screw = copy(t.screw);
+  else if (t.mode === 'screw') s.screw = copy(t.screw);
+  else s.calc = copy(t.calc);
   return s;
 }
 
@@ -161,14 +165,31 @@ function parseScrew(raw: unknown): ScrewProblem | null {
   return { unit: raw.unit as LenUnit, items, points };
 }
 
+function parseCalc(raw: unknown): CalcProblem | null {
+  if (!isObj(raw) || !CKINDS.includes(raw.kind as CalcKind) || !isObj(raw.p)) return null;
+  const kind = raw.kind as CalcKind;
+  const p = calcDefaults(kind).p;
+  for (const fl of CALC_FIELDS[kind]) {
+    const x = (raw.p as Record<string, unknown>)[fl.key];
+    if (!isNum(x)) return null;
+    p[fl.key] = x;
+  }
+  return { kind, p };
+}
+
 export function parseFp(raw: unknown): { ok: true; problem: FpState } | { ok: false; errors: string[] } {
-  if (!isObj(raw) || !['scheme', 'euler', 'screw'].includes(raw.mode as string)) return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
+  if (!isObj(raw) || !['scheme', 'euler', 'screw', 'calc'].includes(raw.mode as string))
+    return { ok: false, errors: ['В файле нет задачи (problem с полем mode).'] };
   const s = parseScheme(raw.scheme),
     e = parseEuler(raw.euler),
-    w = parseScrew(raw.screw);
-  const cur = raw.mode === 'scheme' ? s : raw.mode === 'euler' ? e : w;
+    w = parseScrew(raw.screw),
+    c = parseCalc(raw.calc);
+  const cur = raw.mode === 'scheme' ? s : raw.mode === 'euler' ? e : raw.mode === 'calc' ? c : w;
   if (!cur) return { ok: false, errors: ['Данные задачи неполные.'] };
-  return { ok: true, problem: { mode: raw.mode as FpMode, scheme: s ?? copy(DEF.scheme), euler: e ?? copy(DEF.euler), screw: w ?? copy(DEF.screw) } };
+  return {
+    ok: true,
+    problem: { mode: raw.mode as FpMode, scheme: s ?? copy(DEF.scheme), euler: e ?? copy(DEF.euler), screw: w ?? copy(DEF.screw), calc: c ?? copy(DEF.calc) },
+  };
 }
 
 const nextId = (xs: { id: number }[]) => xs.reduce((m, x) => Math.max(m, x.id), 0) + 1;
@@ -364,6 +385,12 @@ export class FpStore {
       const q = p.screw.points[i];
       if (q) q.name = name.slice(0, 24);
     });
+  };
+  /* ---------- задачи по формулам ---------- */
+  setCalcKind = (k: CalcKind) => this.change((p) => (p.calc = calcDefaults(k)));
+  typeCalc = (key: string, v: number) => {
+    this.touch(`c:${key}`);
+    this.edit((p) => (p.calc.p[key] = v));
   };
   undo = () => {
     const s = this.hist.undo(this.snap());

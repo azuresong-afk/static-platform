@@ -13,7 +13,7 @@ import { KIN_PRESETS, type KinPresetKey } from '../presets';
 export const KIN_MODULE = 'pointkin';
 const STR = ['x', 'y', 'z', 's', 'r', 'phi'] as const;
 export type KinStrKey = (typeof STR)[number] | 'th';
-const MODES: KinMode[] = ['coord', 'natural', 'polar', 'cyl', 'sph', 'tor', 'uni', 'path', 'integ', 'harm', 'shot', 'cam'];
+const MODES: KinMode[] = ['coord', 'natural', 'polar', 'cyl', 'sph', 'tor', 'uni', 'path', 'integ', 'harm', 'shot', 'cam', 'comp', 'conv'];
 export type LinNumKey = LinKey | 'rho' | 'tq';
 const NUM = ['rho', 't', 't1', 't2'] as const;
 export type KinNumKey = (typeof NUM)[number];
@@ -103,6 +103,11 @@ export class KinStore {
   setP = (k: string, s: string) => {
     this.commit();
     this.edit((pr) => (pr.p = { ...(pr.p ?? {}), [k]: s }));
+  };
+  /** Несколько параметров режима сразу (смена вида задачи): одно действие для отмены. */
+  setPs = (m: Record<string, string>) => {
+    this.commit();
+    this.edit((pr) => (pr.p = { ...(pr.p ?? {}), ...m }));
   };
   typeStr = (k: KinStrKey, s: string) => {
     this.touch(`s:${k}`);
