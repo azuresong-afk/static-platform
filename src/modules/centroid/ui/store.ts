@@ -4,6 +4,9 @@ import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../.
 import type { NoticeData } from '../../../shared/ui/Notice';
 import { KINDS, PARAMS, type CPart, type CProblem, type Mode, type PartKind } from '../model/centroid';
 import { CENTROID_PRESETS, type CentroidPresetKey } from '../presets';
+import { extraProblem, findAsk, parseExtra, type ExtraProblem } from '../../../shared/extra';
+import { CENTROID_ASKS } from '../model/extra';
+import { CENTROID_EXTRA_PRESETS, type CentroidExtraKey } from '../extraPresets';
 
 export const CENTROID_MODULE = 'centroid';
 const MAX_PARTS = 12;
@@ -24,6 +27,11 @@ export const DEFAULTS: Record<PartKind, Record<string, number>> = {
   cone: { x: 0, y: 0, z: 0, r: 1, h: 2, ax: 2, dir: 1 },
   sphere: { x: 0, y: 0, z: 0, r: 1 },
   hemi: { x: 0, y: 0, z: 0, r: 1, ax: 2, dir: -1 },
+  frustum: { x: 0, y: 0, z: 0, a: 4, b: 1, h: 2, ax: 2, dir: 1 },
+  tri3: { x1: 0, y1: 0, z1: 0, x2: 2, y2: 0, z2: 0, x3: 0, y3: 0, z3: 2 },
+  quad3: { x1: 0, y1: 0, z1: 0, x2: 2, y2: 0, z2: 0, x3: 2, y3: 2, z3: 0, x4: 0, y4: 2, z4: 0 },
+  cylsurf: { x: 0, y: 0, z: 0, r: 1, h: 2, ax: 2, dir: 1 },
+  capsurf: { x: 0, y: 0, z: 0, r: 1, h: 0.5, ax: 2, dir: 1 },
 };
 export const newPart = (kind: PartKind): CPart => ({
   kind,
@@ -44,8 +52,11 @@ export const newPart = (kind: PartKind): CPart => ({
 
 export interface CentroidState {
   problem: CProblem;
+  /** Экран обратных задач (пункт 26). */
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
-  preset: CentroidPresetKey | 'custom';
+  preset: CentroidPresetKey | CentroidExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -53,13 +64,15 @@ export interface CentroidState {
 }
 interface Snap {
   problem: CProblem;
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
   preset: CentroidState['preset'];
 }
 const copy = (p: CProblem): CProblem => structuredClone(p);
 
 export function parseProblem(raw: unknown): { ok: true; problem: CProblem } | { ok: false; errors: string[] } {
-  if (!isObj(raw) || !['area', 'line', 'volume', 'mass'].includes(raw.mode as string) || !Array.isArray(raw.parts)) return { ok: false, errors: ['В файле нет задачи (problem с полями mode и parts).'] };
+  if (!isObj(raw) || !['area', 'line', 'volume', 'surface', 'mass'].includes(raw.mode as string) || !Array.isArray(raw.parts)) return { ok: false, errors: ['В файле нет задачи (problem с полями mode и parts).'] };
   const mode = raw.mode as Mode;
   const e: string[] = [];
   const parts: CPart[] = raw.parts.flatMap((q: unknown, i) => {
@@ -85,7 +98,7 @@ export class CentroidStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: CentroidPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm912';
-    this.st = { problem: copy(CENTROID_PRESETS[k].problem as CProblem), title: CENTROID_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { problem: copy(CENTROID_PRESETS[k].problem as CProblem), extra: structuredClone(CENTROID_EXTRA_PRESETS.x913.problem), view: 'main', title: CENTROID_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): CentroidState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -96,7 +109,7 @@ export class CentroidStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -110,9 +123,39 @@ export class CentroidStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: CentroidPresetKey) => {
+  loadPreset = (k: CentroidPresetKey | CentroidExtraKey) => {
     this.commit();
-    this.set({ problem: copy(CENTROID_PRESETS[k].problem as CProblem), title: CENTROID_PRESETS[k].title, preset: k });
+    if (k in CENTROID_EXTRA_PRESETS) {
+      const e = CENTROID_EXTRA_PRESETS[k as CentroidExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    const m = CENTROID_PRESETS[k as CentroidPresetKey];
+    this.set({ problem: copy(m.problem as CProblem), view: 'main', title: m.title, preset: k });
+  };
+  /* ---------- обратные задачи (пункт 26) ---------- */
+  setView = (view: 'main' | 'extra') => {
+    if (view !== this.st.view) this.set({ view });
+  };
+  private editX(fn: (x: ExtraProblem) => void) {
+    const x = structuredClone(this.st.extra);
+    fn(x);
+    this.set({ extra: x });
+  }
+  setXAsk = (id: string) => {
+    this.commit();
+    this.set({ extra: extraProblem(findAsk(CENTROID_ASKS, id)) });
+  };
+  typeNum = (k: string, v: number) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.n[k] = v));
+  };
+  typeText = (k: string, s: string) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.s[k] = s.slice(0, 300)));
+  };
+  pick = (k: string, v: string) => {
+    this.commit();
+    this.editX((x) => (x.s[k] = v));
   };
   /** Смена режима: части заменяются одной частью подходящего вида. */
   setMode = (mode: Mode) => {
@@ -163,17 +206,19 @@ export class CentroidStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(CENTROID_MODULE, this.st.title, { problem: this.st.problem }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(CENTROID_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== CENTROID_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseProblem(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const ex = parseExtra(env.raw.extra, CENTROID_ASKS);
+    const view = env.raw.view === 'extra' && ex ? 'extra' : 'main';
+    if (!r.ok && view !== 'extra') return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Центр тяжести';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: ex ?? this.st.extra, view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

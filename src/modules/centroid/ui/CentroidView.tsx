@@ -13,11 +13,17 @@ import { centroidDoc } from '../text/solution';
 import type { CentroidStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { CENTROID_ASKS } from '../model/extra';
+import { CENTROID_EXTRA_PRESETS } from '../extraPresets';
+
+const ALL_PRESETS = { ...CENTROID_PRESETS, ...CENTROID_EXTRA_PRESETS };
 
 const MODES: [Mode, string][] = [
   ['area', 'плоская фигура'],
   ['line', 'линия (проволока)'],
   ['volume', 'тело'],
+  ['surface', 'поверхность (оболочка, лист)'],
   ['mass', 'система грузов'],
 ];
 
@@ -55,6 +61,25 @@ function PolyField({ part, onPts }: { part: CPart; onPts: (pts: [number, number]
 }
 
 export function CentroidView({ chrome, store }: { chrome: Chrome; store: CentroidStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store}
+        asks={CENTROID_ASKS}
+        presets={ALL_PRESETS}
+        prefix="g"
+        heading="Центр тяжести: обратные задачи"
+        lede="Найти размер или точку по условию на центр тяжести: подвешенная трапеция, вырез с вершиной в центре тяжести остатка, точки опоры пластины, половины цилиндра на нити."
+        mainLabel="фигуры, линии, тела, поверхности"
+        tabName="Центр тяжести"
+      />
+    );
+  return <CentroidMain chrome={chrome} store={store} />;
+}
+
+function CentroidMain({ chrome, store }: { chrome: Chrome; store: CentroidStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const r = useMemo(() => solveCentroid(pr), [pr]);
@@ -68,13 +93,13 @@ export function CentroidView({ chrome, store }: { chrome: Chrome; store: Centroi
         <header className="top">
           <div>
             <h1>Центр тяжести</h1>
-            <p className="lede">Составные плоские фигуры с вырезами, линии, тела и системы грузов: части с отрицательной площадью, разный удельный вес, формулы центров секторов, сегментов, дуг, конуса и полушара.</p>
+            <p className="lede">Составные плоские фигуры с вырезами, линии, тела, поверхности в пространстве и системы грузов: части с отрицательной площадью, разный удельный вес, формулы центров секторов, сегментов, дуг, конуса, полушара, усечённой пирамиды и сферического пояса.</p>
           </div>
           <div className="topright">
             <label className="preset">
               Готовая задача
               <select id="gpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as CentroidPresetKey)}>
-                <PresetOptions items={taskEntries(CENTROID_PRESETS)} />
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -104,6 +129,11 @@ export function CentroidView({ chrome, store }: { chrome: Chrome; store: Centroi
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Части">
+            <div className="segbtns">
+              <button type="button" id="gto-extra" onClick={() => store.setView('extra')}>
+                Обратные задачи →
+              </button>
+            </div>
             <h2>Части</h2>
             <label className="field">
               <span>Что ищем</span>

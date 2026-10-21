@@ -7,6 +7,7 @@ import { MECH_PRESETS, type MechPresetKey } from '../presets';
 
 export const MECH_MODULE = 'mechanism';
 export const MAX_ITEMS = 24;
+export const MAX_ACC2_PTS = 6;
 export const MAX_LAWS = 8;
 
 export interface MechState {
@@ -133,7 +134,17 @@ export function parseMech(raw: unknown): { ok: true; problem: MechProblem } | { 
   if (typeof raw.g === 'string' && raw.g) problem.g = str(raw, 'g');
   if (isObj(raw.param)) problem.param = { val: str(raw.param, 'val', '0'), from: str(raw.param, 'from', '0'), to: str(raw.param, 'to', '360') };
   if (isObj(raw.energy)) problem.energy = { phi0: str(raw.energy, 'phi0', '0'), w0: str(raw.energy, 'w0', '0') };
+  if (isObj(raw.acc2) && Array.isArray(raw.acc2.pts) && Array.isArray(raw.acc2.a)) {
+    const pts = (raw.acc2.pts as unknown[]).slice(0, MAX_ACC2_PTS).flatMap((q) => (isObj(q) ? [{ name: str(q, 'name').slice(0, 12), x: str(q, 'x', '0'), y: str(q, 'y', '0') }] : []));
+    const a = (raw.acc2.a as unknown[]).slice(0, 2).map((q) => (isObj(q) ? { mag: str(q, 'mag', '0'), ang: str(q, 'ang', '0') } : { mag: '0', ang: '0' }));
+    while (a.length < 2) a.push({ mag: '0', ang: '0' });
+    if (pts.length >= 2) problem.acc2 = { pts, a };
+  }
   if (typeof raw.plot === 'string' && raw.plot) problem.plot = str(raw, 'plot');
+  if (Array.isArray(raw.formulas)) {
+    const fs = (raw.formulas as unknown[]).slice(0, MAX_ITEMS).flatMap((q) => (isObj(q) && typeof q.key === 'string' && typeof q.f === 'string' ? [{ key: q.key.slice(0, 40), f: q.f.slice(0, 160), ...(typeof q.tol === 'number' && q.tol > 0 ? { tol: q.tol } : {}) }] : []));
+    if (fs.length) problem.formulas = fs;
+  }
   if (isObj(raw.time)) {
     const tm = raw.time;
     const laws: MLaw[] = [];
@@ -398,7 +409,34 @@ export class MechStore {
   };
   removeLaw = (i: number) => this.change((p) => p.time?.laws.splice(i, 1));
   setEnergy = (on: boolean) => this.change((p) => (p.energy = on ? { phi0: p.param?.from ?? '0', w0: '0' } : null));
+  /** Режим «ω и ε по ускорениям двух точек» (Мещерский 18.29–18.36) и возврат к механизму. */
+  setAcc2 = (on: boolean) => {
+    this.commit();
+    this.set({
+      problem: on
+        ? { points: [], bodies: [], cons: [], drives: [], acc2: { pts: [{ name: 'A', x: '0', y: '0' }, { name: 'B', x: '10', y: '0' }], a: [{ mag: '10', ang: '0' }, { mag: '20', ang: '180' }] } }
+        : copy(MECH_PRESETS.m1812.problem as MechProblem),
+    });
+  };
+  addAcc2Pt = () =>
+    this.change((p) => {
+      const a = p.acc2;
+      if (!a || a.pts.length >= MAX_ACC2_PTS) return;
+      const used = new Set(a.pts.map((q) => q.name));
+      a.pts.push({ name: ['C', 'D', 'E', 'F', 'G'].find((n) => !used.has(n)) ?? `P${a.pts.length}`, x: '5', y: '5' });
+    });
+  removeAcc2Pt = (i: number) => this.change((p) => p.acc2 && i >= 2 && p.acc2.pts.splice(i, 1));
   setPlot = (key: string) => this.change((p) => (p.plot = key));
+  /** Формула книги для сверки с расчётом величины key (пусто — убрать). */
+  typeFormula = (key: string, s: string) => {
+    this.touch(`formula:${key}`);
+    this.edit((p) => {
+      const rest = (p.formulas ?? []).filter((q) => q.key !== key);
+      const f = s.slice(0, 160);
+      p.formulas = f.trim() ? [...rest, { key, f }] : rest;
+      if (!p.formulas.length) delete p.formulas;
+    });
+  };
   setGravity = (on: boolean) => this.change((p) => (p.g = on ? '9.81' : ''));
   undo = () => {
     const s = this.hist.undo(this.snap());

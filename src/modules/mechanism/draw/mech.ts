@@ -261,6 +261,11 @@ export function renderPlot(pl: PlotResult): { svg: string; viewBox: string } {
   });
   if (seg.length > 1) segs.push(seg);
   for (const sg of segs) out.push(`<path class="rt-line" d="M${sg.join('L')}"/>`);
+  if (pl.formula) {
+    // Формула книги — пунктиром поверх расчёта.
+    const fp = pl.formula.map((y, i) => (y == null ? null : `${r1(X(pl.xs[i]))} ${r1(Math.max(y0 - 20, Math.min(y0 + h + 20, Y(y))))}`));
+    out.push(`<path class="rt-line" fill="none" stroke-dasharray="7 6" style="stroke:var(--accent, #c0392b)" d="M${fp.filter(Boolean).join('L')}"/>`, `<text class="rt-tick" x="${x0 + w}" y="${y0 - 16}" text-anchor="end">пунктир — формула книги</text>`);
+  }
   const mark = (p: { x: number; y: number } | null, cls: string, txt: string, below: boolean) => {
     if (!p) return;
     out.push(`<circle class="${cls}" cx="${r1(X(p.x))}" cy="${r1(Y(p.y))}" r="4.5"/><text class="rt-val" x="${r1(Math.min(X(p.x) + 8, x0 + w - 150))}" y="${r1(below ? Y(p.y) + 18 : Y(p.y) - 8)}">${txt}</text>`);

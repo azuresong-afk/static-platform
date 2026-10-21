@@ -8,8 +8,12 @@ import { TRUSS_PRESETS } from '../src/modules/truss/presets';
 import { cremona, planarityError } from '../src/modules/graphstat/model/cremona';
 import { beamEquilibrium, chain, funicular } from '../src/modules/graphstat/model/funicular';
 import { GRAPH_PRESETS } from '../src/modules/graphstat/presets';
+import { nodePolygons } from '../src/modules/graphstat/model/nodepoly';
+import { renderNodePolygons } from '../src/modules/graphstat/draw/nodepoly';
+import { cremonaDoc } from '../src/modules/graphstat/text/solution';
+import { docHTML } from '../src/shared/doc';
 
-const trussKeys = Object.entries(GRAPH_PRESETS).filter(([, p]) => p.kind === 'truss');
+const trussKeys = Object.entries(GRAPH_PRESETS).filter(([, p]) => p.kind === 'truss' && !planarityError(p.truss));
 const beamKeys = Object.entries(GRAPH_PRESETS).filter(([, p]) => p.kind === 'beam');
 
 describe('Диаграмма Максвелла–Кремоны', () => {
@@ -41,6 +45,22 @@ describe('Диаграмма Максвелла–Кремоны', () => {
         });
       });
   }
+
+  it('5.14: вместо диаграммы — силовые многоугольники узлов; усилия совпадают с «Фермами» и с книгой', () => {
+    const t = TRUSS_PRESETS.m514.truss;
+    const res = solveTruss(t);
+    const np = nodePolygons(t, res);
+    expect(np.ok).toBe(true);
+    expect(np.maxErr).toBeLessThan(1e-9);
+    const found = np.polys.flatMap((p) => p.found);
+    expect(found.map((x) => x.bar).sort()).toEqual([0, 1, 2, 3, 4]);
+    TRUSS_PRESETS.m514.book.bars.forEach((v, k) => expect(Math.abs(found.find((x) => x.bar === k)!.N - v)).toBeLessThanOrEqual(Math.max(0.02 * Math.abs(v), 0.06)));
+    // Каждый многоугольник замкнут.
+    for (const p of np.polys) expect(Math.hypot(p.items.reduce((s, q) => s + q.v[0], 0), p.items.reduce((s, q) => s + q.v[1], 0))).toBeLessThan(1e-9);
+    const doc = docHTML(cremonaDoc(t, res, cremona(t, res), { explain: true }));
+    expect(doc).toContain('Силовые многоугольники узлов');
+    expect(renderNodePolygons(np).svg).not.toContain('NaN');
+  });
 
   it('5.14: стержни пересекаются вне узла — диаграмма не строится, причина названа', () => {
     const t = TRUSS_PRESETS.m514.truss;

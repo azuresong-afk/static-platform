@@ -45,6 +45,21 @@ export interface PlotResult {
   approx: boolean;
   /** Ось графика: параметр φ (°) или время t (с). */
   axis: 'phi' | 't';
+  /** Формула книги (если задана для этой величины): значения в точках xs. */
+  formula?: (number | null)[];
+}
+/** Сверка расчёта с формулой книги на диапазоне графика. */
+export interface FormulaCheck {
+  key: string;
+  label: string;
+  f: string;
+  /** Наибольшее отклонение, наибольший модуль величины, число сравнённых точек. */
+  dev: number;
+  scale: number;
+  n: number;
+  /** Допустимое относительное отклонение (у приближённых формул книги больше). */
+  tol: number;
+  error?: string;
 }
 /** Закон движения в момент t: формулы производных и значения (угол — в радианах). */
 export interface LawState {
@@ -67,6 +82,8 @@ export interface MechSolution extends MechResult {
   plot: PlotResult | null;
   /** Законы движения в момент t (null — режим времени не включён). */
   time: { t: number; laws: LawState[] } | null;
+  /** Сверка с формулами книги (пусто — формулы не заданы). */
+  checks?: FormulaCheck[];
   /** Уравнения плоского движения звеньев по времени: x и y полюса (первая точка звена) и угол φ направления «полюс → последняя точка». */
   motion?: MotionTable[];
 }
@@ -451,7 +468,66 @@ function simpson2(f: (x: number, edge: -1 | 0 | 1) => [number, number] | null, a
   return [(s[0] * h) / 3, (s[1] * h) / 3];
 }
 
+const FORMULA_N = 72;
+/** Значения формулы книги: φ (рад) или t; в режиме параметра x — градусы. */
+function formulaFn(src: string, axis: 'phi' | 't'): ((x: number) => number) | string {
+  const e = parseExpr(src.replace(PHI, 't'));
+  if (!e.ok) return e.error;
+  return axis === 'phi' ? (x) => evalExpr(e.e, (x * Math.PI) / 180) : (x) => evalExpr(e.e, x);
+}
+
+/** Сверка расчёта с формулами книги (pr.formulas) и значения формулы на оси выбранного графика. */
+function withFormulas(pr: MechProblem, sol: MechSolution): MechSolution {
+  const fs = (pr.formulas ?? []).filter((q) => q.key && q.f.trim());
+  if (!fs.length || !sol.ok) return sol;
+  const axis: 'phi' | 't' = pr.time ? 't' : 'phi';
+  const rng = pr.time ? [num(pr.time.from), num(pr.time.to)] : pr.param ? [num(pr.param.from), num(pr.param.to)] : [null, null];
+  const keys = plotKeys(pr);
+  const checks: FormulaCheck[] = [];
+  for (const q of fs) {
+    const label = keys.find((k) => k[0] === q.key)?.[1] ?? q.key;
+    const base = { key: q.key, label, f: q.f, dev: 0, scale: 0, n: 0, tol: q.tol ?? 1e-6 };
+    const fn = formulaFn(q.f, axis);
+    if (typeof fn === 'string') {
+      checks.push({ ...base, error: `формула: ${fn}` });
+      continue;
+    }
+    const [lo, hi] = rng;
+    if (lo == null || hi == null || !(hi > lo)) {
+      checks.push({ ...base, error: 'нет диапазона графика (задайте «от» и «до»)' });
+      continue;
+    }
+    let dev = 0,
+      scale = 0,
+      n = 0;
+    for (let i = 0; i <= FORMULA_N; i++) {
+      const x = lo + ((hi - lo) * i) / FORMULA_N;
+      const q2 = pr.time ? atTime(pr, x) : pr;
+      const val = q2 ? valueOf(q.key, stateAt(q2, pr.time ? null : x), q2) : null;
+      const fv = fn(x);
+      if (val == null || !Number.isFinite(fv)) continue;
+      let d = Math.abs(val - fv);
+      if (q.key.startsWith('ang:')) d = Math.abs(d - 2 * Math.PI * Math.round(d / (2 * Math.PI)));
+      dev = Math.max(dev, d);
+      scale = Math.max(scale, Math.abs(val));
+      n++;
+    }
+    checks.push({ ...base, dev, scale, n, ...(n ? {} : { error: 'на диапазоне механизм не собирается или формула не определена' }) });
+  }
+  let plot = sol.plot;
+  const cur = plot && fs.find((q) => q.key === plot!.key);
+  if (plot && cur) {
+    const fn = formulaFn(cur.f, axis);
+    if (typeof fn !== 'string') plot = { ...plot, formula: plot.xs.map((x) => (Number.isFinite(fn(x)) ? fn(x) : null)) };
+  }
+  return { ...sol, plot, checks };
+}
+
 export function solveMech(pr: MechProblem): MechSolution {
+  return withFormulas(pr, solveMechCore(pr));
+}
+
+function solveMechCore(pr: MechProblem): MechSolution {
   if (pr.time) return solveTimed(pr, pr.time);
   const extraErrors: string[] = [];
   let phi: number | null = null;

@@ -12,6 +12,11 @@ import { nodeDoc, reduceDoc } from '../text/solution';
 import type { ConvStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { CONV_ASKS } from '../model/extra';
+import { CONV_EXTRA_PRESETS } from '../extraPresets';
+
+const ALL_PRESETS = { ...CONV_PRESETS, ...CONV_EXTRA_PRESETS };
 
 const KIND: [NodeForce['kind'], string][] = [
   ['known', 'известная сила'],
@@ -30,6 +35,25 @@ function NameField({ value, onType, onEnd }: { value: string; onType: (s: string
 }
 
 export function ConvView({ chrome, store }: { chrome: Chrome; store: ConvStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store}
+        asks={CONV_ASKS}
+        presets={ALL_PRESETS}
+        prefix="v"
+        heading="Статика: системы тел, трение, механизмы"
+        lede="Многоузловые шарнирные системы и механизмы в равновесии (тела на шарнирах, ползуны с трением, уравновешивающая сила); верёвочный многоугольник; трение в стыках, клин, наивыгоднейший угол тяги, перекос в направляющих, тормоза; щит, штабель плит, дифференциальный блок, бифиляр."
+        mainLabel="узел и приведение системы сил"
+        tabName="Сходящиеся силы"
+      />
+    );
+  return <ConvMain chrome={chrome} store={store} />;
+}
+
+function ConvMain({ chrome, store }: { chrome: Chrome; store: ConvStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const out = useMemo(() => {
@@ -55,7 +79,7 @@ export function ConvView({ chrome, store }: { chrome: Chrome; store: ConvStore }
             <label className="preset">
               Готовая задача
               <select id="vpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as ConvPresetKey)}>
-                <PresetOptions items={taskEntries(CONV_PRESETS)} />
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -85,6 +109,11 @@ export function ConvView({ chrome, store }: { chrome: Chrome; store: ConvStore }
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Силы">
+            <div className="segbtns">
+              <button type="button" id="vto-extra" onClick={() => store.setView('extra')}>
+                Системы тел, трение, механизмы →
+              </button>
+            </div>
             <h2>Силы</h2>
             <label className="field">
               <span>Задача</span>

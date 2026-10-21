@@ -1,11 +1,14 @@
 /** Решение, чертёж и текст для любого способа задания (общий вход для экрана и проверок). */
 import type { Doc } from '../../../shared/doc';
 import { renderCamRot, renderCamTrans, renderHarm, renderInteg, renderPath, renderShot } from '../draw/ext';
+import { renderComp, renderConv } from '../draw/comp';
 import { renderKin, renderUni } from '../draw/kin';
+import { solveComp, solveConv } from '../model/comp';
 import { solveCamRot, solveCamTrans } from '../model/cam';
 import { solveHarm, solveInteg, solvePath, solveShot } from '../model/ext';
 import { solveKin, type KinProblem } from '../model/kin';
 import { DEF_UNI, solveLin } from '../model/uniform';
+import { compDoc, convDoc } from '../text/comp';
 import { camRotDoc, camTransDoc } from '../text/cam';
 import { harmDoc, integDoc, pathDoc, shotDoc } from '../text/ext';
 import { kinDoc } from '../text/solution';
@@ -36,6 +39,14 @@ export function solveAny(pr: KinProblem, explain: boolean): { fig: Fig; doc: Doc
     case 'shot': {
       const q = solveShot(pr);
       return { fig: renderShot(q), doc: shotDoc(pr, q, ex) };
+    }
+    case 'comp': {
+      const q = solveComp(pr);
+      return { fig: renderComp(q), doc: compDoc(pr, q, ex) };
+    }
+    case 'conv': {
+      const q = solveConv(pr);
+      return { fig: renderConv(q), doc: convDoc(pr, q, ex) };
     }
     case 'cam': {
       if (pr.p?.kind === 'trans') {

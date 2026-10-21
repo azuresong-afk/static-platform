@@ -1,0 +1,17 @@
+/* Силовые многоугольники узлов (пункт 26). */
+.gs-kn {
+  stroke: var(--ink-2);
+  stroke-width: 1.4;
+  fill: none;
+}
+.gs-kn-f {
+  fill: var(--ink-2);
+}
+.gs-nw {
+  stroke: var(--ink);
+  stroke-width: 2.6;
+  fill: none;
+}
+.gs-nw-f {
+  fill: var(--ink);
+}

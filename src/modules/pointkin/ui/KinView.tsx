@@ -33,8 +33,10 @@ const MODES: [KinMode, string][] = [
   ['harm', 'гармонические колебания: центр, амплитуда, частота, фаза'],
   ['shot', 'бросок под углом к горизонту'],
   ['cam', 'кулачки: контур и закон движения толкателя'],
+  ['comp', 'составные задачи: капли, степень времени, дуги, моменты'],
+  ['conv', 'пересчёт декартовых уравнений в полярные, цилиндрические, сферические'],
 ];
-const EXT: KinMode[] = ['path', 'integ', 'harm', 'shot', 'cam'];
+const EXT: KinMode[] = ['path', 'integ', 'harm', 'shot', 'cam', 'comp', 'conv'];
 
 export function KinView({ chrome, store }: { chrome: Chrome; store: KinStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);

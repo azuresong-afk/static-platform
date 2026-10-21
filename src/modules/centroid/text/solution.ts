@@ -5,8 +5,8 @@ import { KIND_NAME, type CProblem, type CentroidResult } from '../model/centroid
 
 const f = (x: number) => fmt(x, 3);
 const fp = (x: number) => (x < 0 ? `(${f(x)})` : f(x));
-const SYM = { area: 'A', line: 'L', volume: 'V', mass: 'G' } as const;
-const UNIT = { area: 'площадь', line: 'длина', volume: 'объём', mass: 'вес' } as const;
+const SYM = { area: 'A', line: 'L', volume: 'V', surface: 'A', mass: 'G' } as const;
+const UNIT = { area: 'площадь', line: 'длина', volume: 'объём', surface: 'площадь', mass: 'вес' } as const;
 
 export function centroidDoc(pr: CProblem, r: CentroidResult, opts: { explain?: boolean } = {}): Doc {
   const steps: Step[] = [];

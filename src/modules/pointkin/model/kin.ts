@@ -21,7 +21,7 @@
 import { diff, evalExpr, parseExpr, type Expr } from '../../../shared/expr';
 import type { LinUni } from './uniform';
 
-export type KinMode = 'coord' | 'natural' | 'polar' | 'cyl' | 'sph' | 'tor' | 'uni' | 'path' | 'integ' | 'harm' | 'shot' | 'cam';
+export type KinMode = 'coord' | 'natural' | 'polar' | 'cyl' | 'sph' | 'tor' | 'uni' | 'path' | 'integ' | 'harm' | 'shot' | 'cam' | 'comp' | 'conv';
 export interface KinProblem {
   mode: KinMode;
   x: string;
@@ -62,6 +62,12 @@ export interface KinResult {
   polar: { r: number; phi: number; vr: number; vphi: number; ar: number; aphi: number } | null;
   /** Цилиндрические (r, φ, z) или сферические (r, φ, θ) координаты и проекции v, a на оси системы. */
   curv: { q: [number, number, number]; v: [number, number, number]; a: [number, number, number] } | null;
+  /**
+   * Годограф скорости в полярных и цилиндрических координатах (Мещерский 11.15–11.16): точка M₁ с радиусом-вектором,
+   * равным скорости M (r₁ = |v_xy|, φ₁ — направление скорости, z₁ = v_z), и проекции её скорости (= ускорения M)
+   * на оси той же системы в M₁: v_r1 = a_τ (горизонтальной части), v_φ1 = a_n со знаком (по φ₁), v_z1 = a_z.
+   */
+  hodo: { r: number; phi: number; z: number | null; vr: number; vphi: number; vz: number | null } | null;
   /** Углы скорости и ускорения с осями, градусы. */
   vAngles: [number, number, number] | null;
   aAngles: [number, number, number] | null;
@@ -79,6 +85,20 @@ export function torA(pr: KinProblem, errors: string[]): number {
   return evalExpr(e.e, 0);
 }
 const ZERO: Expr = { k: 'num', v: 0 };
+
+/** Годограф скорости в полярных (z = false) или цилиндрических координатах по декартовым v и a. */
+function hodograph(vel: number[], acc: number[], cyl: boolean): KinResult['hodo'] {
+  const r1 = Math.hypot(vel[0], vel[1]);
+  if (r1 < 1e-12) return null;
+  return {
+    r: clean(r1),
+    phi: Math.atan2(vel[1], vel[0]),
+    z: cyl ? clean(vel[2]) : null,
+    vr: clean((vel[0] * acc[0] + vel[1] * acc[1]) / r1),
+    vphi: clean((vel[0] * acc[1] - vel[1] * acc[0]) / r1),
+    vz: cyl ? clean(acc[2]) : null,
+  };
+}
 
 export function solveKin(pr: KinProblem): KinResult {
   const errors: string[] = [];
@@ -103,7 +123,7 @@ export function solveKin(pr: KinProblem): KinResult {
   });
   if (pr.mode === 'natural' && !(pr.rho >= 0)) errors.push('Радиус кривизны — неотрицательное число (0 — прямолинейное движение).');
   const z3: [number, number, number] = [0, 0, 0];
-  const empty: KinResult = { ok: false, errors, f, pos: z3, vel: z3, acc: z3, v: 0, a: 0, at: 0, an: 0, rho: null, polar: null, curv: null, vAngles: null, aAngles: null };
+  const empty: KinResult = { ok: false, errors, f, pos: z3, vel: z3, acc: z3, v: 0, a: 0, at: 0, an: 0, rho: null, polar: null, curv: null, hodo: null, vAngles: null, aAngles: null };
   if (errors.length) return empty;
   const t = pr.t;
   const val = (i: number, k: 'e' | 'd1' | 'd2') => evalExpr(f[i][k], t);
@@ -219,6 +239,7 @@ export function solveKin(pr: KinProblem): KinResult {
     rho,
     polar,
     curv,
+    hodo: pr.mode === 'polar' || pr.mode === 'cyl' ? hodograph(vel, acc, pr.mode === 'cyl') : null,
     vAngles: angles(vel, v),
     aAngles: angles(acc, amag),
   };

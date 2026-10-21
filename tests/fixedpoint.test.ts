@@ -8,6 +8,9 @@ import { eulerDoc, schemeDoc, screwDoc } from '../src/modules/fixedpoint/text/so
 import { FpStore, parseFp } from '../src/modules/fixedpoint/ui/store';
 import { docText } from './helpers/doctext';
 import { angleDeg, cross, norm, vadd, vsub } from '../src/modules/fixedpoint/model/vec';
+import { solveCalc } from '../src/modules/fixedpoint/model/calc';
+import { calcDoc } from '../src/modules/fixedpoint/text/calc';
+import { renderCalc } from '../src/modules/fixedpoint/draw/calc';
 import { bd, ct, euler, FP_PRESETS, inp, pt, scheme } from '../src/modules/fixedpoint/presets';
 import { taskInfo } from '../src/shared/tasks';
 
@@ -76,6 +79,12 @@ describe('готовые задачи: ответы книги', () => {
         got = gotEuler(r);
         text = docText(eulerDoc(p.problem.euler, r, { explain: true }));
         svg = renderEuler(p.problem.euler, r).svg;
+      } else if (p.problem.mode === 'calc') {
+        const r = solveCalc(p.problem.calc);
+        expect(r.ok, key + r.errors.join()).toBe(true);
+        got = r.get;
+        text = docText(calcDoc(p.problem.calc, r, { explain: true }));
+        svg = renderCalc(r).svg;
       } else {
         const r = solveScrew(p.problem.screw);
         expect(r.ok, key + r.errors.join()).toBe(true);
@@ -88,7 +97,7 @@ describe('готовые задачи: ответы книги', () => {
       const rel = (p as { relTol?: number }).relTol ?? 0.005;
       for (const [k, book] of Object.entries((p as { book?: Record<string, number> }).book ?? {})) {
         expect(got[k], `${key}: нет ${k}`).toBeDefined();
-        const val = /^(c\d\d|wF|wB|eF|eB|vx|vy|vz|ax$|ay$|az$)/.test(k) ? got[k] : Math.abs(got[k]);
+        const val = p.problem.mode === 'calc' || /^(c\d\d|wF|wB|eF|eB|vx|vy|vz|ax$|ay$|az$)/.test(k) ? got[k] : Math.abs(got[k]);
         expect(Math.abs(val - book), `${key} ${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(Math.abs(book) < 1e-12 ? 1e-9 : rel * Math.abs(book));
       }
       const par = /Мещерский (\d+)\./.exec(p.title)![1];
