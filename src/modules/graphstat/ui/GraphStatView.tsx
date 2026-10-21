@@ -10,7 +10,9 @@ import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { nodeName, solveTruss } from '../../truss/model/truss';
 import { renderChainForce, renderChainSpace, renderBeamSpace, renderForcePolygon } from '../draw/funicular';
 import { renderCremona, renderSpace } from '../draw/truss';
-import { cremona } from '../model/cremona';
+import { cremona, planarityError } from '../model/cremona';
+import { nodePolygons } from '../model/nodepoly';
+import { renderNodePolygons } from '../draw/nodepoly';
 import { chain, funicular } from '../model/funicular';
 import { GRAPH_PRESETS, type GraphPresetKey } from '../presets';
 import { chainDoc, cremonaDoc, funicularDoc } from '../text/solution';
@@ -29,13 +31,15 @@ export function GraphStatView({ chrome, store }: { chrome: Chrome; store: GraphS
       const cr = cremona(t, res);
       const book = preset && preset.kind === 'truss' ? preset.book : undefined;
       const a = cr.ok ? renderSpace(t, res, cr) : res.status === 'ok' ? renderSpace(t, res, cr) : { svg: '', viewBox: '0 0 10 10' };
-      const bfig = cr.ok ? renderCremona(res, cr) : null;
+      // Граф не плоский (5.14): вместо диаграммы — силовые многоугольники узлов.
+      const np = !cr.ok && res.status === 'ok' && planarityError(t) ? nodePolygons(t, res) : null;
+      const bfig = cr.ok ? renderCremona(res, cr) : np?.ok ? renderNodePolygons(np) : null;
       return {
         a,
         b: bfig,
         doc: cremonaDoc(t, res, cr, { explain: st.explain, book }),
-        aLabel: 'Ферма с обозначениями Боу',
-        bLabel: 'Диаграмма Максвелла–Кремоны',
+        aLabel: np?.ok ? 'Ферма' : 'Ферма с обозначениями Боу',
+        bLabel: np?.ok ? 'Силовые многоугольники узлов' : 'Диаграмма Максвелла–Кремоны',
       };
     }
     if (st.kind === 'beam') {
