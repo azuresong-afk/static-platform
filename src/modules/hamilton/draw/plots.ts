@@ -4,11 +4,14 @@
  * по параметру, фазовый портрет, x(t), скорость изменения амплитуды ȧ(a) и период по амплитуде.
  */
 import { fmt } from '../../../shared/format';
-import { prettyName, varName } from '../../../shared/sym';
+import { evalSym, prettyName, varName } from '../../../shared/sym';
 import { plot } from '../../rotation/draw/rotation';
 import type { NonlinSolution } from '../model/nonlin';
 import type { RouthSolution } from '../model/routh';
-import type { StabSolution } from '../model/stability';
+import type { StringSolution } from '../model/jacobi';
+import type { LetSolution } from '../model/letters';
+import type { RollSolution } from '../model/roll';
+import type { Cx, StabSolution } from '../model/stability';
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -95,48 +98,149 @@ export function routhPlots(r: RouthSolution): { svg: string; viewBox: string } |
   return { svg: out.join(''), viewBox: `0 0 ${cols * (pw + 110) + 30} ${rows * (ph + 90) + 20}` };
 }
 
-export function stabPlots(r: StabSolution): { svg: string; viewBox: string } {
-  const out: string[] = [];
-  // Комплексная плоскость: одинаковый масштаб.
-  const re = r.roots.map((z) => z[0]),
-    im = r.roots.map((z) => z[1]);
+type Scan = { param: string; from: number; to: number; stable: [number, number][]; bounds: number[] };
+const PH = 300;
+/** Корни на комплексной плоскости (одинаковый масштаб), левая полуплоскость закрашена. Возвращает правый край. */
+function rootsPlane(out: string[], x0: number, roots: Cx[]): number {
+  const re = roots.map((z) => z[0]),
+    im = roots.map((z) => z[1]);
   const R = Math.max(1e-6, ...re.map(Math.abs), ...im.map(Math.abs)) * 1.25;
-  const W = 380,
-    Hh = 300;
-  const f = frame(80, 50, W, Hh, [-R * (W / Hh), R * (W / Hh)], [-R, R], 'Корни λ на комплексной плоскости', 'Re λ', 'Im λ');
+  const W = 380;
+  const f = frame(x0, 50, W, PH, [-R * (W / PH), R * (W / PH)], [-R, R], 'Корни λ на комплексной плоскости', 'Re λ', 'Im λ');
   out.push(...f.svg);
-  // Левая полуплоскость — область устойчивости.
-  out.push(`<rect class="sp-cone1" x="80" y="50" width="${r1(f.X(0) - 80)}" height="${Hh}" opacity=".5"/>`);
-  for (const z of r.roots)
+  out.push(`<rect class="sp-cone1" x="${x0}" y="50" width="${r1(f.X(0) - x0)}" height="${PH}" opacity=".5"/>`);
+  for (const z of roots)
     out.push(
       `<circle class="${Math.abs(z[0]) <= 1e-7 * Math.max(1, Math.hypot(z[0], z[1])) ? 'vb-node' : 'vb-pt'}" cx="${r1(f.X(z[0]))}" cy="${r1(f.Y(z[1]))}" r="5"><title>λ = ${fmt(z[0], 4)} ${z[1] < 0 ? '−' : '+'} ${fmt(Math.abs(z[1]), 4)}i</title></circle>`,
     );
-  let width = 80 + W + 40;
-  if (r.scan) {
-    const s = r.scan;
-    const x0 = width + 60,
-      w = 380,
-      y0 = 50 + Hh / 2 - 20;
-    const tx = ticks(s.from, s.to);
-    const X = (v: number) => x0 + ((v - s.from) / (s.to - s.from || 1)) * w;
-    const dx = digits(tx);
-    out.push(`<text class="rt-title" x="${x0}" y="${y0 - 40}">Устойчивость по ${esc(s.param)}</text>`);
-    for (const [lo, hi] of s.stable) out.push(`<rect class="sp-cone1" x="${r1(X(lo))}" y="${y0}" width="${r1(X(hi) - X(lo))}" height="40"/>`);
-    out.push(`<rect fill="none" class="rt-axis" x="${x0}" y="${y0}" width="${w}" height="40"/>`);
-    for (const v of tx)
-      if (v >= s.from - 1e-12 && v <= s.to + 1e-12)
-        out.push(
-          `<line class="rt-axis" x1="${r1(X(v))}" y1="${y0 + 40}" x2="${r1(X(v))}" y2="${y0 + 46}"/><text class="rt-tick" x="${r1(X(v))}" y="${y0 + 62}" text-anchor="middle">${fmt(v, dx)}</text>`,
-        );
-    out.push(`<text class="rt-tick" x="${x0 + w}" y="${y0 + 80}" text-anchor="end">${esc(s.param)}</text>`);
-    for (const b of s.bounds)
+  return x0 + W + 40;
+}
+/** Полоса «устойчиво/неустойчиво» по параметру. Возвращает правый край. */
+function scanBar(out: string[], x0: number, s: Scan): number {
+  const w = 380,
+    y0 = 50 + PH / 2 - 20;
+  const tx = ticks(s.from, s.to);
+  const X = (v: number) => x0 + ((v - s.from) / (s.to - s.from || 1)) * w;
+  const dx = digits(tx);
+  out.push(`<text class="rt-title" x="${x0}" y="${y0 - 40}">Устойчивость по ${esc(s.param)}</text>`);
+  for (const [lo, hi] of s.stable) out.push(`<rect class="sp-cone1" x="${r1(X(lo))}" y="${y0}" width="${r1(X(hi) - X(lo))}" height="40"/>`);
+  out.push(`<rect fill="none" class="rt-axis" x="${x0}" y="${y0}" width="${w}" height="40"/>`);
+  for (const v of tx)
+    if (v >= s.from - 1e-12 && v <= s.to + 1e-12)
       out.push(
-        `<line class="vb-kmark" x1="${r1(X(b))}" y1="${y0 - 10}" x2="${r1(X(b))}" y2="${y0 + 50}"/><text class="vb-mk" x="${r1(X(b))}" y="${y0 - 14}" text-anchor="middle">${esc(s.param)} = ${fmt(b, 4)}</text>`,
+        `<line class="rt-axis" x1="${r1(X(v))}" y1="${y0 + 40}" x2="${r1(X(v))}" y2="${y0 + 46}"/><text class="rt-tick" x="${r1(X(v))}" y="${y0 + 62}" text-anchor="middle">${fmt(v, dx)}</text>`,
       );
-    out.push(`<text class="vb-leg" x="${x0}" y="${y0 + 104}">закрашено — устойчиво</text>`);
-    width = x0 + w + 40;
+  out.push(`<text class="rt-tick" x="${x0 + w}" y="${y0 + 80}" text-anchor="end">${esc(s.param)}</text>`);
+  for (const b of s.bounds)
+    out.push(
+      `<line class="vb-kmark" x1="${r1(X(b))}" y1="${y0 - 10}" x2="${r1(X(b))}" y2="${y0 + 50}"/><text class="vb-mk" x="${r1(X(b))}" y="${y0 - 14}" text-anchor="middle">${esc(s.param)} = ${fmt(b, 4)}</text>`,
+    );
+  out.push(`<text class="vb-leg" x="${x0}" y="${y0 + 104}">закрашено — устойчиво</text>`);
+  return x0 + w + 40;
+}
+
+export function stabPlots(r: StabSolution): { svg: string; viewBox: string } {
+  const out: string[] = [];
+  let width = rootsPlane(out, 80, r.roots);
+  if (r.scan) width = scanBar(out, width + 60, r.scan);
+  return { svg: out.join(''), viewBox: `0 0 ${width} ${PH + 100}` };
+}
+
+/** В буквах: W(q) около положения (одна координата), закон малых колебаний, корни, область устойчивости. */
+export function lettersPlots(r: LetSolution): { svg: string; viewBox: string } | null {
+  const out: string[] = [];
+  let width = 80;
+  const pw = 380;
+  const name = r.ctx.coords.length === 1 ? prettyName(r.ctx.coords[0]) : '';
+  if (name && !r.neutralAll) {
+    const q0 = r.q[0];
+    const span = Math.abs(q0) > 1e-9 ? Math.min(Math.abs(q0), 2) : 1;
+    const ev = (x: number) => evalSym(r.W, (n, ord) => (n === r.ctx.coords[0] ? (ord === 0 ? x : 0) : (r.values.get(n) ?? NaN)));
+    const pts: [number, number][] = Array.from({ length: 161 }, (_, i) => {
+      const x = q0 - span + (2 * span * i) / 160;
+      return [x, ev(x)];
+    });
+    if (pts.some((p) => Number.isFinite(p[1]))) {
+      const f = frame(width, 50, pw, PH, [q0 - span, q0 + span], range(pts.map((p) => p[1])), 'W = Π − T₀', name, 'W');
+      out.push(...f.svg, line(f, pts, 'vb-mode-l vb-s0'));
+      const w0 = ev(q0);
+      if (Number.isFinite(w0)) out.push(`<circle class="${r.verdict === 'unstable' ? 'vb-node' : 'vb-pt'}" cx="${r1(f.X(q0))}" cy="${r1(f.Y(w0))}" r="5"/>`);
+      width += pw + 110;
+    }
   }
-  return { svg: out.join(''), viewBox: `0 0 ${width} ${Hh + 100}` };
+  if (r.law) {
+    const L = r.law;
+    const tEnd = (3 * 2 * Math.PI) / L.k;
+    const pts: [number, number][] = Array.from({ length: 301 }, (_, i) => {
+      const t = (tEnd * i) / 300;
+      return [t, L.amp * Math.sin(L.k * t + L.phase)];
+    });
+    out.push(plot(width, 50, pw, PH, pts, 'δ' + name, '', 'с'));
+    width += pw + 110;
+  } else if (r.stab) width = rootsPlane(out, width, r.stab.roots) + 70;
+  if (r.scan) width = scanBar(out, width, r.scan) + 70;
+  if (!out.length) return null;
+  return { svg: out.join(''), viewBox: `0 0 ${width - 40} ${PH + 100}` };
+}
+
+/** Катящийся диск: θ(t), ψ(t) возмущённого движения, корни, область устойчивости. */
+export function rollPlots(r: RollSolution): { svg: string; viewBox: string } {
+  const out: string[] = [];
+  const pw = 380;
+  let width = 80;
+  if (r.sim && r.sim.t.length > 1) {
+    const s = r.sim;
+    out.push(
+      plot(
+        width,
+        50,
+        pw,
+        PH,
+        s.t.map((t, i) => [t, s.th[i]] as [number, number]),
+        'θ',
+        'рад',
+        'с',
+      ),
+    );
+    width += pw + 110;
+    out.push(
+      plot(
+        width,
+        50,
+        pw,
+        PH,
+        s.t.map((t, i) => [t, s.psi[i]] as [number, number]),
+        'ψ',
+        'рад',
+        'с',
+      ),
+    );
+    width += pw + 110;
+  }
+  width = rootsPlane(out, width, r.roots) + 70;
+  if (r.scan) width = scanBar(out, width, r.scan) + 70;
+  return { svg: out.join(''), viewBox: `0 0 ${width - 40} ${PH + 100}` };
+}
+
+/** Струна, нить: собственные формы. */
+export function stringPlots(r: StringSolution): { svg: string; viewBox: string } {
+  const out: string[] = [];
+  const pw = 600;
+  const f = frame(80, 50, pw, PH, [0, r.lv], [-1.1, 1.1], 'Собственные формы Yₖ(x)', 'x, м', 'Y');
+  out.push(...f.svg);
+  r.shapes.y.forEach((y, k) => {
+    out.push(
+      line(
+        f,
+        r.shapes.x.slice(0, y.length).map((x, i) => [x, y[i]]),
+        `vb-mode-l ${SER[k % SER.length]}`,
+      ),
+    );
+    out.push(
+      `<line class="vb-mode-l ${SER[k % SER.length]}" x1="${80 + pw + 20}" y1="${66 + 22 * k}" x2="${80 + pw + 44}" y2="${66 + 22 * k}"/><text class="vb-leg" x="${80 + pw + 52}" y="${70 + 22 * k}">ω${'₁₂₃₄₅₆'[k]} = ${fmt(r.omega[k], 4)}</text>`,
+    );
+  });
+  return { svg: out.join(''), viewBox: `0 0 ${80 + pw + 230} ${PH + 100}` };
 }
 
 export function nonlinPlots(r: NonlinSolution): { svg: string; viewBox: string } {

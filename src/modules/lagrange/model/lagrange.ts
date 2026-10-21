@@ -57,6 +57,35 @@ export interface LagProblem {
   tEnd: number;
   /** Поиск положений равновесия: отрезок для одной координаты (для нескольких — метод Ньютона от q* координат). */
   eqSearch?: { from: number; to: number } | null;
+  /** Реакция связей на тело и отрыв (§43). */
+  body?: LagBody | null;
+  /** Состояние в момент, когда первая координата достигает значения (формула от параметров). */
+  stop?: string | null;
+  /** Программное движение: законы qⱼ(t) — обобщённые силы, которые его осуществляют (Яблонский, Д.20). */
+  program?: LagProgram | null;
+}
+
+/** Тело системы: масса, центр масс (ось y — вверх), ось проекций реакции и угол поворота тела. */
+export interface LagBody {
+  m: string;
+  x: string;
+  y: string;
+  /** Угол оси e с осью x (формула от координат и параметров); n — ось, повёрнутая на 90°. Пусто — оси x, y. */
+  dir: string;
+  /** Угол поворота тела — для угловой скорости после отрыва. */
+  angle: string;
+  /** Начальное положение в буквах для интеграла энергии (одна координата, движение из покоя). */
+  from: string;
+  /** Отрыв: проекция реакции на e или n обращается в нуль. */
+  sep: 'none' | 'e' | 'n';
+  /** После отрыва (или события stop) тело свободно: полёт центра масс по параболе. */
+  flight: boolean;
+}
+export interface LagProgram {
+  /** Законы qⱼ(t) — формулы от t и параметров. */
+  laws: string[];
+  /** Момент времени для ответа. */
+  at: string;
 }
 
 export interface CoordDerivation {
@@ -88,7 +117,7 @@ export interface LagSolution {
   H: Sym;
   /** Ускорения в начальный момент. */
   acc0: number[];
-  sim: { t: number[]; q: number[][]; E: number[] } | null;
+  sim: { t: number[]; q: number[][]; v: number[][]; E: number[] } | null;
   /** Энергия сохраняется (нет непотенциальных сил и явной зависимости от t). */
   conservative: boolean;
   energyDrift: number | null;
@@ -256,6 +285,7 @@ export function solveLagrange(pr: LagProblem): LagResult {
       t = 0;
     const ts = [0],
       qs = q0.map((x) => [x]),
+      vs = v0.map((x) => [x]),
       Es = [energy(q, v, 0)];
     const f = (qq: number[], vv: number[], tt: number) => ({ dq: vv, dv: accAt(qq, vv, tt) });
     const every = 4;
@@ -282,11 +312,14 @@ export function solveLagrange(pr: LagProblem): LagResult {
       if (!q.every(Number.isFinite) || !v.every(Number.isFinite)) break;
       if (s % every === 0 || s === DT_STEPS) {
         ts.push(t);
-        for (let i = 0; i < n; i++) qs[i].push(q[i]);
+        for (let i = 0; i < n; i++) {
+          qs[i].push(q[i]);
+          vs[i].push(v[i]);
+        }
         Es.push(energy(q, v, t));
       }
     }
-    sim = { t: ts, q: qs, E: Es };
+    sim = { t: ts, q: qs, v: vs, E: Es };
     if (conservative) {
       const E0 = Es[0];
       energyDrift = Math.max(...Es.map((e) => Math.abs(e - E0))) / Math.max(1e-12, Math.abs(E0), ...Es.map(Math.abs));
