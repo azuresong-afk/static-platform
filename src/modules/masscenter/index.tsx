@@ -4,6 +4,7 @@ import { McStore, MC_MODULE } from './ui/store';
 import { McView } from './ui/McView';
 import { taskEntries } from '../../shared/tasks';
 import { MC_PRESETS, type McPresetKey } from './presets';
+import { MC_EXTRA_PRESETS, type McExtraKey } from './extraPresets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -31,7 +32,7 @@ export function createMcModule(): StatikaModule {
     tab: 'Центр масс',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
-    tasks: taskEntries(MC_PRESETS),
-    loadTask: (k) => store.loadPreset(k as McPresetKey),
+    tasks: taskEntries({ ...MC_PRESETS, ...MC_EXTRA_PRESETS }),
+    loadTask: (k) => store.loadPreset(k as McPresetKey | McExtraKey),
   };
 }

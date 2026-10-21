@@ -1,4 +1,8 @@
 /** Состояние вкладки «Реакции при плоском движении»: тело, точки, связи, нагрузки, скорости; история отмены, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
+import { BODY_ASKS } from '../model/extra';
+import { BODY_EXTRA_PRESETS, type BodyExtraKey } from '../extraPresets';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -18,8 +22,10 @@ const KINDS: ConstrKind[] = ['pin', 'roller', 'rope', 'unwind', 'roll'];
 
 export interface BodyState {
   problem: BodyProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: BodyPresetKey | 'custom';
+  preset: BodyPresetKey | BodyExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -27,6 +33,8 @@ export interface BodyState {
 }
 interface Snap {
   problem: BodyProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: BodyState['preset'];
 }
@@ -91,6 +99,8 @@ export class BodyStore {
   constructor(opts: { preset?: BodyPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm3920';
     this.st = {
+      extra: structuredClone(BODY_EXTRA_PRESETS.x3701.problem),
+      view: 'main',
       problem: copy(BODY_PRESETS[k].problem),
       title: BODY_PRESETS[k].title,
       preset: k,
@@ -109,7 +119,7 @@ export class BodyStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -123,10 +133,16 @@ export class BodyStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: BodyPresetKey) => {
+  loadPreset = (k: BodyPresetKey | BodyExtraKey) => {
     this.commit();
-    this.set({ problem: copy(BODY_PRESETS[k].problem), title: BODY_PRESETS[k].title, preset: k });
+    if (k in BODY_EXTRA_PRESETS) {
+      const e = BODY_EXTRA_PRESETS[k as BodyExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    this.set({ problem: copy(BODY_PRESETS[k as BodyPresetKey].problem), view: 'main', title: BODY_PRESETS[k as BodyPresetKey].title, preset: k });
   };
+  /** Второй экран (пункт 28): кинетический момент, свободное движение, стержень в несколько этапов. */
+  xhost = extraHost(BODY_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   typeNum = (key: BodyNumKey, v: number) => {
     this.touch(`n:${key}`);
     this.edit((p) => (p[key] = v));
@@ -225,7 +241,7 @@ export class BodyStore {
   projectTitle = () => this.st.title;
   exportProject = (now = new Date()) => ({
     name: projectFileName(this.st.title, now),
-    text: writeEnvelope(BODY_MODULE, this.st.title, { problem: this.st.problem }, now),
+    text: writeEnvelope(BODY_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now),
   });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
@@ -233,10 +249,11 @@ export class BodyStore {
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== BODY_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseBody(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, BODY_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Реакции при плоском движении';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

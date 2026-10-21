@@ -1,4 +1,8 @@
 /** Состояние вкладки «Центр масс и плоское движение»: шесть режимов, история отмены, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
+import { MC_ASKS } from '../model/extra';
+import { MC_EXTRA_PRESETS, type McExtraKey } from '../extraPresets';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -25,8 +29,10 @@ const MAX = 10;
 
 export interface McState {
   problem: McState3;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: McPresetKey | 'custom';
+  preset: McPresetKey | McExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -34,6 +40,8 @@ export interface McState {
 }
 interface Snap {
   problem: McState3;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: McState['preset'];
 }
@@ -153,7 +161,7 @@ export class McStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: McPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm3511';
-    this.st = { problem: presetState(k), title: MC_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { extra: structuredClone(MC_EXTRA_PRESETS.x2901.problem), view: 'main', problem: presetState(k), title: MC_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): McState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -164,7 +172,7 @@ export class McStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -178,10 +186,16 @@ export class McStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: McPresetKey) => {
+  loadPreset = (k: McPresetKey | McExtraKey) => {
     this.commit();
-    this.set({ problem: presetState(k, this.st.problem), title: MC_PRESETS[k].title, preset: k });
+    if (k in MC_EXTRA_PRESETS) {
+      const e = MC_EXTRA_PRESETS[k as McExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    this.set({ problem: presetState(k as McPresetKey, this.st.problem), view: 'main', title: MC_PRESETS[k as McPresetKey].title, preset: k });
   };
+  /** Второй экран (пункт 28): опрокидывание массива, маятник, крановая тележка, Яблонский Д.7, Д.8, Д.12. */
+  xhost = extraHost(MC_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   setMode = (m: McMode) => {
     if (m === this.st.problem.mode) return;
     this.commit();
@@ -378,17 +392,18 @@ export class McStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(MC_MODULE, this.st.title, { problem: this.st.problem }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(MC_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== MC_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseMc(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, MC_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Центр масс';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

@@ -1,4 +1,8 @@
 /** Состояние вкладки «Геометрия масс»: части, ось, история отмены, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
+import { INERTIA_ASKS } from '../model/extra';
+import { INERTIA_EXTRA_PRESETS, type InertiaExtraKey } from '../extraPresets';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -24,8 +28,10 @@ export const newPart = (kind: PartKind): IPart => ({ kind, m: 1, c: [0, 0, 0], u
 
 export interface InertiaState {
   problem: IProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: InertiaPresetKey | 'custom';
+  preset: InertiaPresetKey | InertiaExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -33,6 +39,8 @@ export interface InertiaState {
 }
 interface Snap {
   problem: IProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: InertiaState['preset'];
 }
@@ -63,7 +71,7 @@ export class InertiaStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: InertiaPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm3421';
-    this.st = { problem: copy(INERTIA_PRESETS[k].problem as IProblem), title: INERTIA_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { extra: structuredClone(INERTIA_EXTRA_PRESETS.x3433.problem), view: 'main', problem: copy(INERTIA_PRESETS[k].problem as IProblem), title: INERTIA_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): InertiaState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -74,7 +82,7 @@ export class InertiaStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -88,10 +96,16 @@ export class InertiaStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: InertiaPresetKey) => {
+  loadPreset = (k: InertiaPresetKey | InertiaExtraKey) => {
     this.commit();
-    this.set({ problem: copy(INERTIA_PRESETS[k].problem as IProblem), title: INERTIA_PRESETS[k].title, preset: k });
+    if (k in INERTIA_EXTRA_PRESETS) {
+      const e = INERTIA_EXTRA_PRESETS[k as InertiaExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    this.set({ problem: copy(INERTIA_PRESETS[k as InertiaPresetKey].problem as IProblem), view: 'main', title: INERTIA_PRESETS[k as InertiaPresetKey].title, preset: k });
   };
+  /** Второй экран (пункт 28): эллипсоид инерции. */
+  xhost = extraHost(INERTIA_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   addPart = () => {
     if (this.st.problem.parts.length >= MAX_PARTS) return;
     this.commit();
@@ -141,17 +155,18 @@ export class InertiaStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(INERTIA_MODULE, this.st.title, { problem: this.st.problem }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(INERTIA_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== INERTIA_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseInertia(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, INERTIA_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Геометрия масс';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

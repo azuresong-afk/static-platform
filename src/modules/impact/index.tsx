@@ -4,6 +4,7 @@ import { ImpStore, IMPACT_MODULE } from './ui/store';
 import { ImpactView } from './ui/ImpactView';
 import { taskEntries } from '../../shared/tasks';
 import { IMP_PRESETS, type ImpPresetKey } from './presets';
+import { IMP_EXTRA_PRESETS, type ImpExtraKey } from './extraPresets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -38,7 +39,7 @@ export function createImpactModule(): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
-    tasks: taskEntries(IMP_PRESETS),
-    loadTask: (k) => store.loadPreset(k as ImpPresetKey),
+    tasks: taskEntries({ ...IMP_PRESETS, ...IMP_EXTRA_PRESETS }),
+    loadTask: (k) => store.loadPreset(k as ImpPresetKey | ImpExtraKey),
   };
 }

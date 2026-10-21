@@ -12,6 +12,8 @@
  */
 import { evalExpr, parseExpr } from '../../../shared/expr';
 import { parseNum } from '../../../shared/format';
+import { POINT_ASKS_28 } from './extra28';
+import { POINT_ASKS_YAB } from './extraYab';
 import { ansB, bisect, bold, eqB, fail, rk4, sample, sg, simpson, stepB, stepEx, type AskDef, type ExtraOut, type ExtraProblem } from '../../../shared/extra';
 
 const G = 9.81;
@@ -336,4 +338,4 @@ const A_INCLINE: AskDef = {
   },
 };
 
-export const POINT_EXTRA_ASKS: AskDef[] = [A_LAW, A_CENTERS, A_INCLINE, A_BALL];
+export const POINT_EXTRA_ASKS: AskDef[] = [A_LAW, A_CENTERS, A_INCLINE, A_BALL, ...POINT_ASKS_28, ...POINT_ASKS_YAB];

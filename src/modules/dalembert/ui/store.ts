@@ -1,4 +1,8 @@
 /** Состояние вкладки «Принцип Даламбера»: тело на оси, опоры, ω и ε; история отмены, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
+import { SHAFT_ASKS } from '../model/extra';
+import { SHAFT_EXTRA_PRESETS, type ShaftExtraKey } from '../extraPresets';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -16,8 +20,10 @@ export type DriveKey = (typeof DRIVE_KEYS)[number];
 
 export interface ShaftState {
   problem: ShaftProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: ShaftPresetKey | 'custom';
+  preset: ShaftPresetKey | ShaftExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -25,6 +31,8 @@ export interface ShaftState {
 }
 interface Snap {
   problem: ShaftProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: ShaftState['preset'];
 }
@@ -57,7 +65,7 @@ export class ShaftStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: ShaftPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm427';
-    this.st = { problem: copy(SHAFT_PRESETS[k].problem as ShaftProblem), title: SHAFT_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { extra: structuredClone(SHAFT_EXTRA_PRESETS.x4212.problem), view: 'main', problem: copy(SHAFT_PRESETS[k].problem as ShaftProblem), title: SHAFT_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): ShaftState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -68,7 +76,7 @@ export class ShaftStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -82,10 +90,16 @@ export class ShaftStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: ShaftPresetKey) => {
+  loadPreset = (k: ShaftPresetKey | ShaftExtraKey) => {
     this.commit();
-    this.set({ problem: copy(SHAFT_PRESETS[k].problem as ShaftProblem), title: SHAFT_PRESETS[k].title, preset: k });
+    if (k in SHAFT_EXTRA_PRESETS) {
+      const e = SHAFT_EXTRA_PRESETS[k as ShaftExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    this.set({ problem: copy(SHAFT_PRESETS[k as ShaftPresetKey].problem as ShaftProblem), view: 'main', title: SHAFT_PRESETS[k as ShaftPresetKey].title, preset: k });
   };
+  /** Второй экран (пункт 28): пластинка, вращающаяся вокруг оси в своей плоскости. */
+  xhost = extraHost(SHAFT_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   addPart = () => {
     if (this.st.problem.parts.length >= MAX_PARTS) return;
     this.commit();
@@ -166,17 +180,18 @@ export class ShaftStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(DALEMBERT_MODULE, this.st.title, { problem: this.st.problem }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(DALEMBERT_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== DALEMBERT_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseShaft(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, SHAFT_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Принцип Даламбера';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

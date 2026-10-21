@@ -12,10 +12,34 @@ import { inertiaDoc } from '../text/solution';
 import type { InertiaStore } from './store';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { INERTIA_ASKS } from '../model/extra';
+import { INERTIA_EXTRA_PRESETS, type InertiaExtraKey } from '../extraPresets';
+
+const ALL_PRESETS = { ...INERTIA_PRESETS, ...INERTIA_EXTRA_PRESETS };
 
 const AX = ['x', 'y', 'z'];
 
 export function InertiaView({ chrome, store }: { chrome: Chrome; store: InertiaStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={INERTIA_ASKS}
+        presets={ALL_PRESETS}
+        prefix="in"
+        heading="Геометрия масс: эллипсоид инерции"
+        lede="Тензор инерции относительно точки: главные моменты и главные оси, уравнение эллипсоида инерции; тетраэдр с рёбрами по осям."
+        mainLabel="моменты инерции составного тела"
+        tabName="Геометрия масс"
+      />
+    );
+  return <InertiaViewMain chrome={chrome} store={store} />;
+}
+
+function InertiaViewMain({ chrome, store }: { chrome: Chrome; store: InertiaStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const r = useMemo(() => solveInertia(pr), [pr]);
@@ -34,8 +58,8 @@ export function InertiaView({ chrome, store }: { chrome: Chrome; store: InertiaS
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="ipreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as InertiaPresetKey)}>
-                <PresetOptions items={taskEntries(INERTIA_PRESETS)} />
+              <select id="ipreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as InertiaPresetKey | InertiaExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -65,6 +89,11 @@ export function InertiaView({ chrome, store }: { chrome: Chrome; store: InertiaS
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Части">
+            <div className="segbtns">
+              <button type="button" id="into-extra" onClick={() => store.xhost.setView('extra')}>
+                Эллипсоид инерции, главные оси →
+              </button>
+            </div>
             <h2>Ось</h2>
             <div className="cgpar cg0">
               {[0, 1, 2].map((a) => (

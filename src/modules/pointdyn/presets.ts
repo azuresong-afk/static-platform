@@ -178,6 +178,13 @@ const d52 = { k: 0.01, v0: 50, al: 60 };
 const yd2 = { k1: Math.sqrt(3), gk: G / 4, t: 1 };
 
 export const PLANE_PRESETS = {
+  p2767: {
+    title: 'Мещерский 27.67: падение тяжёлой точки при отталкивании от вертикальной оси',
+    problem: plane({ x0: 0, y0: 10, v0: 2, ang: 0, formX: '4*x', ask: 'land', y1: 0 }),
+    book: { t: Math.sqrt(20 / G), x: Math.sinh(2 * Math.sqrt(20 / G)) },
+    relTol: 1e-4,
+    note: 'Задача в буквах; числа — для примера: m = 1 кг, c = 4 Н/м (F_x = c·x), h = 10 м, v₀ = 2 м/с. Книга: x = (v₀/k) sh kt, y = h − gt²/2, k = √(c/m); t₁ = √(2h/g).',
+  },
   p2744: {
     title: 'Мещерский 27.44: дальность и высота при угле 30°',
     problem: plane({ v0: 100, ang: 30 }),
@@ -259,6 +266,13 @@ const s23 = { h0: 0.9, h: 0.8, v0: 1 };
 const vC6 = Math.sqrt(0.8 ** 2 + 4 * G * 0.2 * (2 * Math.sin(rad(60)) + Math.cos(rad(60))));
 
 export const CIRCLE_PRESETS = {
+  c2768: {
+    title: 'Мещерский 27.68: точка во внутренней поверхности гладкого цилиндра — скорость и реакция при φ = 30°',
+    problem: circ({ R: 1, link: 'inner', phi0: 90, v0: 0, phi1: 30 }),
+    book: { v: Math.pow(3, 0.25) * Math.sqrt(G), N: ((3 * Math.sqrt(3)) / 2) * G },
+    relTol: 1e-6,
+    note: 'Задача в буквах; числа — для примера (r = 1 м, m = 1 кг); φ отсчитывается от нижней точки. Книга: v = ⁴√3·√(gr), N = (3√3/2)·mg.',
+  },
   c268: {
     title: 'Мещерский 26.8: натяжение нити сразу после толчка',
     problem: circ({ byWeight: true, m: 2, R: 1, v0: 5 }),

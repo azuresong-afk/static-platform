@@ -4,6 +4,7 @@ import { OrbStore, ORBIT_MODULE } from './ui/store';
 import { OrbitView } from './ui/OrbitView';
 import { taskEntries } from '../../shared/tasks';
 import { ORB_PRESETS, type OrbPresetKey } from './presets';
+import { ORB_EXTRA_PRESETS, type OrbExtraKey } from './extraPresets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -38,7 +39,7 @@ export function createOrbitModule(): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
-    tasks: taskEntries(ORB_PRESETS),
-    loadTask: (k) => store.loadPreset(k as OrbPresetKey),
+    tasks: taskEntries({ ...ORB_PRESETS, ...ORB_EXTRA_PRESETS }),
+    loadTask: (k) => store.loadPreset(k as OrbPresetKey | OrbExtraKey),
   };
 }
