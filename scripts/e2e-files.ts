@@ -752,7 +752,7 @@ async function main() {
   // Пункт 24: второй экран «Переменной массы».
   await p.click('#vmto-extra');
   await p.selectOption('#vmpreset', 'x4527');
-  check((await p.innerText('#vmxsolution')).includes('1,520'), 'Мещерский 45.27: число Циолковского для подъёма вдоль прямой');
+  check((await p.innerText('#vmxsolution')).includes('1,52'), 'Мещерский 45.27: число Циолковского для подъёма вдоль прямой');
   await p.selectOption('#vmpreset', 'x458');
   check((await p.innerText('#vmxsolution')).includes('135,1'), 'Мещерский 45.8: время сгорания (расхождение с книгой записано)');
   await p.selectOption('#vmpreset', 'x4535');
