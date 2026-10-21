@@ -4,10 +4,12 @@
  */
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve as pathResolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium, type Page } from 'playwright-core';
 import { preview } from 'vite';
 import { blockOf, NAV_BLOCKS } from '../src/app/nav';
+import { ROADMAP } from '../src/app/roadmap';
+import type { E2EKit } from './e2e-kit';
 
 const root = pathResolve(dirname(fileURLToPath(import.meta.url)), '..');
 const out = process.env.E2E_OUT;
@@ -143,14 +145,17 @@ async function main() {
     await p.click(`[data-block="${b.id}"]`);
     seen.push(...(await p.locator('.tabs [role="tab"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab!))));
   }
-  check(new Set(seen).size === 38 && seen.length === 38, 'тридцать восемь разделов, каждый — в одном блоке', seen.join(' '));
+  const navTabs = NAV_BLOCKS.flatMap((b) => b.tabs);
+  check(new Set(seen).size === navTabs.length && seen.length === navTabs.length && navTabs.every((t) => seen.includes(t)), `${navTabs.length} разделов, каждый — в одном блоке`, seen.join(' '));
   await tab('frames');
   check((await p.evaluate(`getComputedStyle(document.querySelector('.nav')).position`)) === 'sticky', 'навигация прилипает к верху страницы');
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 45, 'готово сорок пять пунктов');
-  check((await p.textContent('[data-rm="joints"] .rm-badge')) === 'следующий', 'следующий раздел — соединения');
+  const rmItems = ROADMAP.flatMap((b) => b.items);
+  const rmNext = rmItems.find((i) => i.status !== 'done');
+  check((await p.locator('.rm-done').count()) === rmItems.filter((i) => i.status === 'done').length, 'готовые пункты — как в roadmap.ts');
+  check(!rmNext || (await p.textContent(`[data-rm="${rmNext.id}"] .rm-badge`)) === 'следующий', `следующий пункт — «${rmNext?.title}»`);
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -1629,7 +1634,7 @@ async function main() {
   await p.setViewportSize({ width: 390, height: 800 });
   check(await p.isVisible('.nav-menu'), 'на узком экране — кнопка меню');
   await p.click('.nav-menu');
-  check((await p.locator('.nav-sheet [data-go]').count()) === 40, 'в меню все разделы, «Задачник» и «Дорожная карта»');
+  check((await p.locator('.nav-sheet [data-go]').count()) === navTabs.length + 2, 'в меню все разделы, «Задачник» и «Дорожная карта»');
   await p.click('.nav-sheet [data-go="torsion"]');
   check((await p.getAttribute('[data-tab="torsion"]', 'aria-selected')) === 'true' && (await p.locator('.nav-sheet').count()) === 0, 'выбор в меню открывает раздел и закрывает меню');
   await p.setViewportSize({ width: 1280, height: 1000 });
@@ -1698,41 +1703,27 @@ async function main() {
   await p.emulateMedia({ media: 'screen' });
   if (out) await p.screenshot({ path: pathResolve(out, 'graphstat.png'), fullPage: true });
 
-  await tab('centrodes');
-  await p.selectOption('#cpreset', 'm176');
-  let ceS = await p.innerText('#csolution');
-  check(ceS.includes('Неподвижная центроида') && ceS.includes('гипербола с фокусами A и B') && ceS.includes('наибольшая невязка уравнения книги'), 'Мещерский 17.6: антипараллелограмм — гиперболы из ответа книги', ceS.slice(0, 200));
-  check((await p.locator('#csvg .ce-fixed').count()) >= 2 && (await p.locator('#csvg .ce-moving').count()) >= 2 && (await p.locator('#csvg2 .ce-moving').count()) >= 2, 'на чертежах — обе центроиды');
-  const phi0 = await p.textContent('#cphival');
-  await p.$eval('#cphi', (el) => {
-    const i = el as HTMLInputElement;
-    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-    set.call(i, '60');
-    i.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  check((await p.textContent('#cphival')) !== phi0 && (await p.locator('#csvg .ce-ic').count()) === 1, 'ползунок меняет положение, мгновенный центр на чертеже');
-  await p.locator('#cv-b').fill('6');
-  await p.locator('#cv-b').blur();
-  check((await p.innerText('#csolution')).includes('наибольшая невязка уравнения книги'), 'размер изменён — центроиды пересчитаны');
-  await p.click('.hist button[title^="Отменить"]');
-  check((await p.inputValue('#cv-b')) === '5', 'отмена возвращает размер');
-  await p.selectOption('#cpreset', 'm1711');
-  ceS = await p.innerText('#csolution');
-  check(ceS.includes('x² = a(2y − a)') && ceS.includes('ξ² = a(2η − a)'), 'Мещерский 17.11: параболы из ответа книги', ceS.slice(-300));
-  await p.selectOption('#cpreset', 'm1710');
-  check((await p.innerText('#csolution')).includes('η² = aξ'), 'Мещерский 17.10: подвижная центроида η² = aξ');
-  const [dlCe] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
-  const ceText = await (await dlCe.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
-  check(JSON.parse(ceText).module === 'centrodes' && JSON.parse(ceText).preset === 'm1710', 'файл центроид');
-  const ceSol = await p.innerText('#csolution');
-  await tab('frames');
-  await openText('centrodes.json', ceText, 'ok');
-  check((await p.getAttribute('[data-tab="centrodes"]', 'aria-selected')) === 'true' && (await p.innerText('#csolution')) === ceSol, 'файл центроид открывается в своей вкладке без потерь');
-  await p.emulateMedia({ media: 'print' });
-  const ceRep = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
-  check(ceRep.svgs === 2 && ceRep.text.includes('Подвижная центроида'), 'отчёт по центроидам');
-  await p.emulateMedia({ media: 'screen' });
-  if (out) await p.screenshot({ path: pathResolve(out, 'centrodes.png'), fullPage: true });
+  // Проверки по пунктам — по файлу на пункт в scripts/e2e/ (см. scripts/e2e/README.md).
+  const saveText = async () => {
+    const [d] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+    return (await d.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  };
+  const printReport = async () => {
+    await p.emulateMedia({ media: 'print' });
+    const r = (await p.evaluate(`(() => { const r = document.querySelector('.print-report'); return { text: r.innerText, svgs: r.querySelectorAll('svg').length }; })()`)) as { text: string; svgs: number };
+    await p.emulateMedia({ media: 'screen' });
+    return r;
+  };
+  const shot = async (file: string) => {
+    if (out) await p.screenshot({ path: pathResolve(out, file), fullPage: true });
+  };
+  const kit: E2EKit = { p, check, tab, openText, saveText, report: printReport, shot };
+  const itemDir = pathResolve(root, 'scripts/e2e');
+  for (const f of readdirSync(itemDir).filter((f) => f.endsWith('.ts')).sort()) {
+    await tab('frames');
+    const item = (await import(pathToFileURL(pathResolve(itemDir, f)).href)) as { default: (k: E2EKit) => Promise<void> };
+    await item.default(kit);
+  }
 
   await browser.close();
   await new Promise<void>((r) => server.httpServer.close(() => r()));
