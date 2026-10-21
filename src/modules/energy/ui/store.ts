@@ -4,6 +4,9 @@ import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../.
 import type { NoticeData } from '../../../shared/ui/Notice';
 import { ATTACHES, type Attach, type Body, type BodyKind, type EnergyMode, type EnergyProblem, type InertiaKind } from '../model/energy';
 import { ENERGY_PRESETS, type EnergyPresetKey } from '../presets';
+import { extraProblem, findAsk, parseExtra, type ExtraProblem } from '../../../shared/extra';
+import { ENERGY_ASKS } from '../model/extra';
+import { ENERGY_EXTRA_PRESETS, type EnergyExtraKey } from '../extraPresets';
 
 export const ENERGY_MODULE = 'energy';
 const MAX_BODIES = 6;
@@ -36,8 +39,11 @@ export const newBody = (i: number, from: number | null, fromKind: BodyKind | nul
 
 export interface EnergyState {
   problem: EnergyProblem;
+  /** Задачи пункта 24 (нить, падение тел, J·dω/dt) и какой экран показан. */
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
-  preset: EnergyPresetKey | 'custom';
+  preset: EnergyPresetKey | EnergyExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -45,10 +51,13 @@ export interface EnergyState {
 }
 interface Snap {
   problem: EnergyProblem;
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
   preset: EnergyState['preset'];
 }
 const copy = (p: EnergyProblem): EnergyProblem => structuredClone(p);
+const copyX = (p: ExtraProblem): ExtraProblem => structuredClone(p);
 
 export function parseEnergy(raw: unknown): { ok: true; problem: EnergyProblem } | { ok: false; errors: string[] } {
   if (!isObj(raw) || !Array.isArray(raw.bodies) || !MODES.includes(raw.mode as EnergyMode) || ![raw.v0, raw.s, raw.v1].every(isNum)) return { ok: false, errors: ['В файле нет задачи (problem с полями bodies, mode, v0, s, v1).'] };
@@ -75,7 +84,7 @@ export class EnergyStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: EnergyPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm3845';
-    this.st = { problem: copy(ENERGY_PRESETS[k].problem as EnergyProblem), title: ENERGY_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { problem: copy(ENERGY_PRESETS[k].problem as EnergyProblem), extra: copyX(ENERGY_EXTRA_PRESETS.x3835.problem), view: 'main', title: ENERGY_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): EnergyState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -86,7 +95,7 @@ export class EnergyStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -100,9 +109,39 @@ export class EnergyStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: EnergyPresetKey) => {
+  loadPreset = (k: EnergyPresetKey | EnergyExtraKey) => {
     this.commit();
-    this.set({ problem: copy(ENERGY_PRESETS[k].problem as EnergyProblem), title: ENERGY_PRESETS[k].title, preset: k });
+    if (k in ENERGY_EXTRA_PRESETS) {
+      const e = ENERGY_EXTRA_PRESETS[k as EnergyExtraKey];
+      return this.set({ extra: copyX(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    const m = ENERGY_PRESETS[k as EnergyPresetKey];
+    this.set({ problem: copy(m.problem as EnergyProblem), view: 'main', title: m.title, preset: k });
+  };
+  /* задачи пункта 24 */
+  setView = (view: 'main' | 'extra') => {
+    if (view !== this.st.view) this.set({ view });
+  };
+  private editX(fn: (x: ExtraProblem) => void) {
+    const x = copyX(this.st.extra);
+    fn(x);
+    this.set({ extra: x });
+  }
+  setXAsk = (id: string) => {
+    this.commit();
+    this.set({ extra: extraProblem(findAsk(ENERGY_ASKS, id)) });
+  };
+  typeNum = (k: string, v: number) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.n[k] = v));
+  };
+  typeText = (k: string, s: string) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.s[k] = s.slice(0, 300)));
+  };
+  pick = (k: string, v: string) => {
+    this.commit();
+    this.editX((x) => (x.s[k] = v));
   };
   addBody = () => {
     const n = this.st.problem.bodies.length;
@@ -194,17 +233,19 @@ export class EnergyStore {
   closeNotice = () => this.set({ notice: null });
   setExplain = (explain: boolean) => this.set({ explain });
   projectTitle = () => this.st.title;
-  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(ENERGY_MODULE, this.st.title, { problem: this.st.problem }, now) });
+  exportProject = (now = new Date()) => ({ name: projectFileName(this.st.title, now), text: writeEnvelope(ENERGY_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now) });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
     const env = readEnvelope(text);
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== ENERGY_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseEnergy(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const ex = parseExtra(env.raw.extra, ENERGY_ASKS);
+    const view = env.raw.view === 'extra' && ex ? 'extra' : 'main';
+    if (!r.ok && !(view === 'extra' && ex)) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Кинетическая энергия';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: ex ?? this.st.extra, view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

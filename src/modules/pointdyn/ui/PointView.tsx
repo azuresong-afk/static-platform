@@ -40,6 +40,9 @@ import { relDoc } from '../text/rel';
 import { pointDoc } from '../text/solution';
 import type { AnyPresetKey, CircleNumKey, EarthNumKey, FirstNumKey, PlaneNumKey, PointMode, PointNumKey, PointStore, RelNumKey } from './store';
 import { taskInfo } from '../../../shared/tasks';
+import { ExtraScreen, type ExtraHost } from '../../../shared/ui/ExtraScreen';
+import { POINT_EXTRA_ASKS } from '../model/extra';
+import { POINT_EXTRA_PRESETS } from '../extraPresets';
 
 const LABELS = { w: ['v', 'м/с'] as [string, string], phi: ['x', 'м'] as [string, string], note: 'Скорость и координата точки по времени; точка — искомое состояние (наведите, чтобы увидеть значения).' };
 const FORCES: [PointNumKey, string, boolean][] = [
@@ -65,6 +68,41 @@ const MODES: [PointMode, string][] = [
 ];
 
 export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra') {
+    const host: ExtraHost = {
+      get: store.get,
+      subscribe: store.subscribe,
+      setXAsk: store.setXAsk,
+      typeNum: store.typeXNum,
+      typeText: store.typeXText,
+      pick: store.pick,
+      endSession: store.endSession,
+      undo: store.undo,
+      redo: store.redo,
+      loadPreset: (k) => store.loadPreset(k as AnyPresetKey),
+      setView: store.setView,
+      closeNotice: store.closeNotice,
+      setExplain: store.setExplain,
+    };
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={host}
+        asks={POINT_EXTRA_ASKS}
+        presets={POINT_EXTRA_PRESETS}
+        prefix="p"
+        heading="Динамика точки: сила по пути, несколько центров, баллистика"
+        lede="Сила по зависимости пути от скорости, притяжение к нескольким (в том числе движущимся) центрам и постоянная сила, баллистика с табличным законом сопротивления, установившееся движение по наклонной плоскости."
+        mainLabel="движение точки: все режимы"
+        tabName="Динамика точки"
+      />
+    );
+  }
+  return <PointMain chrome={chrome} store={store} />;
+}
+
+function PointMain({ chrome, store }: { chrome: Chrome; store: PointStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const task = st.problem;
   const out = useMemo(() => {
@@ -146,6 +184,7 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
                     ['Поверхности и кривые: Мещерский § 31', SURF_PRESETS],
                     ['Составные задачи: Мещерский § 31', STAGE_PRESETS],
                     ['Теорема об импульсе: Мещерский § 28', IMPULSE_PRESETS],
+                    ['Сила по пути, несколько центров, баллистика: Мещерский § 27', POINT_EXTRA_PRESETS],
                   ] as [string, Record<string, { title: string }>][]
                 ).map(([label, rec]) => (
                   <optgroup key={label} label={label}>
@@ -188,6 +227,11 @@ export function PointView({ chrome, store }: { chrome: Chrome; store: PointStore
         </section>
         <div className="cols">
           <section className="panel conv" aria-label="Данные">
+            <div className="segbtns">
+              <button type="button" id="pto-extra" onClick={() => store.setView('extra')}>
+                Сила по пути, несколько центров, баллистика →
+              </button>
+            </div>
             <h2>Задача</h2>
             <label className="field">
               <span>Что решаем</span>

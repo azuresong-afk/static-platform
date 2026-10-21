@@ -5,6 +5,7 @@ import { PointView } from './ui/PointView';
 import { taskEntries } from '../../shared/tasks';
 import { CIRCLE_PRESETS, EARTH_PRESETS, FIRST_PRESETS, IMPULSE_PRESETS, PLANE_PRESETS, POINT_PRESETS, REL_PRESETS, SPIN_PRESETS, STAGE_PRESETS, SURF_PRESETS } from './presets';
 import type { AnyPresetKey } from './ui/store';
+import { POINT_EXTRA_PRESETS, type PointExtraKey } from './extraPresets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -32,7 +33,7 @@ export function createPointModule(): StatikaModule {
     tab: 'Динамика точки',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
-    tasks: [...taskEntries(POINT_PRESETS), ...taskEntries(FIRST_PRESETS), ...taskEntries(PLANE_PRESETS), ...taskEntries(CIRCLE_PRESETS), ...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(SPIN_PRESETS), ...taskEntries(SURF_PRESETS), ...taskEntries(STAGE_PRESETS), ...taskEntries(IMPULSE_PRESETS)],
-    loadTask: (k) => store.loadPreset(k as AnyPresetKey),
+    tasks: [...taskEntries(POINT_PRESETS), ...taskEntries(FIRST_PRESETS), ...taskEntries(PLANE_PRESETS), ...taskEntries(CIRCLE_PRESETS), ...taskEntries(REL_PRESETS), ...taskEntries(EARTH_PRESETS), ...taskEntries(SPIN_PRESETS), ...taskEntries(SURF_PRESETS), ...taskEntries(STAGE_PRESETS), ...taskEntries(IMPULSE_PRESETS), ...taskEntries(POINT_EXTRA_PRESETS)],
+    loadTask: (k) => store.loadPreset(k as AnyPresetKey | PointExtraKey),
   };
 }

@@ -4,6 +4,9 @@ import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../.
 import type { NoticeData } from '../../../shared/ui/Notice';
 import type { Particles, Stage, StagesProblem, StopKind, VarLine } from '../model/varmass';
 import { VAR_PRESETS, line, type VarMode, type VarPresetKey, type VarState } from '../presets';
+import { extraProblem, findAsk, parseExtra, type ExtraProblem } from '../../../shared/extra';
+import { VARMASS_ASKS } from '../model/extra';
+import { VARMASS_EXTRA_PRESETS, type VarExtraKey } from '../extraPresets';
 
 export const VARMASS_MODULE = 'varmass';
 export const LINE_NUM = ['g', 'alpha', 'Rg', 'w', 'm0', 've', 'beta', 'f', 'k1', 'k2', 'x0', 'v0', 't1', 'm1', 'v1', 's1'] as const;
@@ -16,8 +19,11 @@ const PARTS: Particles[] = ['jet', 'zeroAbs', 'zeroRel'];
 
 export interface VmState {
   problem: VarState;
+  /** Задачи пункта 24 (общий вид, обратные задачи, ротор, центр переменной массы) и какой экран показан. */
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
-  preset: VarPresetKey | 'custom';
+  preset: VarPresetKey | VarExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -25,6 +31,8 @@ export interface VmState {
 }
 interface Snap {
   problem: VarState;
+  extra: ExtraProblem;
+  view: 'main' | 'extra';
   title: string;
   preset: VmState['preset'];
 }
@@ -87,7 +95,7 @@ export class VmStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: VarPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm453';
-    this.st = { problem: presetState(k), title: VAR_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = { problem: presetState(k), extra: structuredClone(VARMASS_EXTRA_PRESETS.x452.problem), view: 'main', title: VAR_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
   }
   get = (): VmState => this.st;
   subscribe = (fn: () => void): (() => void) => {
@@ -98,7 +106,7 @@ export class VmStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -112,9 +120,38 @@ export class VmStore {
     fn(p);
     this.set({ problem: p });
   }
-  loadPreset = (k: VarPresetKey) => {
+  loadPreset = (k: VarPresetKey | VarExtraKey) => {
     this.commit();
-    this.set({ problem: presetState(k, this.st.problem), title: VAR_PRESETS[k].title, preset: k });
+    if (k in VARMASS_EXTRA_PRESETS) {
+      const e = VARMASS_EXTRA_PRESETS[k as VarExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    this.set({ problem: presetState(k as VarPresetKey, this.st.problem), view: 'main', title: VAR_PRESETS[k as VarPresetKey].title, preset: k });
+  };
+  /* задачи пункта 24 */
+  setView = (view: 'main' | 'extra') => {
+    if (view !== this.st.view) this.set({ view });
+  };
+  private editX(fn: (x: ExtraProblem) => void) {
+    const x = structuredClone(this.st.extra);
+    fn(x);
+    this.set({ extra: x });
+  }
+  setXAsk = (id: string) => {
+    this.commit();
+    this.set({ extra: extraProblem(findAsk(VARMASS_ASKS, id)) });
+  };
+  typeNum = (k: string, v: number) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.n[k] = v));
+  };
+  typeText = (k: string, s: string) => {
+    this.touch(`x:${k}`);
+    this.editX((x) => (x.s[k] = s.slice(0, 300)));
+  };
+  pick = (k: string, v: string) => {
+    this.commit();
+    this.editX((x) => (x.s[k] = v));
   };
   setMode = (m: VarMode) => {
     if (m === this.st.problem.mode) return;
@@ -178,7 +215,7 @@ export class VmStore {
   projectTitle = () => this.st.title;
   exportProject = (now = new Date()) => ({
     name: projectFileName(this.st.title, now),
-    text: writeEnvelope(VARMASS_MODULE, this.st.title, { problem: this.st.problem }, now),
+    text: writeEnvelope(VARMASS_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now),
   });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
@@ -186,10 +223,12 @@ export class VmStore {
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== VARMASS_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseVar(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const ex = parseExtra(env.raw.extra, VARMASS_ASKS);
+    const view = env.raw.view === 'extra' && ex ? 'extra' : 'main';
+    if (!r.ok && !(view === 'extra' && ex)) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Переменная масса';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: ex ?? this.st.extra, view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

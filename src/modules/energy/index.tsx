@@ -4,6 +4,7 @@ import { EnergyStore, ENERGY_MODULE } from './ui/store';
 import { EnergyView } from './ui/EnergyView';
 import { taskEntries } from '../../shared/tasks';
 import { ENERGY_PRESETS, type EnergyPresetKey } from './presets';
+import { ENERGY_EXTRA_PRESETS, type EnergyExtraKey } from './extraPresets';
 
 const EXPLAIN_KEY = 'statika.explain';
 
@@ -31,7 +32,7 @@ export function createEnergyModule(): StatikaModule {
     tab: 'Кинетическая энергия',
     store: { undo: store.undo, redo: store.redo, exportProject: store.exportProject, importProject: store.importProject, notify: store.notify, projectTitle: store.projectTitle },
     Screen,
-    tasks: taskEntries(ENERGY_PRESETS),
-    loadTask: (k) => store.loadPreset(k as EnergyPresetKey),
+    tasks: taskEntries({ ...ENERGY_PRESETS, ...ENERGY_EXTRA_PRESETS }),
+    loadTask: (k) => store.loadPreset(k as EnergyPresetKey | EnergyExtraKey),
   };
 }
