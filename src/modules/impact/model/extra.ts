@@ -6,9 +6,14 @@
  *  - chain   44.9 — три шара в желобе: масса среднего, при которой третий получает наибольшую скорость, m₂ = √(m₁m₃);
  *  - oblique 44.13 — косой удар о неподвижную плоскость: углы падения и отражения по отношению скоростей и k;
  *  - aim     44.15 — три одинаковых упругих шара: на какой прямой должен двигаться третий, чтобы после удара о второй
- *              нанести центральный удар первому.
+ *              нанести центральный удар первому;
+ *  - climb   Яблонский, Д.13 — катящееся тело ударяется о ребро ступеньки и о наклонную плоскость (удары без
+ *              проскальзывания и отрыва), между ударами — подъём и качение; скорость до остановки платформы или путь.
  */
-import { ansB, bold, eqB, fail, parB, sample, sg, stepB, stepEx, type AskDef, type ExtraOut } from '../../../shared/extra';
+import { parseNum } from '../../../shared/format';
+import { ansB, bisect, bold, eqB, fail, parB, sample, sg, stepB, stepEx, type AskDef, type ExtraOut, type Ln } from '../../../shared/extra';
+
+const G = 9.81;
 
 const D2R = Math.PI / 180;
 const pos = (...x: number[]) => x.every((v) => v > 0 && Number.isFinite(v));
@@ -139,4 +144,164 @@ const A_AIM: AskDef = {
   },
 };
 
-export const IMPACT_ASKS: AskDef[] = [A_STOP, A_CHAIN, A_OBLIQUE, A_AIM];
+
+/* ---------- Д.13 ---------- */
+type Stage = { k: 'S'; h: number } | { k: 'I'; a: number };
+export function parseStages(src: string): Stage[] | string {
+  const out: Stage[] = [];
+  for (const part of src.split(/[;\n]/).map((x) => x.trim()).filter(Boolean)) {
+    const [k, v] = part.split(':').map((x) => x.trim());
+    const x = parseNum(v ?? '');
+    if (!Number.isFinite(x)) return `препятствие «${part}»: нужно «S:h» или «I:α»`;
+    if (k.toUpperCase() === 'S') out.push({ k: 'S', h: x });
+    else if (k.toUpperCase() === 'I') out.push({ k: 'I', a: x });
+    else return `препятствие «${part}»: S — ступенька, I — наклонная плоскость`;
+  }
+  if (!out.length) return 'нет препятствий';
+  if (out.slice(0, -1).some((s) => s.k === 'I')) return 'наклонная плоскость может быть только последней';
+  return out;
+}
+const SHAPE_K: Record<string, number> = { disk: 0.5, ring: 1, sphere: 0.4 };
+const A_CLIMB: AskDef = {
+  id: 'climb',
+  title: 'Яблонский, Д.13: тело ударяется о ребро ступеньки и о наклонную плоскость — подъём, качение, скорость платформы',
+  hint: 'Цилиндр (шар, обруч) радиуса r на горизонтальной поверхности. До первого удара он движется поступательно со скоростью v (платформа внезапно остановилась) или катится. Препятствия через «;»: S:h — ступенька высотой h (удар о ребро, подъём на неё), I:α — наклонная плоскость под углом α (удар о плоскость, качение вверх по ней на путь s). Удары без проскальзывания и отрыва, качение без скольжения, сопротивлением качению пренебречь.',
+  n: { m: 500, r: 0.5, rho: 0.35, v: 3.68, s: 0.1, g: G },
+  s: { shape: 'disk', start: 'stop', path: 'S:0,1; I:60', find: 'v' },
+  selects: [
+    {
+      k: 'shape',
+      label: 'Тело',
+      options: [
+        ['disk', 'сплошной цилиндр (J_C = mr²/2)'],
+        ['ring', 'тонкий обруч (J_C = mr²)'],
+        ['sphere', 'шар (J_C = 2mr²/5)'],
+        ['rho', 'радиус инерции ρ задан'],
+      ],
+    },
+    {
+      k: 'start',
+      label: 'До первого удара',
+      options: [
+        ['stop', 'движется поступательно со скоростью v (внезапная остановка платформы)'],
+        ['roll', 'катится без скольжения со скоростью центра v'],
+      ],
+    },
+    {
+      k: 'find',
+      label: 'Что найти',
+      options: [
+        ['v', 'скорость v (по пути s на наклонной плоскости или наименьшую — чтобы подняться на все ступеньки)'],
+        ['s', 'по скорости v — движение после ударов (путь s)'],
+      ],
+    },
+  ],
+  fields: [
+    { k: 'path', label: 'препятствия: S:h, I:α через «;»', text: true },
+    { k: 'm', label: 'масса m, кг' },
+    { k: 'r', label: 'радиус r, м' },
+    { k: 'rho', label: 'радиус инерции ρ, м', show: (p) => p.s.shape === 'rho' },
+    { k: 'v', label: 'скорость до первого удара v, м/с', show: (p) => p.s.find === 's' },
+    { k: 's', label: 'путь по наклонной плоскости s, м', show: (p) => p.s.find === 'v' },
+    { k: 'g', label: 'g, м/с²' },
+  ],
+  solve: (q, ex) => {
+    const { m, r, g } = q.n;
+    if (!pos(m, r, g)) return fail(['m, r, g > 0.']);
+    const k = q.s.shape === 'rho' ? (q.n.rho / r) ** 2 : SHAPE_K[q.s.shape] ?? 0.5;
+    if (!(k > 0)) return fail(['ρ > 0.']);
+    const st = parseStages(q.s.path);
+    if (typeof st === 'string') return fail([st]);
+    for (const s of st) {
+      if (s.k === 'S' && !(s.h > 0 && s.h < r)) return fail(['Высота ступеньки 0 < h < r.']);
+      if (s.k === 'I' && !(s.a > 0 && s.a < 90)) return fail(['Угол наклонной плоскости 0 < α < 90°.']);
+    }
+    const roll0 = q.s.start === 'roll';
+    type Rec = { S: [number, number]; w: number; v: number; ok: boolean; s?: number; Sn?: number; St?: number; wUp?: number };
+    const run = (v0: number) => {
+      let v = v0,
+        w = roll0 ? v0 / r : 0;
+      const recs: Rec[] = [];
+      for (const s of st) {
+        if (s.k === 'S') {
+          const L = m * v * (r - s.h) + k * m * r * r * w;
+          const w1 = L / (m * r * r * (k + 1));
+          const xD = Math.sqrt(r * r - (r - s.h) ** 2);
+          const vx = w1 * (r - s.h),
+            vy = w1 * xD;
+          const S: [number, number] = [m * (vx - v), m * vy];
+          const w2sq = w1 * w1 - (2 * g * s.h) / (r * r * (k + 1));
+          const ok = w2sq >= 0;
+          recs.push({ S, w: w1, v: w1 * r, ok, wUp: ok ? Math.sqrt(w2sq) : NaN });
+          if (!ok) return recs;
+          w = Math.sqrt(w2sq);
+          v = w * r;
+        } else {
+          const a = s.a * D2R;
+          const w1 = (k * w * r * r + v * r * Math.cos(a)) / (r * r * (k + 1));
+          const v1 = w1 * r;
+          const S: [number, number] = [m * (v1 * Math.cos(a) - v), m * v1 * Math.sin(a)];
+          const Sn = -S[0] * Math.sin(a) + S[1] * Math.cos(a),
+            St = S[0] * Math.cos(a) + S[1] * Math.sin(a);
+          const sUp = ((k + 1) * v1 * v1) / (2 * g * Math.sin(a));
+          recs.push({ S, w: w1, v: v1, ok: true, s: sUp, Sn, St });
+        }
+      }
+      return recs;
+    };
+    const lastI = st[st.length - 1].k === 'I';
+    let v0: number;
+    if (q.s.find === 'v') {
+      const target = q.n.s;
+      if (lastI && !pos(target)) return fail(['s > 0.']);
+      const good = (v: number) => {
+        const R = run(v);
+        if (R.length < st.length || !R.every((x) => x.ok)) return -1;
+        return lastI ? (R[R.length - 1].s as number) - target : 1;
+      };
+      let hi = 1;
+      while (good(hi) < 0 && hi < 1e6) hi *= 2;
+      if (hi >= 1e6) return fail(['Скорость не найдена.']);
+      v0 = bisect((v) => (good(v) < 0 ? -1 : lastI ? good(v) : 1), 0, hi);
+    } else {
+      v0 = q.n.v;
+      if (!pos(v0)) return fail(['v > 0.']);
+    }
+    const R = run(v0);
+    const steps = [
+      stepEx(ex, 'Момент инерции', null, eqB(`J_C = k m r²,  k = ${sg(k)};  относительно точки касания J = (1 + k) m r²`)),
+    ];
+    const vals: Record<string, number> = { v: v0 };
+    const rows: [Ln, string][] = [[bold(`v = ${sg(v0)} м/с`), q.s.find === 'v' ? (lastI ? 'скорость до первого удара' : 'наименьшая скорость, при которой тело поднимается на все ступеньки') : 'скорость до первого удара']];
+    R.forEach((x, i) => {
+      const s = st[i];
+      const n = i + 1;
+      const Sm = Math.hypot(...x.S);
+      vals[`S${n}`] = Sm;
+      vals[`w${n}`] = x.w;
+      if (s.k === 'S') {
+        vals[`S${n}x`] = x.S[0];
+        vals[`S${n}y`] = x.S[1];
+        steps.push(
+          stepEx(ex, `Удар ${n} — о ребро ступеньки h = ${sg(s.h)} м`, 'Ударный импульс проходит через ребро D — кинетический момент относительно D сохраняется. После удара тело вращается вокруг ребра.', eqB(`L_D = m v_C (r − h) + J_C ω = (1 + k) m r² ω'`, `ω' = ${sg(x.w)} рад/с,  v_C' = ${sg(x.v)} м/с`, `ударный импульс S = m(v_C' − v_C) = (${sg(x.S[0])}; ${sg(x.S[1])}),  |S| = ${sg(Sm)} Н·с`)),
+          stepEx(ex, 'Подъём на ступеньку', 'Теорема об изменении кинетической энергии при повороте вокруг ребра: центр поднимается на h.', eqB(`(1 + k) m r² (ω'² − ω''²)/2 = m g h`, x.ok ? `ω'' = ${sg(x.wUp as number)} рад/с — тело поднимается и катится со скоростью ${sg((x.wUp as number) * r)} м/с` : '(ω″)² < 0 — тело не поднимается на ступеньку')),
+        );
+        if (!x.ok) rows.push(['не поднимается', `на ступеньку ${n}`]);
+      } else {
+        vals.s = x.s as number;
+        vals[`S${n}n`] = x.Sn as number;
+        vals[`S${n}t`] = x.St as number;
+        steps.push(
+          stepEx(ex, `Удар ${n} — о наклонную плоскость α = ${s.a}°`, 'Импульс приложен в точке касания F с плоскостью — кинетический момент относительно F сохраняется; после удара тело катится по плоскости.', eqB(`J_C ω + m v_C r cos α = (1 + k) m r² ω'`, `ω' = ${sg(x.w)} рад/с,  v_C' = ${sg(x.v)} м/с`, `ударный импульс: по нормали ${sg(x.Sn as number)},  вдоль плоскости ${sg(x.St as number)},  |S| = ${sg(Sm)} Н·с`)),
+          stepEx(ex, 'Качение вверх по плоскости', 'Теорема об изменении кинетической энергии.', eqB(`(1 + k) m v_C'²/2 = m g s sin α`, `s = ${sg(x.s as number)} м`)),
+        );
+        rows.push([bold(`s = ${sg(x.s as number)} м`), 'путь по наклонной плоскости']);
+      }
+      rows.push([`|S${n}| = ${sg(Sm)} Н·с`, `ударный импульс ${n}`]);
+    });
+    steps.push(stepB('Ответ', ansB(...rows)));
+    return done({ vals, steps });
+  },
+};
+
+export const IMPACT_ASKS: AskDef[] = [A_STOP, A_CHAIN, A_OBLIQUE, A_AIM, A_CLIMB];

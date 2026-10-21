@@ -8,7 +8,9 @@
  *              кинетический момент относительно оси блока до и после — скорость груза;
  *  - couple  43.8, 44.21 — соединение дисков фрикционной муфтой и шкивов ремнём: сохранение кинетического момента
  *              (муфта) и импульсы натяжений ремня (ремень), потеря кинетической энергии.
+ * Задания Яблонского Д.9 и Д.11 — в extraYab.ts.
  */
+import { ROT_ASKS_YAB } from './extraYab';
 import { ansB, bold, eqB, fail, parB, sample, sg, stepB, stepEx, type AskDef, type ExtraOut } from '../../../shared/extra';
 
 const G = 9.81;
@@ -229,4 +231,4 @@ const A_COUPLE: AskDef = {
   },
 };
 
-export const ROT_ASKS: AskDef[] = [A_MAGNET, A_PHYS, A_MONKEY, A_COUPLE];
+export const ROT_ASKS: AskDef[] = [A_MAGNET, A_PHYS, A_MONKEY, A_COUPLE, ...ROT_ASKS_YAB];
