@@ -30,7 +30,7 @@ export interface ShaftProblem {
   omega: number;
   eps: number;
   /** Вращение под действием пары: момент M относительно z, момент времени τ и начальная угловая скорость ω₀ (тогда omega, eps не используются). */
-  drive?: { M: number; t: number; omega0: number };
+  drive?: { M: number; t: number; omega0: number; /** Рассматриваемый момент задан углом поворота φ (град.) от начала действия пары, а не временем: ω² = ω₀² + 2εφ (Яблонский, Д.16). */ angle?: number };
 }
 
 /** Реакции: X_A, Y_A, Z_A, X_B, Y_B. */
@@ -123,10 +123,17 @@ export function solveShaft(pr: ShaftProblem): ShaftResult {
     if (!(Jz > 1e-12)) err.push('Момент инерции относительно оси вращения равен нулю — угловое ускорение по моменту пары не определяется.');
     if (pr.gravity === 'y' && Math.hypot(C[0], C[1]) > 1e-9)
       err.push('Вал горизонтален, а центр масс не на оси: момент силы тяжести относительно оси меняется при повороте, ε не постоянно и ω = ω₀ + ετ неприменимо — задайте ω и ε в рассматриваемый момент.');
-    if (!(dr.t >= 0)) err.push('Момент времени τ не может быть отрицательным.');
+    if (dr.angle === undefined && !(dr.t >= 0)) err.push('Момент времени τ не может быть отрицательным.');
+    if (dr.angle !== undefined && !(dr.angle >= 0)) err.push('Угол поворота φ не может быть отрицательным.');
     if (err.length) return { ok: false, errors: err, ...empty };
     e = clean((dr.M + MG[2]) / Jz);
-    w = clean(dr.omega0 + e * dr.t);
+    if (dr.angle === undefined) w = clean(dr.omega0 + e * dr.t);
+    else {
+      // ω² = ω₀² + 2εφ; знак ω — по направлению вращения (по ω₀, а если тело стартует из покоя — по ε).
+      const w2 = dr.omega0 * dr.omega0 + 2 * e * ((dr.angle * Math.PI) / 180);
+      if (w2 < -1e-12) return { ok: false, errors: ['Тело останавливается раньше, чем повернётся на заданный угол: ω² = ω₀² + 2εφ < 0.'], ...empty };
+      w = clean((dr.omega0 !== 0 ? Math.sign(dr.omega0) : Math.sign(e) || 1) * Math.sqrt(Math.max(0, w2)));
+    }
   }
   const Phi: V3 = [clean(M * (w * w * C[0] + e * C[1])), clean(M * (w * w * C[1] - e * C[0])), 0];
   const MPhi: V3 = [clean(e * Jxz - w * w * Jyz), clean(e * Jyz + w * w * Jxz), clean(-e * Jz)];

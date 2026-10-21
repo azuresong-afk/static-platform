@@ -149,8 +149,8 @@ async function main() {
   const beforeMap = JSON.stringify(await state(p));
   await tab('roadmap');
   check((await p.locator('.rm-block').count()) === 5, 'дорожная карта: статика, динамика, кинематика, аналитическая механика, сопромат');
-  check((await p.locator('.rm-done').count()) === 43, 'готово сорок три пункта');
-  check((await p.textContent('[data-rm="kinetostatics"] .rm-badge')) === 'следующий', 'следующий раздел — кинетостатика механизмов и машин');
+  check((await p.locator('.rm-done').count()) === 44, 'готово сорок четыре пункта');
+  check((await p.textContent('[data-rm="heavyrope"] .rm-badge')) === 'следующий', 'следующий раздел — тяжёлые нити и переменная масса');
   check((await p.locator('.filebar').count()) === 0, 'на дорожной карте нет кнопок файлов');
   await p.keyboard.press('Control+z');
   await p.click('[data-rm="composite"] .rm-open');
@@ -566,6 +566,38 @@ async function main() {
   await tab('frames');
   await openText('da.json', daText, 'ok');
   check((await p.getAttribute('[data-tab="dalembert"]', 'aria-selected')) === 'true' && (await p.innerText('#dsolution')) === daSol, 'файл принципа Даламбера открывается в своей вкладке без потерь');
+  // Режим «Силы инерции в машинах» (пункт 23).
+  await p.click('#mc-mode-machines');
+  const kn1 = await p.innerText('#mcsolution');
+  check((await p.locator('#mcsvg').count()) === 1 && kn1.includes('совпадает с ответом книги') && kn1.includes('8/3'), 'Мещерский 41.5–41.6: силы инерции стержня на упоре и угле, давление на угол', kn1.slice(-300));
+  await p.selectOption('#mcpreset', 'm4112');
+  const kn12 = await p.innerText('#mcsolution');
+  check((await p.inputValue('#mckind')) === 'crane' && kn12.includes('−5,3') && kn12.includes('6,5') && kn12.includes('совпадает с ответом книги'), 'Мещерский 41.12: кран, подъём груза с ускорением g/3', kn12.slice(-300));
+  await p.selectOption('#mcpreset', 'm4113');
+  check((await p.innerText('#mcsolution')).includes('−1,55'), 'Мещерский 41.13: кран, тележка движется с ускорением 0,5g');
+  await p.fill('#mc-Pt', '1');
+  await p.press('#mc-Pt', 'Tab');
+  const kn13 = await p.innerText('#mcsolution');
+  check(!kn13.includes('совпадает с ответом книги') && (await p.innerText('.top h1')).includes('силы инерции в машинах'), 'число изменено — задача своя, ответа книги нет');
+  await p.click('.hist button[title^="Отменить"]');
+  check((await p.innerText('#mcsolution')).includes('совпадает с ответом книги'), 'отмена возвращает число в режиме «машины»');
+  await p.selectOption('#mckind', 'wedgedyn');
+  check((await p.innerText('#mcsolution')).includes('w₁') && (await p.locator('#mcparams input').count()) === 3, 'тип задачи меняет числа: клин между пластинами');
+  await p.selectOption('#mcpreset', 'm4112');
+  const [dlK] = await Promise.all([p.waitForEvent('download'), p.click('#fsave')]);
+  const kmText = await (await dlK.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'));
+  check(JSON.parse(kmText).module === 'dalembert' && JSON.parse(kmText).machine.id === 'crane', 'файл режима «машины»');
+  const kmSol = await p.innerText('#mcsolution .ans');
+  await tab('frames');
+  await openText('kn.json', kmText, 'ok');
+  check((await p.getAttribute('[data-tab="dalembert"]', 'aria-selected')) === 'true' && (await p.innerText('#mcsolution .ans')) === kmSol, 'файл режима «машины» открывается в своей вкладке без потерь');
+  await p.click('#mc-mode-base');
+  check((await p.locator('#dsvg').count()) === 1, 'переключатель возвращает основной режим вкладки');
+  await p.selectOption('#ddrive', 'couple');
+  await p.selectOption('#dby', 'angle');
+  check((await p.locator('#d-angle').count()) === 1 && (await p.locator('#d-t').count()) === 0, 'Яблонский, Д.16: положение задаётся углом поворота');
+  await p.selectOption('#dby', 'time');
+  await p.selectOption('#ddrive', 'given');
   await tab('frames');
 
   // 23. Вкладка «Динамика точки».
@@ -1511,6 +1543,17 @@ async function main() {
   check((await p.locator('.tk-item').count()) === 1, 'поиск по номеру задачи');
   await p.click('[data-task="virtual:m4619"]');
   check((await p.getAttribute('[data-tab="virtual"]', 'aria-selected')) === 'true' && (await p.inputValue('#vwpreset')) === 'm4619' && (await p.innerText('#vwsolution')).includes('= 10,5'), 'задача из «Задачника» открывается в своём разделе');
+  await tab('tasks');
+  await p.fill('#tksearch', '46.11');
+  await p.click('[data-task="virtual:m4611"]');
+  const vm11 = await p.innerText('#mcsolution');
+  check((await p.getAttribute('[data-tab="virtual"]', 'aria-selected')) === 'true' && (await p.inputValue('#mcpreset')) === 'm4611' && vm11.includes('P = 5') && vm11.includes('совпадает с ответом книги'), 'Мещерский 46.11: реечный домкрат — режим «Машины» из «Задачника»', vm11.slice(-300));
+  await p.selectOption('#mckind', 'windlass');
+  check((await p.innerText('#mcsolution')).includes('Дифференциальный ворот') || (await p.innerText('#mcsolution')).includes('r₂ − r₁'), 'тип задачи: дифференциальный ворот');
+  await p.selectOption('#mcpreset', 'm4612');
+  check((await p.innerText('#mcsolution')).includes('P = 12') && (await p.locator('#mcsvg').count()) === 1, 'Мещерский 46.12: P = 12 кГ');
+  await p.selectOption('#mcpreset', 'm4619');
+  check((await p.locator('#vwsolution').count()) === 1 && (await p.innerText('#vwsolution')).includes('= 10,5'), 'из режима «Машины» выбор прежней задачи включает основной режим');
   await tab('tasks');
   await p.fill('#tksearch', 'конец оттянут тросом');
   await p.click('[data-task="frames:tb:3.7"]');
