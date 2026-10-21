@@ -105,7 +105,9 @@ export class ImpStore {
   constructor(opts: { preset?: ImpPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm4410';
     this.st = {
-      extra: structuredClone(IMP_EXTRA_PRESETS.x4408a.problem), view: 'main', problem: copy(IMP_PRESETS[k].problem),
+      extra: structuredClone(IMP_EXTRA_PRESETS.x4408a.problem),
+      view: 'main',
+      problem: copy(IMP_PRESETS[k].problem),
       title: IMP_PRESETS[k].title,
       preset: k,
       canUndo: false,

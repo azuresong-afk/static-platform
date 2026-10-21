@@ -174,7 +174,17 @@ export class OrbStore {
   private hist = new History<Snap>();
   constructor(opts: { preset?: OrbPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm5022';
-    this.st = { extra: structuredClone(ORB_EXTRA_PRESETS.x5007.problem), view: 'main', problem: presetState(k), title: ORB_PRESETS[k].title, preset: k, canUndo: false, canRedo: false, notice: null, explain: opts.explain ?? true };
+    this.st = {
+      extra: structuredClone(ORB_EXTRA_PRESETS.x5007.problem),
+      view: 'main',
+      problem: presetState(k),
+      title: ORB_PRESETS[k].title,
+      preset: k,
+      canUndo: false,
+      canRedo: false,
+      notice: null,
+      explain: opts.explain ?? true,
+    };
   }
   get = (): OrbStoreState => this.st;
   subscribe = (fn: () => void): (() => void) => {

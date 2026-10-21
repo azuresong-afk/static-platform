@@ -99,7 +99,9 @@ export class BodyStore {
   constructor(opts: { preset?: BodyPresetKey; explain?: boolean } = {}) {
     const k = opts.preset ?? 'm3920';
     this.st = {
-      extra: structuredClone(BODY_EXTRA_PRESETS.x3701.problem), view: 'main', problem: copy(BODY_PRESETS[k].problem),
+      extra: structuredClone(BODY_EXTRA_PRESETS.x3701.problem),
+      view: 'main',
+      problem: copy(BODY_PRESETS[k].problem),
       title: BODY_PRESETS[k].title,
       preset: k,
       canUndo: false,

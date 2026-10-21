@@ -98,7 +98,12 @@ const A_LAMINA: AskDef = {
       return { XA: S - XB, XB };
     };
     const steps = [
-      stepEx(ex, 'Пластинка', 'Площадь, центр тяжести и центробежный момент инерции однородной пластинки — по вершинам многоугольника (формулы Грина).', eqB(`площадь ${sg(Math.abs(mo.A))},  x_C = ${sg(xC)},  z_C = ${sg(zC)}`, `J_xz = (M/S)∫x z dS = ${sg(Jxz)}  (M = P/g = ${sg(M)})`)),
+      stepEx(
+        ex,
+        'Пластинка',
+        'Площадь, центр тяжести и центробежный момент инерции однородной пластинки — по вершинам многоугольника (формулы Грина).',
+        eqB(`площадь ${sg(Math.abs(mo.A))},  x_C = ${sg(xC)},  z_C = ${sg(zC)}`, `J_xz = (M/S)∫x z dS = ${sg(Jxz)}  (M = P/g = ${sg(M)})`),
+      ),
       stepEx(
         ex,
         'Уравнения кинетостатики',
@@ -110,7 +115,13 @@ const A_LAMINA: AskDef = {
       const w = q.n.w;
       if (!(w >= 0)) return fail(['ω ≥ 0.']);
       const r = react(w * w);
-      steps.push(stepB('Реакции', eqB(`X_A = ${sg(r.XA)},  X_B = ${sg(r.XB)}`)), stepB('Ответ', ansB([[bold(`X_A = ${sg(r.XA)}`)], 'боковая реакция опоры A (давление — противоположно)'], [[bold(`X_B = ${sg(r.XB)}`)], 'боковая реакция опоры B'])));
+      steps.push(
+        stepB('Реакции', eqB(`X_A = ${sg(r.XA)},  X_B = ${sg(r.XB)}`)),
+        stepB(
+          'Ответ',
+          ansB([[bold(`X_A = ${sg(r.XA)}`)], 'боковая реакция опоры A (давление — противоположно)'], [[bold(`X_B = ${sg(r.XB)}`)], 'боковая реакция опоры B']),
+        ),
+      );
       return done({ vals: { XA: r.XA, XB: r.XB, absXB: Math.abs(r.XB), Jxz, xC }, steps });
     }
     const atB = q.s.find === 'zeroB';
@@ -118,11 +129,23 @@ const A_LAMINA: AskDef = {
     const z0 = atB ? zA : zB;
     const den = z0 * M * xC - Jxz;
     const w2 = Math.abs(den) > 1e-15 ? grav / den : NaN;
-    if (!(w2 > 0)) return fail([q.s.gravity === 'z' ? 'Такой ω нет: при любой угловой скорости боковое давление на эту опору не обращается в нуль.' : 'Без силы тяжести давление обращается в нуль при всех ω или ни при какой ω ≠ 0 (зависит только от J_xz и x_C).']);
+    if (!(w2 > 0))
+      return fail([
+        q.s.gravity === 'z'
+          ? 'Такой ω нет: при любой угловой скорости боковое давление на эту опору не обращается в нуль.'
+          : 'Без силы тяжести давление обращается в нуль при всех ω или ни при какой ω ≠ 0 (зависит только от J_xz и x_C).',
+      ]);
     const w = Math.sqrt(w2);
     const r = react(w2);
     steps.push(
-      stepB(`Давление на опору ${atB ? 'B' : 'A'} равно нулю`, eqB(`X_${atB ? 'B' : 'A'} = 0:  ω² (z_${atB ? 'A' : 'B'} M x_C − J_xz) = M g x_C`, `ω² = ${sg(w2)},  ω = ${sg(w)} рад/с`, `другая опора: X_${atB ? 'A' : 'B'} = ${sg(atB ? r.XA : r.XB)}`)),
+      stepB(
+        `Давление на опору ${atB ? 'B' : 'A'} равно нулю`,
+        eqB(
+          `X_${atB ? 'B' : 'A'} = 0:  ω² (z_${atB ? 'A' : 'B'} M x_C − J_xz) = M g x_C`,
+          `ω² = ${sg(w2)},  ω = ${sg(w)} рад/с`,
+          `другая опора: X_${atB ? 'A' : 'B'} = ${sg(atB ? r.XA : r.XB)}`,
+        ),
+      ),
       stepEx(ex, 'Проверка', 'Подстановкой ω обратно в уравнения кинетостатики.', parB(`X_A = ${sg(r.XA)}, X_B = ${sg(r.XB)}.`)),
       stepB('Ответ', ansB([[bold(`ω = ${sg(w)} рад/с`)], `боковое давление на опору ${atB ? 'B' : 'A'} равно нулю`])),
     );

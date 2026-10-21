@@ -36,10 +36,13 @@ export const STAGE_VARS: Record<string, string> = {
 const ALIAS: Record<string, string> = { va: 'vA', vb: 'vB', vc: 'vC', τ: 'tau', t: 'T', α: 'alpha', a: 'alpha', β: 'beta', p: 'P', m: 'm' };
 export function parseData(src: string): Record<string, number> | string {
   const out: Record<string, number> = {};
-  for (const part of src.split(/[;\n]/).map((x) => x.trim()).filter(Boolean)) {
+  for (const part of src
+    .split(/[;\n]/)
+    .map((x) => x.trim())
+    .filter(Boolean)) {
     const [k0, v0] = part.split('=').map((x) => x.trim());
     if (v0 == null) return `данные: «имя = значение», не разобрано «${part}»`;
-    const key = k0 in STAGE_VARS || ['beta', 'P', 'm'].includes(k0) ? k0 : ALIAS[k0.toLowerCase()] ?? (k0 === 'T' ? 'T' : '');
+    const key = k0 in STAGE_VARS || ['beta', 'P', 'm'].includes(k0) ? k0 : (ALIAS[k0.toLowerCase()] ?? (k0 === 'T' ? 'T' : ''));
     if (!key) return `данные: неизвестное имя «${k0}» (допустимы ${[...Object.keys(STAGE_VARS), 'beta', 'P', 'm'].join(', ')})`;
     const v = parseNum(v0);
     if (!Number.isFinite(v)) return `данные: не число «${v0}»`;
@@ -55,7 +58,13 @@ function residuals(x: Record<string, number>, dir: Dir, land: string, beta: numb
   const a = dir === 'up' ? -g * (Math.sin(al) + x.f * Math.cos(al)) + Pm : g * (s * Math.sin(al) - x.f * Math.cos(al)) + Pm;
   const th = dir === 'flat' ? 0 : al;
   const sv = dir === 'up' ? -1 : 1;
-  const r = [x.vB - x.vA - a * x.tau, x.l - x.vA * x.tau - (a * x.tau * x.tau) / 2, x.d - x.vB * Math.cos(th) * x.T, x.h - (sv * x.vB * Math.sin(th) * x.T + (g * x.T * x.T) / 2), x.vC * x.vC - x.vB * x.vB - 2 * g * x.h];
+  const r = [
+    x.vB - x.vA - a * x.tau,
+    x.l - x.vA * x.tau - (a * x.tau * x.tau) / 2,
+    x.d - x.vB * Math.cos(th) * x.T,
+    x.h - (sv * x.vB * Math.sin(th) * x.T + (g * x.T * x.T) / 2),
+    x.vC * x.vC - x.vB * x.vB - 2 * g * x.h,
+  ];
   if (land === 'slope') r.push(x.h - x.d * Math.tan(beta * D2R));
   if (land === 'shelf') r.push(x.b - x.d + x.h / Math.tan(beta * D2R));
   return r;
@@ -73,9 +82,25 @@ export function solveStages(known: Record<string, number>, dir: Dir, land: strin
     knownSet.alpha = 0;
     unk.splice(unk.indexOf('alpha'), 1);
   }
-  if (unk.length !== nEq) return { error: `неизвестных ${unk.length} (${unk.join(', ')}), а уравнений ${nEq}: задайте ровно ${names.length - nEq} величин${land !== 'free' ? ' и угол β' : ''}` };
-  const guess: Record<string, number[]> = { vA: [1, 5, 15], vB: [5, 10, 20], tau: [1, 0.3, 3], l: [5, 1, 20], f: [0.1, 0.3, 0.05], alpha: [30, 15, 60], d: [5, 2, 20], h: [5, 2, 20], T: [1, 0.5, 3], vC: [10, 5, 20], b: [1, 0.5, 5] };
-  const ok = (x: Record<string, number>) => x.tau > 0 && x.T > 0 && x.l > 0 && x.f >= -1e-9 && x.vC >= 0 && x.vB >= 0 && x.vA >= 0 && x.alpha >= -1e-9 && x.alpha < 90 && x.d >= 0;
+  if (unk.length !== nEq)
+    return {
+      error: `неизвестных ${unk.length} (${unk.join(', ')}), а уравнений ${nEq}: задайте ровно ${names.length - nEq} величин${land !== 'free' ? ' и угол β' : ''}`,
+    };
+  const guess: Record<string, number[]> = {
+    vA: [1, 5, 15],
+    vB: [5, 10, 20],
+    tau: [1, 0.3, 3],
+    l: [5, 1, 20],
+    f: [0.1, 0.3, 0.05],
+    alpha: [30, 15, 60],
+    d: [5, 2, 20],
+    h: [5, 2, 20],
+    T: [1, 0.5, 3],
+    vC: [10, 5, 20],
+    b: [1, 0.5, 5],
+  };
+  const ok = (x: Record<string, number>) =>
+    x.tau > 0 && x.T > 0 && x.l > 0 && x.f >= -1e-9 && x.vC >= 0 && x.vB >= 0 && x.vA >= 0 && x.alpha >= -1e-9 && x.alpha < 90 && x.d >= 0;
   for (let start = 0; start < 27; start++) {
     const x: Record<string, number> = { ...knownSet };
     unk.forEach((k, i) => (x[k] = guess[k][Math.floor(start / 3 ** (i % 3)) % 3]));
@@ -90,7 +115,10 @@ export function solveStages(known: Record<string, number>, dir: Dir, land: strin
         const rp = residuals(xp, dir, land, beta, Pm, g);
         rp.forEach((v, i) => (J[i][j] = (v - r[i]) / h));
       });
-      const dx = gaussSolve(J, r.map((v) => -v));
+      const dx = gaussSolve(
+        J,
+        r.map((v) => -v),
+      );
       if (!dx) break;
       let lam = 1;
       for (let ls = 0; ls < 20; ls++) {
@@ -166,13 +194,35 @@ const A_STAGES2: AskDef = {
     if ('error' in r) return fail([r.error as string]);
     const x = r.x;
     const al = x.alpha;
-    const a = dir === 'up' ? -g * (Math.sin(al * D2R) + x.f * Math.cos(al * D2R)) + r.Pm : g * ((dir === 'down' ? 1 : 0) * Math.sin(al * D2R) - x.f * Math.cos(al * D2R)) + r.Pm;
+    const a =
+      dir === 'up'
+        ? -g * (Math.sin(al * D2R) + x.f * Math.cos(al * D2R)) + r.Pm
+        : g * ((dir === 'down' ? 1 : 0) * Math.sin(al * D2R) - x.f * Math.cos(al * D2R)) + r.Pm;
     const lab = (k: string) => STAGE_VARS[k].split(',')[0];
     const val = (k: string) => `${lab(k)} = ${sg(x[k])}${STAGE_VARS[k].includes(',') ? STAGE_VARS[k].split(',')[1].replace(' °', '°') : ''}`;
     const steps = [
-      stepEx(ex, 'Участок AB', `Ось x₁ — вдоль AB по движению. На тело действуют тяжесть, нормальная реакция N = mg cos α и трение fN${r.Pm ? ', движущая сила P' : ''}; ускорение постоянно.`, eqB(dir === 'up' ? 'a = −g(sin α + f cos α) + P/m' : 'a = g(sin α − f cos α) + P/m', 'v_B = v_A + aτ,  l = v_Aτ + aτ²/2', `a = ${sg(a)} м/с²`)),
-      stepEx(ex, 'Полёт BC', 'После точки B действует только тяжесть: равномерное движение по горизонтали и равноускоренное по вертикали; начальная скорость v_B направлена вдоль AB.', eqB(dir === 'flat' ? 'd = v_B T,  h = gT²/2' : dir === 'up' ? 'd = v_B cos α·T,  h = −v_B sin α·T + gT²/2' : 'd = v_B cos α·T,  h = v_B sin α·T + gT²/2', 'v_C² = v_B² + 2gh', ...(land === 'slope' ? ['C на плоскости BD: h = d·tg β'] : land === 'shelf' ? ['ширина полки: b = d − h·ctg β'] : []))),
-      stepEx(ex, 'Неизвестные', 'Не заданные в условии величины находятся из системы уравнений совместно (метод Ньютона).', parB(`Неизвестные: ${r.unk.map(lab).join(', ')}.`)),
+      stepEx(
+        ex,
+        'Участок AB',
+        `Ось x₁ — вдоль AB по движению. На тело действуют тяжесть, нормальная реакция N = mg cos α и трение fN${r.Pm ? ', движущая сила P' : ''}; ускорение постоянно.`,
+        eqB(dir === 'up' ? 'a = −g(sin α + f cos α) + P/m' : 'a = g(sin α − f cos α) + P/m', 'v_B = v_A + aτ,  l = v_Aτ + aτ²/2', `a = ${sg(a)} м/с²`),
+      ),
+      stepEx(
+        ex,
+        'Полёт BC',
+        'После точки B действует только тяжесть: равномерное движение по горизонтали и равноускоренное по вертикали; начальная скорость v_B направлена вдоль AB.',
+        eqB(
+          dir === 'flat' ? 'd = v_B T,  h = gT²/2' : dir === 'up' ? 'd = v_B cos α·T,  h = −v_B sin α·T + gT²/2' : 'd = v_B cos α·T,  h = v_B sin α·T + gT²/2',
+          'v_C² = v_B² + 2gh',
+          ...(land === 'slope' ? ['C на плоскости BD: h = d·tg β'] : land === 'shelf' ? ['ширина полки: b = d − h·ctg β'] : []),
+        ),
+      ),
+      stepEx(
+        ex,
+        'Неизвестные',
+        'Не заданные в условии величины находятся из системы уравнений совместно (метод Ньютона).',
+        parB(`Неизвестные: ${r.unk.map(lab).join(', ')}.`),
+      ),
       stepB('Ответ', ansB(...r.unk.map((k): [Ln, string] => [[bold(val(k))], '']))),
     ];
     const vals: Record<string, number> = { ...x, a };
@@ -251,7 +301,14 @@ const A_TUBE: AskDef = {
       y += h0 * Math.sin(al);
       lines.push(`пружина: v² = v_A² + c₀h₀²/m − 2gh₀(sin α + f cos α) ⇒ v = ${sg(v)} м/с`);
     }
-    const steps = [stepEx(ex, 'Метод', 'На гладких дугах работает только тяжесть: v² = v₀² − 2gΔy. На прямых с трением ускорение постоянно: a = −g(sin α + f cos α) (α — направление движения). Давление на стенку на дуге — из проекции на нормаль: N = mv²/R + mg cos θ при повороте влево (против часовой стрелки) и mv²/R − mg cos θ при повороте вправо; N > 0 — шарик прижат к внешней стенке.', parB('Скорость направлена по касательной к оси трубки; изломы оси считаются плавными (без потерь).'))];
+    const steps = [
+      stepEx(
+        ex,
+        'Метод',
+        'На гладких дугах работает только тяжесть: v² = v₀² − 2gΔy. На прямых с трением ускорение постоянно: a = −g(sin α + f cos α) (α — направление движения). Давление на стенку на дуге — из проекции на нормаль: N = mv²/R + mg cos θ при повороте влево (против часовой стрелки) и mv²/R − mg cos θ при повороте вправо; N > 0 — шарик прижат к внешней стенке.',
+        parB('Скорость направлена по касательной к оси трубки; изломы оси считаются плавными (без потерь).'),
+      ),
+    ];
     for (const s of segs) {
       if (s.kind === 'L' || s.kind === 'T') {
         const [ad, x, f] = s.p;
@@ -289,7 +346,9 @@ const A_TUBE: AskDef = {
         const v1 = Math.sqrt(v2);
         const N2 = N(v1, t2);
         const nm = nodeName(s);
-        lines.push(`дуга R = ${sg(R)} м, ${left ? 'влево' : 'вправо'}, θ ${sg(t1)}° → ${sg(t2)}°: Δy = ${sg(dy)} м ⇒ v_${nm} = ${sg(v1)} м/с;  N в начале ${sg(N1)} Н, в конце ${sg(N2)} Н`);
+        lines.push(
+          `дуга R = ${sg(R)} м, ${left ? 'влево' : 'вправо'}, θ ${sg(t1)}° → ${sg(t2)}°: Δy = ${sg(dy)} м ⇒ v_${nm} = ${sg(v1)} м/с;  N в начале ${sg(N1)} Н, в конце ${sg(N2)} Н`,
+        );
         y += dy;
         v = v1;
         vals[`v${nm}`] = v;
@@ -319,7 +378,10 @@ const A_TUBE: AskDef = {
     steps.push(stepB('Участки', eqB(...lines)));
     const ans: [Ln, string][] = Object.entries(vals)
       .filter(([k]) => /^(v[A-Z]|N[A-Z]|h$|s$|H$)/.test(k))
-      .map(([k, x]): [Ln, string] => [[bold(`${k.replace(/^v/, 'v_').replace(/^N(?!0)/, 'N_')} = ${sg(x)}`)], k.startsWith('v') ? 'м/с' : k.startsWith('N') ? 'Н (давление на стенку в конце дуги)' : 'м']);
+      .map(([k, x]): [Ln, string] => [
+        [bold(`${k.replace(/^v/, 'v_').replace(/^N(?!0)/, 'N_')} = ${sg(x)}`)],
+        k.startsWith('v') ? 'м/с' : k.startsWith('N') ? 'Н (давление на стенку в конце дуги)' : 'м',
+      ]);
     steps.push(stepB('Ответ', ansB(...ans)));
     return done({ vals, steps });
   },
