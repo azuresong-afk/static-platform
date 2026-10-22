@@ -81,7 +81,7 @@
 
 Раз в 2–3 пункта или по просьбе пользователя. `npm run build && npm run bundle` → `dist/statika.html` (один файл,
 проверен в браузере) и имена файлов сборки. Артефакт: `https://claude.ai/artifact/CmFedYKfiaWF36jqYQgj3y`
-(версия 47, после пунктов 12 и 13: `assets/index-CdjzKf-y.js`, `assets/index-iAZwhznC.css`). Публиковать `dist/index.html` с `url` этого
+(версия 48, после пунктов 26–28: `assets/index-b5gevEuS.js`, `assets/index-DjnRZUfx.css`). Публиковать `dist/index.html` с `url` этого
 артефакта и `files`: новые `assets/…` → `dist/assets/…`, старые имена → `null` (старые имена — `Artifact` `list`
 `scope: "files"`). Затем отправить `dist/statika.html` пользователю.
 
