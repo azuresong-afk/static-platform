@@ -100,8 +100,9 @@ describe('готовые задачи: ответы книги', () => {
         const val = p.problem.mode === 'calc' || /^(c\d\d|wF|wB|eF|eB|vx|vy|vz|ax$|ay$|az$)/.test(k) ? got[k] : Math.abs(got[k]);
         expect(Math.abs(val - book), `${key} ${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(Math.abs(book) < 1e-12 ? 1e-9 : rel * Math.abs(book));
       }
-      const par = /Мещерский (\d+)\./.exec(p.title)![1];
-      expect(taskInfo(p.title)).toMatchObject({ book: 'mesh', group: `mesh:${par}` });
+      const par = /Мещерский (\d+)\./.exec(p.title)?.[1];
+      if (par) expect(taskInfo(p.title)).toMatchObject({ book: 'mesh', group: `mesh:${par}` });
+      else expect(taskInfo(p.title)).toMatchObject({ book: 'yab' });
     });
 });
 

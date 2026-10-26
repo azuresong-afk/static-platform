@@ -42,7 +42,15 @@ function parseDef(raw: unknown): PtDef | null {
     case 'two':
       return { k: 'two', p1: str(raw, 'p1'), L1: str(raw, 'L1', '1'), p2: str(raw, 'p2'), L2: str(raw, 'L2', '1'), side: side(raw) };
     case 'line':
-      return { k: 'line', from: str(raw, 'from'), L: str(raw, 'L', '1'), through: str(raw, 'through'), ang: str(raw, 'ang', '0'), side: side(raw) };
+      return {
+        k: 'line',
+        from: str(raw, 'from'),
+        L: str(raw, 'L', '1'),
+        through: str(raw, 'through'),
+        ang: str(raw, 'ang', '0'),
+        side: side(raw),
+        ...(typeof raw.to === 'string' ? { to: str(raw, 'to') } : {}),
+      };
     case 'seg':
       return { k: 'seg', p1: str(raw, 'p1'), p2: str(raw, 'p2'), t: str(raw, 't', '1/2') };
     case 'cross':

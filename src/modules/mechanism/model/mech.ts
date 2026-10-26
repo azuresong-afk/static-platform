@@ -35,7 +35,8 @@ export type PtDef =
   /** От точки from на длину L под углом ang к оси x или (to задана) к направлению from→to. */
   | { k: 'polar'; from: string; L: string; ang: string; to?: string }
   | { k: 'two'; p1: string; L1: string; p2: string; L2: string; side: 1 | -1 }
-  | { k: 'line'; from: string; L: string; through: string; ang: string; side: 1 | -1 }
+  /** На прямой через through под углом ang к оси x или (to задана) к направлению through→to, на расстоянии L от from. */
+  | { k: 'line'; from: string; L: string; through: string; ang: string; side: 1 | -1; to?: string }
   | { k: 'seg'; p1: string; p2: string; t: string }
   /** Пересечение двух прямых: каждая — через точку и вторую точку (q) или через точку под углом (q = ''). */
   | { k: 'cross'; p1: string; q1: string; a1: string; p2: string; q2: string; a2: string };
@@ -278,8 +279,14 @@ export function buildPositions(points: MPoint[]): { pos: Record<string, V2>; err
         Q = P(d.through),
         L = N(d.L, 'длина'),
         a = N(d.ang, 'угол');
-      if (F && Q && L != null && a != null) {
-        const u: V2 = [Math.cos(rad(a)), Math.sin(rad(a))],
+      const To = d.to ? P(d.to) : null;
+      let base = 0;
+      if (Q && To) {
+        if (!(len(sub2(To, Q)) > 0)) errors.push(`${where}: направление на ${d.to} не определено — точка совпадает с ${d.through}.`);
+        base = Math.atan2(To[1] - Q[1], To[0] - Q[0]);
+      }
+      if (F && Q && L != null && a != null && (!d.to || To)) {
+        const u: V2 = [Math.cos(base + rad(a)), Math.sin(base + rad(a))],
           w = sub2(Q, F);
         const b = dot(u, w),
           c = dot(w, w) - L * L,
