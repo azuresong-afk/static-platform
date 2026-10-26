@@ -9,6 +9,7 @@ import type { Doc } from '../../../shared/doc';
 import { DocView } from '../../../shared/ui/DocView';
 import { Notice } from '../../../shared/ui/Notice';
 import { Num } from '../../../shared/ui/Num';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
 import { PresetOptions } from '../../../shared/ui/PresetOptions';
 import { taskEntries } from '../../../shared/tasks';
 import { normName, parseSym, prettyName, varName, type SymContext } from '../../../shared/sym';
@@ -22,6 +23,8 @@ import { solveRoll } from '../model/roll';
 import { solveRouth } from '../model/routh';
 import { solveStability, type StabForm } from '../model/stability';
 import { HAM_PRESETS, type HamMode, type HamPresetKey } from '../presets';
+import { HAM_ASKS } from '../model/extra';
+import { HAM_EXTRA_PRESETS, type HamExtraKey } from '../extraPresets';
 import { hjDoc, lettersDoc, rollDoc, stringDoc } from '../text/general';
 import { nonlinDoc, routhDoc, stabDoc } from '../text/solution';
 import type { HamStore } from './store';
@@ -146,7 +149,28 @@ function Params({ params, store, err }: { params: LagParam[]; store: HamStore; e
   );
 }
 
+const ALL_PRESETS = { ...HAM_PRESETS, ...HAM_EXTRA_PRESETS };
+
 export function HamView({ chrome, store }: { chrome: Chrome; store: HamStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={HAM_ASKS}
+        presets={ALL_PRESETS}
+        prefix="hm"
+        heading="Устойчивость и нелинейные колебания: связи, волчки, упоры, субгармоники"
+        lede="Равновесие при связях с множителями Лагранжа и произвольной кривой, форма направляющей для безразличного равновесия, волчок на волчке, колебания с упорами и трением покоя, субгармоники при сухом трении, точечное преобразование."
+        mainLabel="интегралы, устойчивость, нелинейные колебания, общий вид"
+        tabName="Устойчивость и нелинейные колебания"
+      />
+    );
+  return <HamViewMain chrome={chrome} store={store} />;
+}
+
+function HamViewMain({ chrome, store }: { chrome: Chrome; store: HamStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const mode = pr.mode;
@@ -192,7 +216,7 @@ export function HamView({ chrome, store }: { chrome: Chrome; store: HamStore }) 
   }, [res]);
   const err = (field: string) => (!res.r.ok && res.r.field === field ? res.r.error : undefined);
   const errPre = (pre: string) => (!res.r.ok && res.r.field.startsWith(pre) ? res.r.error : undefined);
-  const note = st.preset !== 'custom' ? HAM_PRESETS[st.preset].note : null;
+  const note = st.preset !== 'custom' && st.preset in HAM_PRESETS ? HAM_PRESETS[st.preset as HamPresetKey].note : null;
   const R = mode === 'jacobi' ? J.hj : pr.routh,
     S = pr.stab,
     N = pr.nonlin,
@@ -276,8 +300,8 @@ export function HamView({ chrome, store }: { chrome: Chrome; store: HamStore }) 
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="hmpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as HamPresetKey)}>
-                <PresetOptions items={taskEntries(HAM_PRESETS)} />
+              <select id="hmpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as HamPresetKey | HamExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
@@ -326,6 +350,11 @@ export function HamView({ chrome, store }: { chrome: Chrome; store: HamStore }) 
 
         <div className="cols">
           <section className="panel conv" aria-label="Система">
+            <div className="segbtns">
+              <button type="button" id="hmto-extra" onClick={() => store.xhost.setView('extra')}>
+                Связи, волчки, упоры, субгармоники →
+              </button>
+            </div>
             <h2>Система</h2>
             {mode === 'jacobi' && (
               <>

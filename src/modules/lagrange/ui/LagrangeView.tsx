@@ -12,6 +12,8 @@ import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { solveLagrange } from '../model/lagrange';
 import { findEquilibria } from '../model/equil';
 import { equilSteps } from '../text/equil';
+import { findInverse } from '../model/inverse';
+import { inverseSteps } from '../text/inverse';
 import type { Doc } from '../../../shared/doc';
 import { renderPlots } from '../draw/plots';
 import { LAGRANGE_PRESETS, type LagrangePresetKey } from '../presets';
@@ -61,12 +63,15 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
   const r = useMemo(() => solveLagrange(pr), [pr]);
   const ok = r.ok ? r : null;
   const eqr = useMemo(() => findEquilibria(pr), [pr]);
+  const ivr = useMemo(() => (eqr?.ok ? findInverse(pr, eqr) : null), [pr, eqr]);
   const rr = useMemo(() => (ok && (pr.body || pr.stop != null || pr.program) ? solveReact(pr, ok) : null), [pr, ok]);
   const rok = rr && rr.ok ? rr : null;
   // Без T — только статика: положения равновесия и устойчивость по Π.
   const statOnly = !r.ok && r.field === 'T' && !pr.T.trim() && !!eqr;
   const doc = useMemo((): Doc | null => {
-    const es = eqr?.ok ? equilSteps(eqr, { explain: st.explain, hasT: !!pr.T.trim() }) : null;
+    const es0 = eqr?.ok ? equilSteps(eqr, { explain: st.explain, hasT: !!pr.T.trim() }) : null;
+    const is = eqr?.ok && ivr ? inverseSteps(eqr, ivr, { explain: st.explain }) : null;
+    const es = es0 && is ? { steps: [...es0.steps, ...is.steps], rows: [...is.rows, ...es0.rows] } : es0;
     const eqErr = eqr && !eqr.ok ? [{ title: 'Положения равновесия', blocks: [{ k: 'badge' as const, tone: 'bad' as const, text: 'проверьте данные' }, { k: 'p' as const, c: [eqr.error] }] }] : [];
     if (ok) {
       const base = lagrangeDoc(pr, ok, { explain: st.explain });
@@ -79,7 +84,7 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
     }
     if (statOnly) return { steps: [...(es?.steps ?? []), ...eqErr, ...(es ? [{ title: 'Ответ', blocks: [{ k: 'answer' as const, rows: es.rows }] }] : [])] };
     return null;
-  }, [pr, ok, rr, rok, eqr, statOnly, st.explain]);
+  }, [pr, ok, rr, rok, eqr, ivr, statOnly, st.explain]);
   const plots = useMemo(() => (ok ? renderPlots(ok, rok) : null), [ok, rok]);
   const rerr = (field: string) => (rr && !rr.ok && rr.field === field ? rr.error : undefined);
   const pctx: SymContext = { coords: [], params: pr.params.map((p) => normName(p.name.trim())) };
@@ -183,6 +188,28 @@ export function LagrangeView({ chrome, store }: { chrome: Chrome; store: Lagrang
               <div className="sgrid">
                 <Num id="lg-eqfrom" label={`поиск: ${dotted(pr.coords[0].name, 0)} от`} value={pr.eqSearch.from} neg zero onType={(v) => store.typeEqRange('from', v)} onEnd={() => store.endSession('eq:from')} />
                 <Num id="lg-eqto" label="до" value={pr.eqSearch.to} neg zero onType={(v) => store.typeEqRange('to', v)} onEnd={() => store.endSession('eq:to')} />
+              </div>
+            )}
+            {pr.eqSearch && (
+              <label className="toggle">
+                <input type="checkbox" id="lginv" checked={!!pr.inverse} onChange={(e) => store.setInverse(e.target.checked)} />
+                обратная задача: параметр, при котором положение q* (таблица координат) — положение равновесия
+              </label>
+            )}
+            {pr.inverse && (
+              <div className="sgrid">
+                <label className="field">
+                  <span>параметр</span>
+                  <select id="lg-invp" value={normName(pr.inverse.param.trim())} onChange={(e) => store.typeInverse('param', e.target.value)} onBlur={() => store.endSession('inv:param')}>
+                    {pr.params.map((p, i) => (
+                      <option key={i} value={normName(p.name.trim())}>
+                        {prettyName(normName(p.name.trim()))}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Num id="lg-invfrom" label="поиск от" value={pr.inverse.from} neg zero onType={(v) => store.typeInverse('from', v)} onEnd={() => store.endSession('inv:from')} />
+                <Num id="lg-invto" label="до" value={pr.inverse.to} neg zero onType={(v) => store.typeInverse('to', v)} onEnd={() => store.endSession('inv:to')} />
               </div>
             )}
             {pr.eqSearch && (

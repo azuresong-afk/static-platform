@@ -2,6 +2,7 @@
 import type { Chrome, StatikaModule } from '../../app/module';
 import { taskEntries } from '../../shared/tasks';
 import { HAM_PRESETS, type HamPresetKey } from './presets';
+import { HAM_EXTRA_PRESETS, type HamExtraKey } from './extraPresets';
 import { HamStore, HAM_MODULE } from './ui/store';
 import { HamView } from './ui/HamView';
 
@@ -38,7 +39,7 @@ export function createHamModule(): StatikaModule {
       projectTitle: store.projectTitle,
     },
     Screen,
-    tasks: taskEntries(HAM_PRESETS),
-    loadTask: (k) => store.loadPreset(k as HamPresetKey),
+    tasks: taskEntries({ ...HAM_PRESETS, ...HAM_EXTRA_PRESETS }),
+    loadTask: (k) => store.loadPreset(k as HamPresetKey | HamExtraKey),
   };
 }

@@ -278,6 +278,7 @@ function Editor({ store, pr }: { store: MechStore; pr: MechProblem }) {
                 ]}
                 {d.k === 'line' && [
                   P([...base, 'through'], 'прямая через', d.through, i),
+                  <Sel key="to" id={`m-points-${i}-def-lto`} label="угол отсчитан от" value={d.to ?? ''} opts={[['', 'оси x'], ...ptOpts(i).map(([v]) => [v, `направления на ${v}`] as [string, string])]} onPick={(v) => store.pick([...base, 'to'], v)} />,
                   T([...base, 'ang'], 'её угол, °', d.ang),
                   P([...base, 'from'], 'расстояние от', d.from, i),
                   T([...base, 'L'], 'расстояние', d.L),
