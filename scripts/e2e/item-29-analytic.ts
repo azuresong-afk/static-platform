@@ -76,7 +76,11 @@ export default async function ({ p, check, tab, openText, saveText, shot }: E2EK
   );
   await p.selectOption('#lgpreset', 'm4718');
   lg = await p.innerText('#lgsolution');
-  check(lg.includes(`n = ${want('m4718')}`) && want('m4718').startsWith('187,9'), 'Мещерский 47.18: n ≈ 188 об/мин', lg.slice(-300));
+  check(
+    lg.includes(`n = ${want('m4718')}`) && Math.abs(parseFloat(want('m4718').replace(',', '.')) - 188) < 0.5,
+    'Мещерский 47.18: n ≈ 188 об/мин',
+    lg.slice(-300),
+  );
   await p.selectOption('#lgpreset', 'm4719');
   lg = await p.innerText('#lgsolution');
   check(

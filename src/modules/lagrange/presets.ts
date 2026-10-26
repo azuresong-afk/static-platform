@@ -171,7 +171,7 @@ export const LAGRANGE_PRESETS = {
     problem: {
       coords: [C('φ', 0.5)],
       params: P({ p: 5, p1: 10, l: 0.3, ω: 15, g: G }),
-      T: "(p/g) l^2 (φ'^2 + ω^2 sin(φ)^2) + (p1/(2 g)) (2 l sin φ φ')^2",
+      T: "(p/g) l^2 (φ'^2 + ω^2 sin(φ)^2) + (p1/(2 g)) (2 l sin(φ) φ')^2",
       P: '−2 (p + p1) l cos φ',
       tEnd: 0,
       eqSearch: { from: 0.01, to: 1.55 },
@@ -183,7 +183,7 @@ export const LAGRANGE_PRESETS = {
     problem: {
       coords: [C('α', 0.5, 0, '', Math.PI / 6)],
       params: P({ P1: 10, P2: 5, l: 0.3, a: 0.05, c: 100, g: G, ω: 10 }),
-      T: "(P2/g) (l^2 α'^2 + (a + l sin α)^2 ω^2) + (P1/(2 g)) (2 l sin α α')^2",
+      T: "(P2/g) (l^2 α'^2 + (a + l sin α)^2 ω^2) + (P1/(2 g)) (2 l sin(α) α')^2",
       P: '−2 (P1 + P2) l cos α + 2 c l^2 (1 − cos α)^2',
       tEnd: 0,
       eqSearch: { from: 0.01, to: 1.55 },
@@ -196,7 +196,7 @@ export const LAGRANGE_PRESETS = {
     problem: {
       coords: [C('θ', 1, 0, '', Math.PI / 3)],
       params: P({ P: 15, PC: 10, l: 25, e: 3, c: 15, g: 981, θ0: Math.PI / 6, n: 150 }),
-      T: "(P/g) ((l cos θ θ')^2 + (e + l sin θ)^2 (π n/30)^2) + (PC/(2 g)) (l sin θ θ')^2",
+      T: "(P/g) ((l cos(θ) θ')^2 + (e + l sin θ)^2 (π n/30)^2) + (PC/(2 g)) (l sin(θ) θ')^2",
       P: '−PC l cos θ + c l^2 (sin θ − sin θ0)^2',
       tEnd: 0,
       eqSearch: { from: 0.01, to: 1.55 },
