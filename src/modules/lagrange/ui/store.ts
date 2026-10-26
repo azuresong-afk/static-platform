@@ -48,6 +48,8 @@ export function parseProblem(raw: unknown): { ok: true; problem: LagProblem } | 
   if (errors.length) return { ok: false, errors };
   const es = raw.eqSearch;
   if (es != null && !(isObj(es) && isNum(es.from) && isNum(es.to) && es.to > es.from)) return { ok: false, errors: ['Поиск равновесия: отрезок from < to.'] };
+  const iv = raw.inverse;
+  if (iv != null && !(isObj(iv) && isStr(iv.param) && isNum(iv.from) && isNum(iv.to) && iv.to > iv.from)) return { ok: false, errors: ['Параметр по положению равновесия: имя параметра и отрезок from < to.'] };
   const bd = raw.body;
   let body: LagBody | null = null;
   if (bd != null) {
@@ -82,6 +84,7 @@ export function parseProblem(raw: unknown): { ok: true; problem: LagProblem } | 
       P: raw.P as string,
       tEnd: raw.tEnd as number,
       ...(isObj(es) ? { eqSearch: { from: es.from as number, to: es.to as number } } : {}),
+      ...(isObj(iv) ? { inverse: { param: iv.param as string, from: iv.from as number, to: iv.to as number } } : {}),
       ...(body ? { body } : {}),
       ...(isStr(raw.stop) ? { stop: raw.stop } : {}),
       ...(program ? { program } : {}),
@@ -130,7 +133,21 @@ export class LagrangeStore {
   setEqSearch = (on: boolean) => {
     if (on === !!this.st.problem.eqSearch) return;
     this.commit();
-    this.setProblem({ ...this.st.problem, eqSearch: on ? { from: -3.1415, to: 3.1416 } : null });
+    this.setProblem({ ...this.st.problem, eqSearch: on ? { from: -3.1415, to: 3.1416 } : null, ...(on ? {} : { inverse: null }) });
+  };
+  /** Обратная задача: параметр по заданному положению равновесия q* (нужен поиск равновесия). */
+  setInverse = (on: boolean) => {
+    const p = this.st.problem;
+    if (on === !!p.inverse) return;
+    this.commit();
+    const last = p.params[p.params.length - 1]?.name ?? 'ω';
+    this.setProblem({ ...p, eqSearch: p.eqSearch ?? { from: -3.1415, to: 3.1416 }, inverse: on ? { param: last, from: 0, to: 100 } : null });
+  };
+  typeInverse = <K extends 'param' | 'from' | 'to'>(key: K, v: K extends 'param' ? string : number) => {
+    const iv = this.st.problem.inverse;
+    if (!iv) return;
+    this.touch(`inv:${key}`);
+    this.setProblem({ ...this.st.problem, inverse: { ...iv, [key]: v } });
   };
   typeEqRange = (key: 'from' | 'to', v: number) => {
     const es = this.st.problem.eqSearch;
