@@ -1,4 +1,6 @@
 /** Состояние вкладки «Устойчивость и нелинейные колебания»: режим, задачи режимов, история отмены, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
@@ -9,6 +11,8 @@ import type { LetCoord, LetProblem } from '../model/letters';
 import type { NonlinProblem } from '../model/nonlin';
 import type { RollMotion, RollProblem } from '../model/roll';
 import type { StabForm, StabProblem } from '../model/stability';
+import { HAM_ASKS } from '../model/extra';
+import { HAM_EXTRA_PRESETS, type HamExtraKey } from '../extraPresets';
 import { defaultProblem, defJacobi, defLetters, defRoll, HAM_PRESETS, type HamMode, type HamPresetKey, type HamProblem, type JacProblem } from '../presets';
 
 export const HAM_MODULE = 'hamilton';
@@ -17,8 +21,11 @@ const MAX_STARTS = 6;
 
 export interface HamState {
   problem: HamProblem;
+  /** Второй экран (пункт 31): связи, направляющая, волчки, упоры, субгармоники, точечное преобразование. */
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: HamPresetKey | 'custom';
+  preset: HamPresetKey | HamExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -26,6 +33,8 @@ export interface HamState {
 }
 interface Snap {
   problem: HamProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: HamState['preset'];
 }
@@ -180,6 +189,8 @@ export class HamStore {
     const k = opts.preset ?? 'm5524';
     this.st = {
       problem: structuredClone(HAM_PRESETS[k].problem),
+      extra: structuredClone(HAM_EXTRA_PRESETS.x5519.problem),
+      view: 'main',
       title: HAM_PRESETS[k].title,
       preset: k,
       canUndo: false,
@@ -197,7 +208,7 @@ export class HamStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя задача' };
@@ -209,10 +220,16 @@ export class HamStore {
   private put(p: Partial<HamProblem>) {
     this.set({ problem: { ...this.st.problem, ...p } });
   }
-  loadPreset = (k: HamPresetKey) => {
+  loadPreset = (k: HamPresetKey | HamExtraKey) => {
     this.commit();
-    this.set({ problem: structuredClone(HAM_PRESETS[k].problem), title: HAM_PRESETS[k].title, preset: k });
+    if (k in HAM_EXTRA_PRESETS) {
+      const e = HAM_EXTRA_PRESETS[k as HamExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    const p = HAM_PRESETS[k as HamPresetKey];
+    this.set({ problem: structuredClone(p.problem), view: 'main', title: p.title, preset: k });
   };
+  xhost = extraHost(HAM_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   setMode = (mode: HamMode) => {
     if (mode === this.st.problem.mode) return;
     this.commit();
@@ -466,7 +483,7 @@ export class HamStore {
   projectTitle = () => this.st.title;
   exportProject = (now = new Date()) => ({
     name: projectFileName(this.st.title, now),
-    text: writeEnvelope(HAM_MODULE, this.st.title, { problem: this.st.problem }, now),
+    text: writeEnvelope(HAM_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now),
   });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
@@ -474,10 +491,11 @@ export class HamStore {
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== HAM_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseProblem(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, HAM_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Устойчивость и нелинейные колебания';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };
