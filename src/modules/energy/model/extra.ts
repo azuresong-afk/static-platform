@@ -13,6 +13,7 @@
  *  - track   38.4  — кинетическая энергия гусеницы: T = 2γ(l + πr)v₀²/g;
  *  - jw      38.51–38.53 — приведённый момент инерции эпи- и гипоциклического механизма, J·dω/dt = M(ω).
  */
+import { ENERGY_ASKS_29 } from './extra29';
 import { parB, ansB, bold, eqB, fail, sample, sg, stepB, stepEx, type AskDef, type ExtraOut, type ExtraProblem } from '../../../shared/extra';
 
 const G = 9.81;
@@ -501,5 +502,5 @@ const A_JW: AskDef = {
   },
 };
 
-export const ENERGY_ASKS: AskDef[] = [A_ROD, A_LADDER, A_PULLEY, A_SLIDE, A_STOP2, A_TABLE, A_PEG, A_CABLE, A_CABLE48, A_TRACK, A_JW];
+export const ENERGY_ASKS: AskDef[] = [A_ROD, A_LADDER, A_PULLEY, A_SLIDE, A_STOP2, A_TABLE, A_PEG, A_CABLE, A_CABLE48, A_TRACK, A_JW, ...ENERGY_ASKS_29];
 void parB;

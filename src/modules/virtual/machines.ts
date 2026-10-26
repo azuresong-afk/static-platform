@@ -8,6 +8,7 @@
  */
 import { sig } from '../relative/text/earth';
 import type { Catalog, Fig, Machine, MachinePreset, Param, Row, Solved, Step, Vals } from '../../shared/machines/types';
+import { VIRTUAL_MACHINES_29, VIRTUAL_MACHINE_PRESETS_29 } from './machines29';
 import { arrow, circle, ground, line, pin, poly, rect, svgOf, text, turn, type P } from '../../shared/machines/sketch';
 
 const PI = Math.PI;
@@ -957,6 +958,7 @@ export const VIRTUAL_MACHINES: Machine[] = [
   brake16,
   blocks17,
   blocks18,
+  ...VIRTUAL_MACHINES_29,
 ];
 
 const tg = (a: number) => Math.tan(rad(a));
@@ -1039,6 +1041,7 @@ export const VIRTUAL_MACHINE_PRESETS: Record<string, MachinePreset> = {
   ),
   m4617: pr('Мещерский 46.17: грузы на наклонных плоскостях и подвижный блок', 'blocks17', undefined, { P1: 100, P2: 100 / (2 * Math.sin(rad(45))) }),
   m4618: pr('Мещерский 46.18: грузы A, B и блок с грузом K', 'blocks18', undefined, { P: 50, f: 1 }),
+  ...VIRTUAL_MACHINE_PRESETS_29,
 };
 
 export const VIRTUAL_CATALOG: Catalog = {
