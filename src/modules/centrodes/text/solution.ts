@@ -19,6 +19,8 @@ export interface CentrodesDocInput {
   pose: Pose;
   phi: number;
   explain: boolean;
+  /** Своё движение (пункт 31): уравнения — пользователя, невязки посчитаны заранее. */
+  own?: { res: { fixed: number; moving: number } };
 }
 
 export function centrodesDoc(i: CentrodesDocInput): Doc {
@@ -203,7 +205,9 @@ export function centrodesDoc(i: CentrodesDocInput): Doc {
     }
     return rows;
   };
-  const res = preset?.check ? bookResiduals(preset.check, i.values, cen) : null;
+  const res = i.own ? i.own.res : preset?.check ? bookResiduals(preset.check, i.values, cen) : null;
+  const eqLabel = i.own ? 'Проверяемое уравнение: ' : 'Уравнение по ответу книги: ';
+  const resLabel = i.own ? 'наибольшая невязка уравнения (расстояние до линии в долях её размера)' : 'наибольшая невязка уравнения книги';
   {
     const bl: Block[] = [];
     bl.push({
@@ -219,12 +223,12 @@ export function centrodesDoc(i: CentrodesDocInput): Doc {
     });
     bl.push({ k: 'ul', items: sample(fl, cen.phis) });
     if (preset) {
-      bl.push({ k: 'p', c: ['Уравнение по ответу книги: ', b(preset.book.fixed)] });
-      if (res && preset.check)
+      bl.push({ k: 'p', c: [eqLabel, b(preset.book.fixed)] });
+      if (res && preset.check && Number.isFinite(res.fixed))
         bl.push({
           k: 'badge',
           tone: res.fixed <= preset.check.tol ? 'ok' : 'warn',
-          text: `наибольшая невязка уравнения книги ${res.fixed < 1e-9 ? '< 10⁻⁹' : res.fixed.toExponential(1).replace('e-', '·10⁻').replace('e+', '·10')}`,
+          text: `${resLabel} ${res.fixed < 1e-9 ? '< 10⁻⁹' : res.fixed.toExponential(1).replace('e-', '·10⁻').replace('e+', '·10')}`,
         });
     }
     steps.push({ title: 'Неподвижная центроида', blocks: bl });
@@ -305,12 +309,12 @@ export function centrodesDoc(i: CentrodesDocInput): Doc {
     bl.push({ k: 'p', c: ['Те же положения, но в подвижных осях, дают подвижную центроиду (красная линия). Несколько её точек:'] });
     bl.push({ k: 'ul', items: sample(ml, cen.phis) });
     if (preset) {
-      bl.push({ k: 'p', c: ['Уравнение по ответу книги: ', b(preset.book.moving)] });
-      if (res && preset.check)
+      bl.push({ k: 'p', c: [eqLabel, b(preset.book.moving)] });
+      if (res && preset.check && Number.isFinite(res.moving))
         bl.push({
           k: 'badge',
           tone: res.moving <= preset.check.tol ? 'ok' : 'warn',
-          text: `наибольшая невязка уравнения книги ${res.moving < 1e-9 ? '< 10⁻⁹' : res.moving.toExponential(1).replace('e-', '·10⁻').replace('e+', '·10')}`,
+          text: `${resLabel} ${res.moving < 1e-9 ? '< 10⁻⁹' : res.moving.toExponential(1).replace('e-', '·10⁻').replace('e+', '·10')}`,
         });
     }
     ex(

@@ -221,7 +221,8 @@ export function solveKin(pr: KinProblem): KinResult {
     rho = cr > 1e-12 * Math.max(1, v ** 3) ? v ** 3 / cr : null;
   }
   if (errors.length) return { ...empty, errors };
-  const a = Math.hypot(at, an);
+  // При v = 0 разложение на касательное и нормальное не определено — полное ускорение по проекциям.
+  const a = v > 1e-12 ? Math.hypot(at, an) : Math.hypot(...acc);
   if (![...pos, ...vel, ...acc, v, a].every(Number.isFinite)) return { ...empty, errors: [`В момент t = ${t} формулы не определены.`] };
   const angles = (w: [number, number, number], m: number): [number, number, number] | null => (pr.mode === 'natural' || m < 1e-12 ? null : (w.map((c) => (Math.acos(Math.max(-1, Math.min(1, c / m))) * 180) / Math.PI) as [number, number, number]));
   const amag = Math.hypot(...acc);
