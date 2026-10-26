@@ -1,9 +1,13 @@
 /** Состояние вкладки «Колебания систем»: задача, история отмены, файл проекта. */
+import type { ExtraProblem } from '../../../shared/extra';
+import { extraHost, readExtraView, type XView } from '../../../shared/extraHost';
 import { History } from '../../../shared/history';
 import { isNum, isObj, projectFileName, readEnvelope, writeEnvelope } from '../../../shared/projectFile';
 import type { NoticeData } from '../../../shared/ui/Notice';
 import type { BeamMass, BeamSupport, BeamSys } from '../model/beam';
 import { MAX_DOF, type AbsorberSys, type ChainBody, type ChainLink, type ChainSys, type EnergySys, type VibCoord, type VibProblem } from '../model/vibration';
+import { VIB_ASKS } from '../model/extra';
+import { VIB_EXTRA_PRESETS, type VibExtraKey } from '../extraPresets';
 import { defaultProblem, VIB_PRESETS, type VibPresetKey } from '../presets';
 
 export const VIB_MODULE = 'vibration';
@@ -12,8 +16,10 @@ const MAX_SUPPORTS = 6;
 
 export interface VibState {
   problem: VibProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
-  preset: VibPresetKey | 'custom';
+  preset: VibPresetKey | VibExtraKey | 'custom';
   canUndo: boolean;
   canRedo: boolean;
   notice: NoticeData | null;
@@ -21,6 +27,8 @@ export interface VibState {
 }
 interface Snap {
   problem: VibProblem;
+  extra: ExtraProblem;
+  view: XView;
   title: string;
   preset: VibState['preset'];
 }
@@ -143,6 +151,8 @@ export class VibStore {
     const k = opts.preset ?? 'm5445';
     this.st = {
       problem: copy(VIB_PRESETS[k].problem),
+      extra: structuredClone(VIB_EXTRA_PRESETS.x5410.problem),
+      view: 'main',
       title: VIB_PRESETS[k].title,
       preset: k,
       canUndo: false,
@@ -160,7 +170,7 @@ export class VibStore {
     this.st = { ...this.st, ...patch, canUndo: this.hist.canUndo, canRedo: this.hist.canRedo };
     this.listeners.forEach((f) => f());
   }
-  private snap = (): Snap => ({ problem: this.st.problem, title: this.st.title, preset: this.st.preset });
+  private snap = (): Snap => ({ problem: this.st.problem, extra: this.st.extra, view: this.st.view, title: this.st.title, preset: this.st.preset });
   private commit() {
     this.hist.push(this.snap());
     if (this.st.preset !== 'custom') this.st = { ...this.st, preset: 'custom', title: 'Своя система' };
@@ -181,10 +191,20 @@ export class VibStore {
     this.commit();
     this.apply(fn);
   };
-  loadPreset = (k: VibPresetKey) => {
+  loadPreset = (k: VibPresetKey | VibExtraKey) => {
     this.commit();
-    this.set({ problem: copy(VIB_PRESETS[k].problem), title: VIB_PRESETS[k].title, preset: k });
+    if (k in VIB_EXTRA_PRESETS) {
+      const e = VIB_EXTRA_PRESETS[k as VibExtraKey];
+      return this.set({ extra: structuredClone(e.problem), view: 'extra', title: e.title, preset: k });
+    }
+    const m = k as VibPresetKey;
+    this.set({ problem: copy(VIB_PRESETS[m].problem), view: 'main', title: VIB_PRESETS[m].title, preset: k });
   };
+  private touch(key: string) {
+    if (this.hist.startSession(key)) this.commit();
+  }
+  /** Второй экран (пункт 30): задачи §54 в буквах и приближённые формулы. */
+  xhost = extraHost(VIB_ASKS, this, { commit: () => this.commit(), touch: (k) => this.touch(k), patch: (p) => this.set(p) });
   /* Добавление и удаление строк. */
   addCoord = () =>
     this.act((p) => {
@@ -244,7 +264,7 @@ export class VibStore {
   projectTitle = () => this.st.title;
   exportProject = (now = new Date()) => ({
     name: projectFileName(this.st.title, now),
-    text: writeEnvelope(VIB_MODULE, this.st.title, { problem: this.st.problem }, now),
+    text: writeEnvelope(VIB_MODULE, this.st.title, { problem: this.st.problem, extra: this.st.extra, view: this.st.view }, now),
   });
   importProject = (text: string, fileName?: string): boolean => {
     const head = fileName ? `Не удалось открыть «${fileName}»: ` : 'Не удалось открыть файл: ';
@@ -252,10 +272,11 @@ export class VibStore {
     if (!env.ok) return (this.notify(head + env.errors.join(' '), 'bad'), false);
     if (env.module !== VIB_MODULE) return (this.notify(head + 'это файл другого раздела.', 'bad'), false);
     const r = parseVib(env.raw.problem);
-    if (!r.ok) return (this.notify(head + r.errors.slice(0, 4).join(' '), 'bad'), false);
+    const x = readExtraView(env.raw, VIB_ASKS, r.ok);
+    if (!x.usable) return (this.notify(head + (r.ok ? '' : r.errors.slice(0, 4).join(' ')), 'bad'), false);
     this.commit();
     const title = env.title ?? 'Колебания систем';
-    this.set({ problem: r.problem, title, preset: 'custom' });
+    this.set({ problem: r.ok ? r.problem : this.st.problem, extra: x.extra ?? this.st.extra, view: x.view, title, preset: 'custom' });
     this.notify(`Открыт проект «${title}».`, 'ok');
     return true;
   };

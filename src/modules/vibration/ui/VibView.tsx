@@ -13,6 +13,9 @@ import { taskEntries } from '../../../shared/tasks';
 import { RedoIcon, UndoIcon } from '../../frames/ui/icons';
 import { renderVib } from '../draw/vib';
 import { linkStiffness, MAX_DOF, solveVib, type ChainSys, type ForceKind, type VibProblem } from '../model/vibration';
+import { ExtraScreen } from '../../../shared/ui/ExtraScreen';
+import { VIB_ASKS } from '../model/extra';
+import { VIB_EXTRA_PRESETS, type VibExtraKey } from '../extraPresets';
 import { VIB_PRESETS, type VibPresetKey } from '../presets';
 import { vibDoc } from '../text/solution';
 import type { VibStore } from './store';
@@ -80,7 +83,28 @@ const KIND_T: Record<ChainSys['kind'], string> = { spring: 'грузы на пр
 const SUB = '₀₁₂₃₄₅₆₇₈₉';
 const sb = (i: number) => String(i).replace(/\d/g, (x) => SUB[+x]);
 
+const ALL_PRESETS = { ...VIB_PRESETS, ...VIB_EXTRA_PRESETS };
+
 export function VibView({ chrome, store }: { chrome: Chrome; store: VibStore }) {
+  const view = useSyncExternalStore(store.subscribe, () => store.get().view);
+  if (view === 'extra')
+    return (
+      <ExtraScreen
+        chrome={chrome}
+        host={store.xhost}
+        asks={VIB_ASKS}
+        presets={ALL_PRESETS}
+        prefix="vb"
+        heading="Колебания систем: приближённые формулы, условия в буквах, уравнения движения"
+        lede="Задачи §54, где нужен вывод, а не только числа: стержень на нити при малом отношении длин, условие равенства главных частот, положение равновесия перед малыми колебаниями, уравнения движения при произвольном движении платформы и для крутильной системы с маятниковым гасителем."
+        mainLabel="система по T и Π, цепочка, балка, гаситель"
+        tabName="Колебания систем"
+      />
+    );
+  return <VibViewMain chrome={chrome} store={store} />;
+}
+
+function VibViewMain({ chrome, store }: { chrome: Chrome; store: VibStore }) {
   const st = useSyncExternalStore(store.subscribe, store.get);
   const pr = st.problem;
   const r = useMemo(() => solveVib(pr), [pr]);
@@ -88,7 +112,7 @@ export function VibView({ chrome, store }: { chrome: Chrome; store: VibStore }) 
   const doc = useMemo(() => vibDoc(pr, r, { explain: st.explain }), [pr, r, st.explain]);
   const end = (k: string) => () => store.endSession(k);
   const err = (field: string) => (!r.ok && r.field === field ? r.error : undefined);
-  const note = st.preset !== 'custom' ? VIB_PRESETS[st.preset].note : null;
+  const note = st.preset !== 'custom' ? ALL_PRESETS[st.preset].note : null;
   const E = pr.energy,
     C = pr.chain,
     B = pr.beam,
@@ -126,14 +150,19 @@ export function VibView({ chrome, store }: { chrome: Chrome; store: VibStore }) 
           <div className="topright">
             <label className="preset">
               Готовая задача
-              <select id="vbpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as VibPresetKey)}>
-                <PresetOptions items={taskEntries(VIB_PRESETS)} />
+              <select id="vbpreset" value={st.preset} onChange={(e) => store.loadPreset(e.target.value as VibPresetKey | VibExtraKey)}>
+                <PresetOptions items={taskEntries(ALL_PRESETS)} />
                 <option value="custom" hidden>
                   {st.title}
                 </option>
               </select>
             </label>
             {chrome.files}
+            <div className="segbtns">
+              <button type="button" id="vbto-extra" onClick={() => store.xhost.setView('extra')}>
+                Приближённые формулы, равновесие, уравнения движения →
+              </button>
+            </div>
           </div>
         </header>
         <Notice notice={st.notice} onClose={store.closeNotice} />

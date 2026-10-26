@@ -1,6 +1,7 @@
 /** Готовые задачи пункта 28 для «Удара и колебаний»: Мещерский §29, 32, 39. Числа — по формулам книги, где в условии буквы. */
 import { extraProblem, findAsk, type ExtraProblem } from '../../shared/extra';
 import { OSC_ASKS } from './model/extra';
+import { OSC_EXTRA_PRESETS2 } from './extraPresets2';
 
 export interface OscExtraPreset {
   title: string;
@@ -15,7 +16,7 @@ const G = 9.81;
 const k3249 = Math.sqrt((((4 * 100 * 200 * 300) / (4 * 100 * 200 + 300 * 300)) * G) / 10);
 const A3223 = Math.sqrt((10 / 1000) ** 2 + (10 * 0.2 ** 2) / (1000 * G));
 
-export const OSC_EXTRA_PRESETS = {
+const OSC_EXTRA_PRESETS_BASE = {
   x3210: {
     title: 'Мещерский 32.10: стержень на шкивах — коэффициент трения по периоду колебаний',
     problem: xp('rollers', { l: 0.25, T: 2, x0: 0.05 }, { find: 'f' }),
@@ -80,4 +81,6 @@ export const OSC_EXTRA_PRESETS = {
     note: 'Задача в буквах; R = 10 см — для примера. Книга: T = π√((9π − 16)R/(2g)).',
   },
 } satisfies Record<string, OscExtraPreset>;
+/** Пункты 28 и 30. */
+export const OSC_EXTRA_PRESETS = { ...OSC_EXTRA_PRESETS_BASE, ...OSC_EXTRA_PRESETS2 };
 export type OscExtraKey = keyof typeof OSC_EXTRA_PRESETS;
