@@ -76,22 +76,25 @@ export function solveTops(pr: TopsIn): TopsRes {
   if (n < 1 || n > 3) return { ok: false, error: 'Волчков — от одного до трёх.' };
   for (const [i, t] of pr.tops.entries()) {
     if (!(t.M > 0 && t.A > 0 && t.C > 0)) return { ok: false, error: `Волчок ${i + 1}: масса и моменты инерции — положительные.` };
-    if (!(t.A >= t.M * t.c * t.c - 1e-12)) return { ok: false, error: `Волчок ${i + 1}: момент инерции относительно оси через острие A ≥ M·c² (теорема Штейнера).` };
+    if (!(t.A >= t.M * t.c * t.c - 1e-12))
+      return { ok: false, error: `Волчок ${i + 1}: момент инерции относительно оси через острие A ≥ M·c² (теорема Штейнера).` };
     if (i < n - 1 && !(t.h > 0)) return { ok: false, error: `Волчок ${i + 1}: расстояние до гнезда следующего h > 0.` };
   }
   const { M, G, K } = topsLetters(n);
   const lam = variable(LAMBDA);
   const D = detSym(M.map((r, i) => r.map((m, j) => add(mul(pow(lam, 2), m), ...(i === j ? [mul(lam, G[i]), K[i]] : [])))));
   const coef = collect(D, 2 * n);
-  const valsOf = (W: number) => (name: string): number => {
-    if (name === 'g') return pr.g;
-    const m = /^(M|A|C|c|h|Ω)(\d)$/u.exec(name);
-    if (!m) return NaN;
-    const t = pr.tops[Number(m[2]) - 1];
-    if (!t) return NaN;
-    const k = m[1] === 'Ω' ? 'W' : (m[1] as 'M' | 'A' | 'C' | 'c' | 'h');
-    return Number(m[2]) === n && k === 'W' ? W : t[k];
-  };
+  const valsOf =
+    (W: number) =>
+    (name: string): number => {
+      if (name === 'g') return pr.g;
+      const m = /^(M|A|C|c|h|Ω)(\d)$/u.exec(name);
+      if (!m) return NaN;
+      const t = pr.tops[Number(m[2]) - 1];
+      if (!t) return NaN;
+      const k = m[1] === 'Ω' ? 'W' : (m[1] as 'M' | 'A' | 'C' | 'c' | 'h');
+      return Number(m[2]) === n && k === 'W' ? W : t[k];
+    };
   const at = (W: number) => {
     const c = coef.map((s) => evalSym(s, valsOf(W)));
     const roots = polyRoots(c) as [number, number][];
@@ -124,5 +127,3 @@ export function solveTops(pr: TopsIn): TopsRes {
   }
   return { ok: true, M, G, K, coef, coefNum: base.c, roots: base.roots, verdict: base.verdict, im: base.im, Wcrit, scan };
 }
-
-

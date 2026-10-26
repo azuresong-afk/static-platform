@@ -24,14 +24,32 @@ describe('готовые задачи §52, 55, 56 (пункт 31)', () => {
 
 describe('независимая проверка', () => {
   it('52.7: определитель в общем виде — это уравнение книги', () => {
-    const r = solveConstr({ coords: ['x1', 'y1', 'x2', 'y2'], params: { P: 1, l: 1 }, Pi: 'P (y1 + y2)/2', cons: ['f(x1, y1)', 'f(x2, y2)', '(x2 − x1)^2 + (y2 − y1)^2 − l^2'], fdef: '', keep: '', box: 1 });
+    const r = solveConstr({
+      coords: ['x1', 'y1', 'x2', 'y2'],
+      params: { P: 1, l: 1 },
+      Pi: 'P (y1 + y2)/2',
+      cons: ['f(x1, y1)', 'f(x2, y2)', '(x2 − x1)^2 + (y2 − y1)^2 − l^2'],
+      fdef: '',
+      keep: '',
+      box: 1,
+    });
     if (!r.ok) throw new Error(r.error);
     expect(r.concrete).toBeNull();
     const D = r.general.det!;
     expect(symText(D)).toContain('∂f/∂x₁');
     // Случайные значения: P·[(x₂ − x₁)(fx₁fy₂ + fy₁fx₂) − 2(y₂ − y₁)fx₁fx₂] (с точностью до множителя).
     for (let i = 0; i < 5; i++) {
-      const v: Record<string, number> = { P: 1.3, x1: Math.sin(i), y1: Math.cos(2 * i), x2: 0.3 * i, y2: -0.2 * i + 0.1, '∂f/∂x₁': 0.7 + i, '∂f/∂y₁': -0.4 * i, '∂f/∂x₂': 1.1, '∂f/∂y₂': 0.5 - i };
+      const v: Record<string, number> = {
+        P: 1.3,
+        x1: Math.sin(i),
+        y1: Math.cos(2 * i),
+        x2: 0.3 * i,
+        y2: -0.2 * i + 0.1,
+        '∂f/∂x₁': 0.7 + i,
+        '∂f/∂y₁': -0.4 * i,
+        '∂f/∂x₂': 1.1,
+        '∂f/∂y₂': 0.5 - i,
+      };
       const book = v.P * ((v.x2 - v.x1) * (v['∂f/∂x₁'] * v['∂f/∂y₂'] + v['∂f/∂y₁'] * v['∂f/∂x₂']) - 2 * (v.y2 - v.y1) * v['∂f/∂x₁'] * v['∂f/∂x₂']);
       expect(Math.abs(evalSym(D, (n) => v[n]))).toBeCloseTo(Math.abs(book), 10);
     }

@@ -66,7 +66,9 @@ const A_CONSTR: AskDef = {
         'Условия равновесия',
         'Принцип возможных перемещений для системы со связями φₖ(q) = 0: δΠ = 0 при Σ(∂φₖ/∂qⱼ)δqⱼ = 0. По правилу множителей Лагранжа это равносильно ∂Π/∂qⱼ + Σλₖ ∂φₖ/∂qⱼ = 0 для всех координат вместе с уравнениями связей. Если в связь входит f(x₁, y₁), её производные остаются буквами ∂f/∂x₁, ∂f/∂y₁.',
         eqB(...r.general.eqs.map((e, j): Ln => `∂Π/∂${prettyName(CN[j])} + Σλₖ∂φₖ/∂${prettyName(CN[j])}:  ${txt(e, CN)} = 0`)),
-        parB(`Неизвестные: ${CN.map(prettyName).join(', ')}, ${lamNames.join(', ') || '—'}; уравнений ${4 + m} (${4} условия и ${m} связи). Число степеней свободы ${r.dof}.`),
+        parB(
+          `Неизвестные: ${CN.map(prettyName).join(', ')}, ${lamNames.join(', ') || '—'}; уравнений ${4 + m} (${4} условия и ${m} связи). Число степеней свободы ${r.dof}.`,
+        ),
       ),
     ];
     if (r.general.det)
@@ -82,7 +84,10 @@ const A_CONSTR: AskDef = {
       steps.push(stepB('Численно', parB('Чтобы найти положения, задайте конкретную функцию f(x, y).')));
       return done({ vals: { count: 0 }, steps });
     }
-    if (r.usesF && r.fSym) steps.push(stepB('С конкретной кривой', eqB(`f(x, y) = ${txt(r.fSym, ['x', 'y'])}`, ...(r.concrete.det ? [`определитель: ${txt(r.concrete.det, CN)} = 0`] : []))));
+    if (r.usesF && r.fSym)
+      steps.push(
+        stepB('С конкретной кривой', eqB(`f(x, y) = ${txt(r.fSym, ['x', 'y'])}`, ...(r.concrete.det ? [`определитель: ${txt(r.concrete.det, CN)} = 0`] : []))),
+      );
     const rows = r.sols.map((s, i) => {
       const [x1, y1, x2, y2] = s.q;
       const ang = Math.atan2(Math.abs(y2 - y1), Math.abs(x2 - x1)) / D2R;
@@ -95,14 +100,26 @@ const A_CONSTR: AskDef = {
         'Система ∇Π + Σλₖ∇φₖ = 0, φₖ = 0 решается методом Ньютона из многих начальных точек области поиска. Устойчивость — по второй вариации Π на связях: матрица ∇²Π + Σλₖ∇²φₖ на касательном подпространстве связей. Положительно определена — минимум Π, равновесие устойчиво (теорема Лагранжа — Дирихле).',
         rows.length ? { k: 'ul', items: rows.map((t) => [t]) } : parB('В области поиска положений равновесия нет — расширьте область или проверьте связи.'),
         ...(r.dropped ? [parB(`Отброшено условием отбора: ${r.dropped}.`)] : []),
-        ...r.sols.slice(0, 3).map((s, i) => parB(`Положение ${i + 1}: собственные числа второй вариации на связях ${s.eig.map((e) => sg(e, 4)).join('; ') || '—'}.`)),
+        ...r.sols
+          .slice(0, 3)
+          .map((s, i) => parB(`Положение ${i + 1}: собственные числа второй вариации на связях ${s.eig.map((e) => sg(e, 4)).join('; ') || '—'}.`)),
       ),
     );
     const first = r.sols.find((s) => s.kind === 'stable') ?? r.sols[0];
     const vals: Record<string, number> = { count: r.sols.length, stable: r.sols.filter((s) => s.kind === 'stable').length };
     if (first) {
       const [x1, y1, x2, y2] = first.q;
-      Object.assign(vals, { x1, y1, x2, y2, phi: Math.atan2(Math.abs(y2 - y1), Math.abs(x2 - x1)), cosphi: Math.abs(x2 - x1) / Math.hypot(x2 - x1, y2 - y1), ymin: Math.min(y1, y2), ymax: Math.max(y1, y2), xspan: Math.abs(x2 - x1) });
+      Object.assign(vals, {
+        x1,
+        y1,
+        x2,
+        y2,
+        phi: Math.atan2(Math.abs(y2 - y1), Math.abs(x2 - x1)),
+        cosphi: Math.abs(x2 - x1) / Math.hypot(x2 - x1, y2 - y1),
+        ymin: Math.min(y1, y2),
+        ymax: Math.max(y1, y2),
+        xspan: Math.abs(x2 - x1),
+      });
     }
     steps.push(
       stepB(
@@ -110,7 +127,11 @@ const A_CONSTR: AskDef = {
         first
           ? ansB(
               [bold(`${r.sols.length} ${r.sols.length === 1 ? 'положение' : 'положения'} равновесия`), `устойчивых — ${vals.stable}`],
-              [`x₁ = ${sg(first.q[0], 5)}, y₁ = ${sg(first.q[1], 5)}, x₂ = ${sg(first.q[2], 5)}, y₂ = ${sg(first.q[3], 5)}`, first.kind === 'stable' ? 'первое устойчивое' : 'первое найденное', 'aux'],
+              [
+                `x₁ = ${sg(first.q[0], 5)}, y₁ = ${sg(first.q[1], 5)}, x₂ = ${sg(first.q[2], 5)}, y₂ = ${sg(first.q[3], 5)}`,
+                first.kind === 'stable' ? 'первое устойчивое' : 'первое найденное',
+                'aux',
+              ],
               [`cos φ = ${sg(vals.cosphi, 6)}`, 'наклон отрезка 1–2 к горизонтали', 'aux'],
             )
           : parB('Положений равновесия не найдено.'),
@@ -129,10 +150,28 @@ const A_CONSTR: AskDef = {
       const pk = Object.keys(pv);
       const f = compile(cs, (name) => (name === 'x' + idx ? 0 : name === 'y' + idx ? 1 : pk.includes(name) ? pk.indexOf(name) + 2 : -1));
       const pvv = Object.values(pv);
-      for (const [j, ch] of contour((x, y) => f([x, y, ...pvv], 0), -B, B, -B, B).entries()) series.push({ name: j ? '' : `связь ${k + 1}`, pts: ch, cls: 'sb-axis' });
+      for (const [j, ch] of contour((x, y) => f([x, y, ...pvv], 0), -B, B, -B, B).entries())
+        series.push({ name: j ? '' : `связь ${k + 1}`, pts: ch, cls: 'sb-axis' });
     });
-    r.sols.slice(0, 4).forEach((s, i) => series.push({ name: `положение ${i + 1}${s.kind === 'stable' ? ' (устойчиво)' : ''}`, pts: [[s.q[0], s.q[1]], [s.q[2], s.q[3]]] }));
-    const plot: ExtraPlot = { xl: 'x', yl: 'y', equal: true, series: series.filter((s) => s.name || s.pts.length > 1), marks: r.sols.slice(0, 4).flatMap((s, i) => [{ x: s.q[0], y: s.q[1], label: `1${i ? `(${i + 1})` : ''}` }, { x: s.q[2], y: s.q[3], label: `2${i ? `(${i + 1})` : ''}` }]) };
+    r.sols.slice(0, 4).forEach((s, i) =>
+      series.push({
+        name: `положение ${i + 1}${s.kind === 'stable' ? ' (устойчиво)' : ''}`,
+        pts: [
+          [s.q[0], s.q[1]],
+          [s.q[2], s.q[3]],
+        ],
+      }),
+    );
+    const plot: ExtraPlot = {
+      xl: 'x',
+      yl: 'y',
+      equal: true,
+      series: series.filter((s) => s.name || s.pts.length > 1),
+      marks: r.sols.slice(0, 4).flatMap((s, i) => [
+        { x: s.q[0], y: s.q[1], label: `1${i ? `(${i + 1})` : ''}` },
+        { x: s.q[2], y: s.q[3], label: `2${i ? `(${i + 1})` : ''}` },
+      ]),
+    };
     return done({ vals, steps, plot });
   },
 };
@@ -164,7 +203,7 @@ function contour(g: (x: number, y: number) => number, x0: number, x1: number, y0
       if (pts.length === 2) segs.push([pts[0], pts[1]]);
       else if (pts.length === 4) segs.push([pts[0], pts[1]], [pts[2], pts[3]]);
     }
-  const key = (p: [number, number]) => `${Math.round(p[0] / hx * 1e3)},${Math.round(p[1] / hy * 1e3)}`;
+  const key = (p: [number, number]) => `${Math.round((p[0] / hx) * 1e3)},${Math.round((p[1] / hy) * 1e3)}`;
   const used = new Array(segs.length).fill(false);
   const byKey = new Map<string, number[]>();
   segs.forEach((s, k) => [key(s[0]), key(s[1])].forEach((kk) => byKey.set(kk, [...(byKey.get(kk) ?? []), k])));
@@ -271,11 +310,11 @@ const A_GUIDE: AskDef = {
     ];
     if (G && Gs)
       steps.push(
-        stepB(
-          'Проверка уравнения',
-          eqB(`G(r, θ) = ${txt(Gs, ['r', 'θ'])}`, `max |G|/l² по кривой = ${sg(res, 3)}`),
-          { k: 'badge', tone: res < 1e-9 ? 'ok' : 'bad', text: res < 1e-9 ? 'кривая удовлетворяет уравнению' : 'кривая уравнению не удовлетворяет' },
-        ),
+        stepB('Проверка уравнения', eqB(`G(r, θ) = ${txt(Gs, ['r', 'θ'])}`, `max |G|/l² по кривой = ${sg(res, 3)}`), {
+          k: 'badge',
+          tone: res < 1e-9 ? 'ok' : 'bad',
+          text: res < 1e-9 ? 'кривая удовлетворяет уравнению' : 'кривая уравнению не удовлетворяет',
+        }),
       );
     const last = pts[pts.length - 1];
     steps.push(
@@ -307,7 +346,27 @@ const A_TOPS: AskDef = {
   id: 'tops',
   title: '55.19: волчок на волчке — устойчивость вертикального вращения',
   hint: 'Волчки нумеруются снизу; острие первого — в неподвижном гнезде, острие следующего — в гнезде на оси предыдущего на расстоянии h от его острия. A — момент инерции относительно горизонтальной оси через острие, C — относительно оси симметрии, c — от острия до центра тяжести.',
-  n: { g: 9.81, M1: 2, A1: 0.08, C1: 0.04, c1: 0.15, h1: 0.25, W1: 120, M2: 0.5, A2: 0.01, C2: 0.006, c2: 0.06, h2: 0.1, W2: 200, M3: 0.2, A3: 0.002, C3: 0.001, c3: 0.03, h3: 0, W3: 300 },
+  n: {
+    g: 9.81,
+    M1: 2,
+    A1: 0.08,
+    C1: 0.04,
+    c1: 0.15,
+    h1: 0.25,
+    W1: 120,
+    M2: 0.5,
+    A2: 0.01,
+    C2: 0.006,
+    c2: 0.06,
+    h2: 0.1,
+    W2: 200,
+    M3: 0.2,
+    A3: 0.002,
+    C3: 0.001,
+    c3: 0.03,
+    h3: 0,
+    W3: 300,
+  },
   selects: [
     {
       k: 'cnt',
@@ -329,13 +388,28 @@ const A_TOPS: AskDef = {
         { k: `C${i + 1}`, label: `C${'₁₂₃'[i]} — относительно оси симметрии` },
         { k: `c${i + 1}`, label: `c${'₁₂₃'[i]} — от острия до центра тяжести`, neg: true, zero: true },
         { k: `W${i + 1}`, label: `Ω${'₁₂₃'[i]} — угловая скорость собственного вращения`, neg: true, zero: true },
-        ...(i < 2 ? [{ k: `h${i + 1}`, label: `h${'₁₂₃'[i]} — от острия до гнезда волчка ${i + 2}`, show: (p: { s: Record<string, string> }) => Number(p.s.cnt) > i + 1 }] : []),
+        ...(i < 2
+          ? [
+              {
+                k: `h${i + 1}`,
+                label: `h${'₁₂₃'[i]} — от острия до гнезда волчка ${i + 2}`,
+                show: (p: { s: Record<string, string> }) => Number(p.s.cnt) > i + 1,
+              },
+            ]
+          : []),
       ].map((f) => ({ ...f, show: f.show ?? ((p: { s: Record<string, string> }) => Number(p.s.cnt) > i) })),
     ),
   ],
   solve: (q, ex) => {
     const n = Number(q.s.cnt) || 2;
-    const tops = Array.from({ length: n }, (_, i) => ({ M: q.n[`M${i + 1}`], A: q.n[`A${i + 1}`], C: q.n[`C${i + 1}`], c: q.n[`c${i + 1}`], h: q.n[`h${i + 1}`] ?? 0, W: q.n[`W${i + 1}`] }));
+    const tops = Array.from({ length: n }, (_, i) => ({
+      M: q.n[`M${i + 1}`],
+      A: q.n[`A${i + 1}`],
+      C: q.n[`C${i + 1}`],
+      c: q.n[`c${i + 1}`],
+      h: q.n[`h${i + 1}`] ?? 0,
+      W: q.n[`W${i + 1}`],
+    }));
     const r = solveTops({ g: q.n.g, tops });
     if (!r.ok) return fail([r.error]);
     const idx = (i: number) => '₁₂₃'[i];
@@ -357,17 +431,29 @@ const A_TOPS: AskDef = {
         'Решение ζ = a·e^{−iλt}: ось прецессирует с частотой λ. Подстановка даёт det(λ²M + λG + K) = 0. Если все корни λ вещественны и различны, наклоны остаются малыми — вращение устойчиво; комплексный корень даёт экспоненциально растущий наклон.',
         eqB(eqLetters),
         eqB(`числа: ${r.coefNum.map((c, i) => `${sg(c, 6)}${powL(deg - i)}`).join(' + ')} = 0`),
-        parB(`Корни λ: ${r.roots.map(([re, im]) => (Math.abs(im) > 1e-9 * Math.max(1, Math.abs(re)) ? `${sg(re, 5)} ${im < 0 ? '−' : '+'} ${sg(Math.abs(im), 4)}i` : sg(re, 6))).join('; ')}.`),
+        parB(
+          `Корни λ: ${r.roots.map(([re, im]) => (Math.abs(im) > 1e-9 * Math.max(1, Math.abs(re)) ? `${sg(re, 5)} ${im < 0 ? '−' : '+'} ${sg(Math.abs(im), 4)}i` : sg(re, 6))).join('; ')}.`,
+        ),
       ),
       stepB(
         'Ответ',
         ansB(
-          [bold(r.verdict === 'stable' ? 'вращение устойчиво' : r.verdict === 'boundary' ? 'на границе (кратный корень)' : 'вращение неустойчиво'), 'все корни вещественны и различны — устойчиво'],
-          ...(Number.isFinite(r.Wcrit) ? [[`Ω${idx(n - 1)} > ${sg(r.Wcrit, 5)}`, 'при остальных данных — граница устойчивости по Ω верхнего волчка', 'aux'] as [Ln, string, 'aux']] : []),
+          [
+            bold(r.verdict === 'stable' ? 'вращение устойчиво' : r.verdict === 'boundary' ? 'на границе (кратный корень)' : 'вращение неустойчиво'),
+            'все корни вещественны и различны — устойчиво',
+          ],
+          ...(Number.isFinite(r.Wcrit)
+            ? [[`Ω${idx(n - 1)} > ${sg(r.Wcrit, 5)}`, 'при остальных данных — граница устойчивости по Ω верхнего волчка', 'aux'] as [Ln, string, 'aux']]
+            : []),
         ),
       ),
     ];
-    const plot: ExtraPlot = { xl: `Ω${idx(n - 1)}`, yl: 'max |Im λ|', series: [{ name: 'мера неустойчивости (0 — устойчиво)', pts: r.scan.map((s) => [s.W, s.im]) }], marks: [{ x: tops[n - 1].W, y: r.im, label: 'заданное' }] };
+    const plot: ExtraPlot = {
+      xl: `Ω${idx(n - 1)}`,
+      yl: 'max |Im λ|',
+      series: [{ name: 'мера неустойчивости (0 — устойчиво)', pts: r.scan.map((s) => [s.W, s.im]) }],
+      marks: [{ x: tops[n - 1].W, y: r.im, label: 'заданное' }],
+    };
     const vals: Record<string, number> = { stable: r.verdict === 'stable' ? 1 : 0, Wcrit: r.Wcrit };
     r.coefNum.forEach((c, i) => (vals[`a${i}`] = c));
     return done({ vals, steps, plot });
@@ -467,23 +553,72 @@ const A_STOPS: AskDef = {
         ex,
         'Уравнение движения',
         'Между ударами и вне прилипания — уравнение ẍ = f(x, ẋ, t) − H·sign(ẋ − u). Удар об упор мгновенный: скорость меняет знак и умножается на e. При сухом трении тело прилипает к поверхности, если относительная скорость обращается в нуль, а сила, стремящаяся сдвинуть его, не больше силы трения покоя: |f(x, u, t)| ≤ H₁; срывается, когда |f| превзойдёт H₁.',
-        eqB(`ẍ = ${txt(a.s, ['x'])}${fr ? ` − ${sg(fr.H)}·sign(ẋ − ${sg(fr.u)})` : ''}`, ...(lo != null ? [`x = ${sg(lo)}: ẋ → −${sg(q.n.e)}·ẋ`] : []), ...(hi != null ? [`x = ${sg(hi)}: ẋ → −${sg(q.n.e)}·ẋ`] : []), ...(fr ? [`прилипание при ẋ = ${sg(fr.u)} и |f| ≤ H₁ = ${sg(fr.Hs)}`] : [])),
+        eqB(
+          `ẍ = ${txt(a.s, ['x'])}${fr ? ` − ${sg(fr.H)}·sign(ẋ − ${sg(fr.u)})` : ''}`,
+          ...(lo != null ? [`x = ${sg(lo)}: ẋ → −${sg(q.n.e)}·ẋ`] : []),
+          ...(hi != null ? [`x = ${sg(hi)}: ẋ → −${sg(q.n.e)}·ẋ`] : []),
+          ...(fr ? [`прилипание при ẋ = ${sg(fr.u)} и |f| ≤ H₁ = ${sg(fr.Hs)}`] : []),
+        ),
       ),
       stepEx(
         ex,
         'Движение',
         'Интегрирование Рунге — Кутта; моменты ударов, прилипания, срыва и максимумов x уточняются делением шага пополам. Период — по последним максимумам x (установившееся движение).',
         hasT
-          ? eqB(`T = ${sg(ms!.T, 6)},  ω = 2π/T = ${sg((2 * Math.PI) / ms!.T, 6)}`, `x за период: от ${sg(ms!.xmin, 5)} до ${sg(ms!.xmax, 5)}`, ...(ms!.impacts ? [`ударов за период: ${ms!.impacts}`] : []), ...(fr ? [`покой (прилипание) за период: ${sg(ms!.stick, 5)}`] : []))
+          ? eqB(
+              `T = ${sg(ms!.T, 6)},  ω = 2π/T = ${sg((2 * Math.PI) / ms!.T, 6)}`,
+              `x за период: от ${sg(ms!.xmin, 5)} до ${sg(ms!.xmax, 5)}`,
+              ...(ms!.impacts ? [`ударов за период: ${ms!.impacts}`] : []),
+              ...(fr ? [`покой (прилипание) за период: ${sg(ms!.stick, 5)}`] : []),
+            )
           : parB('Периодического движения на заданном времени не видно (меньше трёх максимумов x).'),
       ),
-      stepB('Ответ', hasT ? ansB([bold(`T = ${sg(ms!.T, 6)}`), 'период установившегося движения'], [`ω = ${sg((2 * Math.PI) / ms!.T, 6)}`, 'частота', 'aux']) : parB('Периода нет.')),
+      stepB(
+        'Ответ',
+        hasT
+          ? ansB([bold(`T = ${sg(ms!.T, 6)}`), 'период установившегося движения'], [`ω = ${sg((2 * Math.PI) / ms!.T, 6)}`, 'частота', 'aux'])
+          : parB('Периода нет.'),
+      ),
     ];
     const plot: ExtraPlot =
       q.s.plot === 'phase'
         ? { xl: 'x', yl: 'ẋ', series: [{ name: 'фазовая траектория', pts: s.x.map((x, i) => [x, s.v[i]]) }] }
-        : { xl: 't', yl: 'x', series: [{ name: 'x(t)', pts: s.t.map((t, i) => [t, s.x[i]]) }, ...(lo != null ? [{ name: 'нижний упор', pts: [[0, lo], [q.n.tEnd, lo]] as [number, number][], cls: 'sb-axis' }] : []), ...(hi != null ? [{ name: 'верхний упор', pts: [[0, hi], [q.n.tEnd, hi]] as [number, number][], cls: 'sb-axis' }] : [])] };
-    return done({ vals: hasT ? { T: ms!.T, w: (2 * Math.PI) / ms!.T, xmax: ms!.xmax, xmin: ms!.xmin, stick: ms!.stick, impacts: ms!.impacts } : {}, steps, plot });
+        : {
+            xl: 't',
+            yl: 'x',
+            series: [
+              { name: 'x(t)', pts: s.t.map((t, i) => [t, s.x[i]]) },
+              ...(lo != null
+                ? [
+                    {
+                      name: 'нижний упор',
+                      pts: [
+                        [0, lo],
+                        [q.n.tEnd, lo],
+                      ] as [number, number][],
+                      cls: 'sb-axis',
+                    },
+                  ]
+                : []),
+              ...(hi != null
+                ? [
+                    {
+                      name: 'верхний упор',
+                      pts: [
+                        [0, hi],
+                        [q.n.tEnd, hi],
+                      ] as [number, number][],
+                      cls: 'sb-axis',
+                    },
+                  ]
+                : []),
+            ],
+          };
+    return done({
+      vals: hasT ? { T: ms!.T, w: (2 * Math.PI) / ms!.T, xmax: ms!.xmax, xmin: ms!.xmin, stick: ms!.stick, impacts: ms!.impacts } : {},
+      steps,
+      plot,
+    });
   },
 };
 
@@ -528,14 +663,20 @@ const A_SUBH: AskDef = {
     const k2 = -(a.f(1e-6, 0, 0) - a.f(-1e-6, 0, 0)) / 2e-6;
     const Vmax = 100 * Math.max(D, 1) * Math.max(Math.sqrt(Math.abs(k2)) || 1, ω / s);
     const pr = freePeriodic(a.f, lo, hi, Ts, ω, Vmax);
-    if (!pr) return fail([`Свободного периодического движения с периодом 2πs/ω = ${sg(Ts, 5)} нет — для линейной пружины с упорами нужно ω/s > k (удары укорачивают период).`]);
+    if (!pr)
+      return fail([
+        `Свободного периодического движения с периодом 2πs/ω = ${sg(Ts, 5)} нет — для линейной пружины с упорами нужно ω/s > k (удары укорачивают период).`,
+      ]);
     const Hc = (F * pr.I) / pr.path;
     const steps = [
       stepEx(
         ex,
         'Порождающее движение',
         'При малых F и H субгармонический режим частоты ω/s близок к свободному периодическому движению системы с упорами, период которого T = 2πs/ω. Его ищем по скорости V прохождения положения x = 0 (делением пополам по периоду).',
-        eqB(`ẍ = ${txt(a.s, ['x'])}${lo != null ? `, упор x = ${sg(lo)}` : ''}${hi != null ? `, упор x = ${sg(hi)}` : ''}`, `T = 2πs/ω = ${sg(Ts, 6)};  V = ${sg(pr.V, 6)}, размах: от ${sg(pr.xmin, 5)} до ${sg(pr.amp, 5)}`),
+        eqB(
+          `ẍ = ${txt(a.s, ['x'])}${lo != null ? `, упор x = ${sg(lo)}` : ''}${hi != null ? `, упор x = ${sg(hi)}` : ''}`,
+          `T = 2πs/ω = ${sg(Ts, 6)};  V = ${sg(pr.V, 6)}, размах: от ${sg(pr.xmin, 5)} до ${sg(pr.amp, 5)}`,
+        ),
       ),
       stepEx(
         ex,
@@ -551,7 +692,14 @@ const A_SUBH: AskDef = {
         ),
       ),
     ];
-    const plot: ExtraPlot = { xl: 't', yl: 'x, ẋ', series: [{ name: 'x(t)', pts: pr.sim.t.map((t, i) => [t, pr.sim.x[i]]) }, { name: 'ẋ(t)', pts: pr.sim.t.map((t, i) => [t, pr.sim.v[i]]) }] };
+    const plot: ExtraPlot = {
+      xl: 't',
+      yl: 'x, ẋ',
+      series: [
+        { name: 'x(t)', pts: pr.sim.t.map((t, i) => [t, pr.sim.x[i]]) },
+        { name: 'ẋ(t)', pts: pr.sim.t.map((t, i) => [t, pr.sim.v[i]]) },
+      ],
+    };
     return done({ vals: { Hc: Math.abs(Hc) < 1e-9 * Math.max(F, 1e-300) ? 0 : Hc, V: pr.V, T: pr.T, L: pr.path }, steps, plot });
   },
 };
@@ -599,7 +747,7 @@ const A_PMAP: AskDef = {
     const { xa, xb } = q.n;
     if (!(xb > xa)) return fail(['Отрезок: «до» больше «от».']);
     const k2 = Math.abs((f(1e-6, 0, 0) - f(-1e-6, 0, 0)) / 2e-6) || 1;
-    const tMax = 40 * (2 * Math.PI) / Math.sqrt(k2);
+    const tMax = (40 * (2 * Math.PI)) / Math.sqrt(k2);
     const P = (x: number) => poincare(f, side, x, tMax, 8000);
     const fps = fixedPoints(P, xa, xb, 60);
     const curve = Array.from({ length: 81 }, (_, i) => {
@@ -625,9 +773,24 @@ const A_PMAP: AskDef = {
         ex,
         'Неподвижные точки',
         'P(x) считается интегрированием от одного пересечения сечения до следующего; корни P(x) − x на отрезке — перебором и делением пополам, P′ — разностью.',
-        fps.length ? { k: 'ul', items: fps.map((p) => [`x* = ${sg(p.x, 7)},  P′(x*) = ${sg(p.mult, 5)} — ${Math.abs(p.mult) < 1 ? 'устойчивый' : 'неустойчивый'} предельный цикл`]) } : parB('На отрезке неподвижных точек нет.'),
+        fps.length
+          ? {
+              k: 'ul',
+              items: fps.map((p) => [
+                `x* = ${sg(p.x, 7)},  P′(x*) = ${sg(p.mult, 5)} — ${Math.abs(p.mult) < 1 ? 'устойчивый' : 'неустойчивый'} предельный цикл`,
+              ]),
+            }
+          : parB('На отрезке неподвижных точек нет.'),
       ),
-      stepB('Ответ', fp ? ansB([bold(`x* = ${sg(fp.x, 7)}`), 'неподвижная точка (амплитуда предельного цикла), ẋ = 0'], [`P′(x*) = ${sg(fp.mult, 5)}`, Math.abs(fp.mult) < 1 ? 'цикл устойчив' : 'цикл неустойчив', 'aux']) : parB('Неподвижной точки нет.')),
+      stepB(
+        'Ответ',
+        fp
+          ? ansB(
+              [bold(`x* = ${sg(fp.x, 7)}`), 'неподвижная точка (амплитуда предельного цикла), ẋ = 0'],
+              [`P′(x*) = ${sg(fp.mult, 5)}`, Math.abs(fp.mult) < 1 ? 'цикл устойчив' : 'цикл неустойчив', 'aux'],
+            )
+          : parB('Неподвижной точки нет.'),
+      ),
     ];
     const plot: ExtraPlot = {
       xl: 'x',
@@ -635,7 +798,14 @@ const A_PMAP: AskDef = {
       equal: true,
       series: [
         { name: 'P(x)', pts: curve },
-        { name: 'P = x', pts: [[xa, xa], [xb, xb]], cls: 'sb-axis' },
+        {
+          name: 'P = x',
+          pts: [
+            [xa, xa],
+            [xb, xb],
+          ],
+          cls: 'sb-axis',
+        },
         { name: 'лестница Ламерея', pts: stair },
       ],
       marks: fps.map((p) => ({ x: p.x, y: p.x, label: 'x*' })),

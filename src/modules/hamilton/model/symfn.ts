@@ -48,7 +48,13 @@ export function compile(s: Sym, slot: (name: string, ord: number) => number): Nu
     const c = term.c;
     const fs = term.f.map(([a, p]) => {
       const f = atomFn(a);
-      return p === 1 ? f : p === 2 ? (v: number[], t: number) => f(v, t) ** 2 : p === 0.5 ? (v: number[], t: number) => Math.sqrt(f(v, t)) : (v: number[], t: number) => Math.pow(f(v, t), p);
+      return p === 1
+        ? f
+        : p === 2
+          ? (v: number[], t: number) => f(v, t) ** 2
+          : p === 0.5
+            ? (v: number[], t: number) => Math.sqrt(f(v, t))
+            : (v: number[], t: number) => Math.pow(f(v, t), p);
     });
     return (v: number[], t: number) => {
       let x = c;

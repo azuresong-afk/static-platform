@@ -249,7 +249,10 @@ export function solveConstr(pr: ConstrIn): ConstrRes {
     for (let it = 0; it < 80; it++) {
       const fn = norm(F);
       if (!Number.isFinite(fn)) break;
-      const D = gauss(jac(q, l), F.map((x) => -x));
+      const D = gauss(
+        jac(q, l),
+        F.map((x) => -x),
+      );
       if (!D.every(Number.isFinite)) break;
       let a = 1,
         q2 = q,

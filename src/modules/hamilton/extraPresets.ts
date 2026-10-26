@@ -98,7 +98,7 @@ export const HAM_EXTRA_PRESETS = {
   x569: {
     title: 'Мещерский 56.9: субгармоника между упорами с сухим трением — наименьшее H',
     problem: xp('subh', { k: 1, D: 0.5, F: 0.1, ω: 3, s: 1, H: 0.05 }, { st: 'both' }),
-    book: { Hc: ((0.1 * 3 * 1) / Math.abs(1 - 9)) / Math.tan((Math.PI * 1 * 1) / (2 * 3)) },
+    book: { Hc: (0.1 * 3 * 1) / Math.abs(1 - 9) / Math.tan((Math.PI * 1 * 1) / (2 * 3)) },
     relTol: 1e-4,
     note: 'k = 1, Δ = 0,5, F/m = 0,1, ω = 3, s = 1 — пример. Книга: при чётном s достаточно H > 0; при нечётном H > F·(ωk/|k² − ω²|)·ctg(πsk/(2ω)), ω/s > k.',
   },
