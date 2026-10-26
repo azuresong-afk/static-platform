@@ -10,6 +10,7 @@
  *  - rolling 39.23 — тело с круглым основанием (полудиск, полушар) качается на плоскости без скольжения.
  */
 import { ansB, bold, eqB, fail, parB, sample, sg, stepB, stepEx, type AskDef, type ExtraOut } from '../../../shared/extra';
+import { OSC_ASKS2 } from './extra2';
 
 const G = 9.81;
 const D2R = Math.PI / 180;
@@ -381,4 +382,4 @@ const A_ROLLING: AskDef = {
   },
 };
 
-export const OSC_ASKS: AskDef[] = [A_ROLLERS, A_ARC, A_PRETENS, A_STAGES, A_THREE, A_ENERGY, A_ROLLING];
+export const OSC_ASKS: AskDef[] = [A_ROLLERS, A_ARC, A_PRETENS, A_STAGES, A_THREE, A_ENERGY, A_ROLLING, ...OSC_ASKS2];
