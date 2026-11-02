@@ -4,7 +4,8 @@ import { type MechProblem } from '../src/modules/mechanism/model/mech';
 import { solveMech, type MechSolution } from '../src/modules/mechanism/model/solve';
 import { MECH_PRESETS } from '../src/modules/mechanism/presets';
 
-const tol = (v: number) => {
+const tol = (v: number, rel?: number) => {
+  if (rel) return rel * Math.abs(v) + 1e-12;
   const s = String(Math.abs(v));
   const d = s.includes('.') ? s.split('.')[1].length : 0;
   return d > 6 ? 1e-9 * Math.max(1, Math.abs(v)) : 2 * Math.pow(10, -d);
@@ -53,7 +54,7 @@ describe('Мещерский §16, 18, 22, 23, 38, 46', () => {
       expect(r.extraErrors, key).toEqual([]);
       for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) {
         const got = pick(r, k);
-        expect(Math.abs(got - book), `${k}: ${got} против ${book}`).toBeLessThanOrEqual(tol(book));
+        expect(Math.abs(got - book), `${k}: ${got} против ${book}`).toBeLessThanOrEqual(tol(book, (p as { relTol?: number }).relTol));
       }
     });
 });
