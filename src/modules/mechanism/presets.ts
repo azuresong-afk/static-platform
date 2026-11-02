@@ -1472,6 +1472,32 @@ export const MECH_PRESETS = {
     relTol: 1e-9,
     note: 'Ближайшее положение (s = l − a = 20): ω₁ = 4π с⁻¹.',
   },
+  m233: {
+    title: 'Мещерский 23.3: сцепной стержень AB паровоза (v₀ = 36 км/ч, R = 1 м, r = 0,75 м) — абсолютное ускорение точки M',
+    problem: {
+      points: [xy('O', '0', '1'), polar('A', 'O', '0.75', '-90'), polar('B', 'A', '3', '0'), seg('M', 'A', 'B', '1/2'), xy('C', '0', '0')],
+      bodies: [body('колесо', 'O', 'A', 'C'), body('AB', 'A', 'M', 'B')],
+      cons: [{ k: 'roll', b: 'колесо', c: 'O', r: '1', ang: '0' }, trans('AB')],
+      drives: [proj('O', '0', '10', '0')],
+    },
+    book: { 'a.M': 75 },
+    relTol: 1e-9,
+    note: 'v₀ = 10 м/с = const, ω = v₀/R = 10 с⁻¹, AB движется поступательно: w_M = w_A = ω²r = 75 м/с² (направлено к оси колеса).',
+  },
+  m2320: {
+    title: 'Мещерский 23.20: качающаяся кулиса поперечно-строгального станка — угловое ускорение кулисы (r < a, числа — пример)',
+    problem: {
+      points: [xy('O1', '0', '0'), xy('O', '0', '2'), polar('A', 'O', '1', '90-φ'), toward('B', 'O1', '4', 'A')],
+      bodies: [body('OA', 'O', 'A'), body('O1B', 'O1', 'B')],
+      cons: [...fixed('O', 'O1'), guide('A', 'O1B', 'O1', 'B')],
+      drives: [omega('OA', '-1')],
+      param: param('60'),
+      plot: 'e:O1B',
+    },
+    book: { 'e.O1B': (3 * 2 * 1 * Math.sin(Math.PI / 3)) / (1 + 4 + 4 * Math.cos(Math.PI / 3)) ** 2 },
+    relTol: 1e-9,
+    note: 'r = OA = 1, a = OO₁ = 2, ω = 1 с⁻¹, φ = ωt = 60° (угол кривошипа от направления «от O₁ через O»). Книга: ε = (r² − a²)arω² sin ωt/(r² + a² + 2ar cos ωt)² (по модулю).',
+  },
 } satisfies Record<string, MechPreset>;
 
 export type MechPresetKey = keyof typeof MECH_PRESETS;
