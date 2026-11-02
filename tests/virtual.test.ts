@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { analyze } from '../src/modules/frames/analyze';
 import { loadPreset, PRESET_TITLES, presetStructure, type Preset, type PresetKey } from '../src/modules/frames/model/presets';
 import { virtualWork, type Release } from '../src/modules/virtual/model/virtual';
-import { M4619, M4620, M4621, M4625, M4626, VIRTUAL_PRESETS } from '../src/modules/virtual/presets';
+import { M4619, M4620, M4621, M4623, M4625, M4626, VIRTUAL_PRESETS } from '../src/modules/virtual/presets';
 import { virtualDoc } from '../src/modules/virtual/text/solution';
 import { renderVirtual } from '../src/modules/virtual/draw/virtual';
 
@@ -118,6 +118,7 @@ describe('готовые задачи: Мещерский из presets, текс
     expect(Math.abs(rel(M4620)('M').value)).toBeCloseTo(2, 12);
     expect(rel(M4621)('Y_N').value).toBeCloseTo(0.5, 12);
     expect(rel(M4625)('Y_A').value).toBeCloseTo(3, 12);
+    expect(Math.abs(rel(M4623)('M_A').value)).toBeCloseTo(0.5 * (1.95 * 16 + 3.6 * 3), 12);
     expect(Math.abs(rel(M4626)('M_A').value)).toBeCloseTo(4, 12);
   });
   for (const [k, p] of Object.entries(VIRTUAL_PRESETS))

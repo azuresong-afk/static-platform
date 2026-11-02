@@ -3,6 +3,7 @@
  * только для интегрирования, частот и поиска положений равновесия; уравнения выводятся в буквах.
  */
 import type { LagBody, LagCoord, LagParam, LagProblem } from './model/lagrange';
+import { LAG_PRESETS_34 } from './presets34';
 
 const C = (name: string, q0: number, v0 = 0, Q = '', eq = 0): LagCoord => ({ name, q0, v0, Q, eq });
 const P = (o: Record<string, number>): LagParam[] => Object.entries(o).map(([name, value]) => ({ name, value }));
@@ -216,6 +217,7 @@ export const LAGRANGE_PRESETS = {
       inverse: { param: 'ω', from: 0, to: 100 },
     },
   },
+  ...LAG_PRESETS_34,
 } satisfies Record<string, { title: string; note: string; problem: LagProblem }>;
 
 export type LagrangePresetKey = keyof typeof LAGRANGE_PRESETS;
