@@ -756,5 +756,484 @@ const P3: PositionProblem[] = [
   },
 ];
 
-export const TASKS32: ContactProblem[] = [...T2, ...T3];
-export const POSITIONS32: PositionProblem[] = [...P2, ...P3];
+/** §4: произвольная плоская система сил. */
+const T4: ContactProblem[] = [
+  mk(
+    '4.9',
+    39,
+    'Плита свободно опирается концом A и держится двумя стержнями',
+    (ids) =>
+      scheme(ids, (b) => {
+        const [A, , B] = b.body([
+          [0, 0],
+          [cos(45), sin(45)],
+          [2 * cos(45), 2 * sin(45)],
+        ]);
+        b.item({ type: 'roller', at: A, side: 'tilt', angle: 135 });
+        b.item({ type: 'weight', at: b.s.nodes[1].id, G: 100 });
+        b.item({ type: 'rod', at: B, angle: 30 });
+        b.item({ type: 'rod', at: B, angle: -30 });
+      }),
+    'Ответ задачника: R_A = 35,4 кГ; S_C = 89,5 кГ; S_D = −60,6 кГ. Плита AB под 45°, вес 100 кГ в середине; опора A давит перпендикулярно плите; стержни BC и BD — под 30° к горизонту вверх и вниз (треугольник BCD равносторонний, CD вертикальна). Оба стержня — в точке C приложения: S_C — к C книги, S_C′ — к D книги.',
+    { R_A: 35.4, S_C: 89.5, "S_C'": -60.6 },
+  ),
+  mk(
+    '4.10',
+    40,
+    'Стержень на гладком полу и гладкой наклонной плоскости, верёвка вдоль плоскости',
+    (ids) =>
+      scheme(ids, (b) => {
+        const [A, M, B] = b.body([
+          [0, 0],
+          [1, 0.25],
+          [2, 0.5],
+        ]);
+        b.item({ type: 'roller', at: A, side: 'below' });
+        b.item({ type: 'weight', at: M, G: 100 });
+        b.item({ type: 'roller', at: B, side: 'tilt', angle: 120 });
+        b.item({ type: 'rod', at: B, angle: 30 });
+      }),
+    'Ответ задачника: P = 25 н; N_A = 50 н; N_B = 43,3 н. Плоскость под 30° поднимается вправо, верёвка BC идёт вверх вдоль неё (натяжение — S_C, равно P). Наклон стержня на ответ не влияет.',
+    { R_A: 50, R_C: 43.3, S_C: 25 },
+  ),
+  mk(
+    '4.11',
+    40,
+    'Часть мостовой фермы на трёх канатах',
+    (ids) =>
+      scheme(ids, (b) => {
+        const [A, D, B, C] = b.body([
+          [0, 0],
+          [4, 0],
+          [6, 0],
+          [7 + Math.sqrt(3), 0],
+        ]);
+        b.item({ type: 'rod', at: A, angle: 90 });
+        b.item({ type: 'weight', at: D, G: 4200 });
+        b.item({ type: 'rod', at: B, angle: 120 });
+        b.item({ type: 'rod', at: C, angle: 45 });
+      }),
+    'Ответ задачника: T_A = 1800 кГ; T_B = 1757 кГ; T_C = 1243 кГ. Канат в A вертикален, в B — под 60° к горизонту влево, в C — под 45° вправо; продолжения канатов B и C пересекаются под точкой F (BF = 1 м), откуда FC = √3 м. В приложении B — центр тяжести D, C и D — точки B и C книги.',
+    { S_A: 1800, S_C: 1757, S_D: 1243 },
+  ),
+  mk(
+    '4.18',
+    42,
+    'Кран в шахте: подпятник и гладкая цилиндрическая опора',
+    (ids) =>
+      scheme(ids, (b) => {
+        const [A, B, C, E] = b.body([
+          [0, 0],
+          [0, 2],
+          [2, 2],
+          [5, 2],
+        ]);
+        b.item({ type: 'pin', at: A, side: 'below' });
+        b.item({ type: 'roller', at: B, side: 'left' });
+        b.item({ type: 'weight', at: C, G: 2 });
+        b.item({ type: 'weight', at: E, G: 4 });
+      }),
+    'Ответ задачника: X_A = 12 т; Y_A = 6 т; X_B = −12 т. Хвост AB = 2 м вертикален, вес крана 2 т — в 2 м от оси Ay, груз 4 т — на вылете 5 м; цилиндрическая поверхность давит в B горизонтально.',
+    { X_A: 12, Y_A: 6, R_B: -12 },
+  ),
+  mk(
+    '4.20',
+    42,
+    'Кран с шарнирами A, B, D: опорные реакции и натяжение BD',
+    (ids) =>
+      scheme(ids, (b) => {
+        const [A, B, C, E] = b.body(
+          [
+            [0, 0],
+            [-4, 4 * Math.sqrt(3)],
+            [5, 0],
+            [15, 0],
+          ],
+          [
+            [0, 1],
+            [0, 2],
+            [2, 3],
+          ],
+        );
+        b.item({ type: 'pin', at: A, side: 'below' });
+        b.item({ type: 'rod', at: B, angle: 240 });
+        b.item({ type: 'weight', at: C, G: 12 });
+        b.item({ type: 'weight', at: E, G: 20 });
+      }),
+    'Ответ задачника: X_A = 26 т; Y_A = 77 т; T = 52 т. Треугольник ABD равносторонний (8 м), D — на земле слева от A, стержень BD — S_B (растянут); ферма 12 т в 5 м от вертикали A, груз 20 т — в 15 м (точка D приложения).',
+    { X_A: 26, Y_A: 77, S_B: 52 },
+  ),
+  mk(
+    '4.22',
+    43,
+    'Арочная ферма: шарнир и опора на плоскости под 30°, ветер',
+    (ids) =>
+      scheme(ids, (b) => {
+        const [B, C, A, K] = b.body([
+          [0, 0],
+          [10, 0],
+          [20, 0],
+          [20, 4],
+        ]);
+        b.item({ type: 'roller', at: B, side: 'tilt', angle: 60 });
+        b.item({ type: 'weight', at: C, G: 10 });
+        b.item({ type: 'pin', at: A, side: 'below' });
+        b.item({ type: 'force', at: K, F: 2, ref: 'left', rot: 'cw', alpha: 0, unknown: false });
+      }),
+    'Ответ задачника: X_A = −1,12 т; Y_A = 4,6 т; R_B = 6,24 т. Пролёт 20 м, вес 10 т над серединой, ветер 2 т влево на высоте 4 м. В приложении A — опора B книги (каток, реакция под 60° к горизонту), C — шарнир A книги.',
+    { X_C: -1.12, Y_C: 4.6, R_A: 6.24 },
+  ),
+  mk(
+    '4.35',
+    46,
+    'Передвижная лестница из двух частей с верёвкой, на ней человек',
+    (ids) =>
+      scheme(ids, (b) => {
+        const u = Math.SQRT1_2;
+        const ids_ = b.body(
+          [
+            [0, 0],
+            [u, u],
+            [1.5 * u, 1.5 * u],
+            [3 * u, 3 * u],
+            [3 * u + 0.6 * u, 3 * u - 0.6 * u],
+            [4.5 * u, 1.5 * u],
+            [5 * u, u],
+            [6 * u, 0],
+          ],
+          undefined,
+          [3],
+        );
+        b.item({ type: 'roller', at: ids_[0], side: 'below' });
+        b.item({ type: 'roller', at: ids_[7], side: 'below' });
+        b.item({ type: 'weight', at: ids_[2], G: 12 });
+        b.item({ type: 'weight', at: ids_[4], G: 72 });
+        b.item({ type: 'weight', at: ids_[5], G: 12 });
+        b.link({ type: 'thread', a: ids_[1], b: ids_[6] });
+      }),
+    'Ответ задачника: R_A = 40,8 кГ; R_B = 55,2 кГ; X_C = ±52,2 кГ; Y_C = ±28,8 кГ; T = 52,2 кГ. Части по 3 м под 45° к полу, шарнир C наверху, верёвка EF в 1 м от концов; человек 72 кГ — на BC в 0,6 м от C. В приложении шарнир C книги — точка D, опора B — точка L.',
+    { R_A: 40.8, R_L: 55.2, T: 52.2, X_D: 52.2, Y_D: 28.8 },
+  ),
+  mk(
+    '4.39',
+    48,
+    'Брус на шарнире у стены, подпёртый стержнем CD',
+    (ids) =>
+      scheme(ids, (b) => {
+        const xd = 0.9 / Math.tan(rad(60));
+        const [A, E, D, B] = b.body([
+          [0, 0],
+          [0.45, 0],
+          [xd, 0],
+          [0.9, 0],
+        ]);
+        b.item({ type: 'pin', at: A, side: 'left' });
+        b.item({ type: 'weight', at: E, G: 10 });
+        b.item({ type: 'rod', at: D, angle: 240 });
+        b.item({ type: 'weight', at: B, G: 25 });
+      }),
+    'Ответ задачника: X_A = −30 кГ; Y_A = −17 кГ; R_C = 60 кГ. AE = EB = 45 см, C на стене в 90 см под A, стержень CD — под 60° к брусу (D в 52 см от A); в приложении D — точка C (стержень сжат: S_C = −60).',
+    { X_A: -30, Y_A: -17, S_C: -60 },
+  ),
+  mk(
+    '4.40',
+    48,
+    'Два бруса на шарнирах, груз в общем шарнире',
+    (ids) =>
+      scheme(ids, (b) => {
+        const [A, M1, C, M2, B] = b.body(
+          [
+            [0, 0],
+            [1, -0.75],
+            [2, -1.5],
+            [3, -0.75],
+            [4, 0],
+          ],
+          undefined,
+          [2],
+        );
+        b.item({ type: 'pin', at: A, side: 'above' });
+        b.item({ type: 'pin', at: B, side: 'above' });
+        b.item({ type: 'weight', at: M1, G: 10 });
+        b.item({ type: 'weight', at: C, G: 20 });
+        b.item({ type: 'weight', at: M2, G: 10 });
+      }),
+    'Ответ задачника: −X_A = X_B = d(P + Q)/(4b); Y_A = Y_B = P + Q/2. Взяты P = 10, Q = 20, d = 4 м, b = 1,5 м: X = 20, Y = 20. Опора B книги — точка E приложения.',
+    { X_A: -20, Y_A: 20, X_E: 20, Y_E: 20 },
+  ),
+  mk(
+    '4.51',
+    52,
+    'Лебёдка удерживает груз на наклонной плоскости',
+    (ids) =>
+      scheme(ids, (b) => {
+        const [A, O, B] = b.body([
+          [-1, 0],
+          [0, 0],
+          [1, 0],
+        ]);
+        b.item({ type: 'roller', at: A, side: 'below' });
+        b.item({ type: 'weight', at: O, G: 240 });
+        b.item({ type: 'pin', at: B, side: 'below' });
+        b.item({ type: 'force', at: A, F: 480 * sin(60), ref: 'left', rot: 'ccw', alpha: 60, unknown: false });
+      }),
+    'Ответ задачника: Y_A = 480 кГ; X_B = 208 кГ; Y_B = 120 кГ. Натяжение верёвки P sin 60° = 415,7 кГ направлено вдоль плоскости (под 60°), его линия проходит через A; лебёдка 240 кГ — на оси CO посередине между A и B. Болт B — точка C приложения.',
+    { R_A: 480, X_C: 208, Y_C: 120 },
+  ),
+  {
+    id: '4.80',
+    book: 'mesh',
+    page: 60,
+    title: 'Шар на шероховатой плоскости: сила, сообщающая равномерное качение',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const [O, K] = b.body([
+          [0, 1],
+          [0, 0],
+        ]);
+        b.item({ type: 'rough', at: K, side: 'below', f: 0.3, k: 0.05 });
+        b.item({ type: 'weight', at: O, G: 10 });
+        b.item({ type: 'force', at: O, F: 1, ref: 'right', rot: 'cw', alpha: 0, unknown: true });
+      }),
+    answer:
+      'Ответ задачника: k/R < f; P = Qk/R. Взяты R = 1, Q = 10, f = 0,3, k = 0,05: шар — отрезок от центра O до точки касания K, сила P в центре неизвестна. Равновесие (покой или равномерное качение) — при |P| ≤ Qk/R = 0,5; качение без скольжения возможно, пока k/R = 0,05 < f = 0,3.',
+    check: { min: -0.5, max: 0.5 },
+  },
+];
+
+/** §4: найти угол, размер или положение — поиск положения равновесия (с трением — промежутки). */
+const PHI_465 = deg(Math.atan((3 * 0.5) / (2 - 1 * 0.2 * 0.5)));
+const PHI_466 = deg(Math.atan((1 + 2 * 2) / (2 * 0.5 * (1 + 2))));
+const L_468 = 0.5 + 0.5 + (1 / (2 * 0.5)) * Math.tan(rad(30));
+const PHI_469 = deg(Math.atan(2 + 1 / 0.5));
+const A_478 = deg(0.05 / 50);
+const A_424 = Math.sqrt((2 * 125) / 6 / 5.5);
+const P4: PositionProblem[] = [
+  {
+    id: '4.1 (113)',
+    page: 37,
+    title: 'Стержень на шарнире, гиря на конце и трос через блок — угол равновесия',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const a = 120;
+        const [A, M, B] = b.body([
+          [0, 0],
+          [0.5 * cos(a), 0.5 * sin(a)],
+          [cos(a), sin(a)],
+        ]);
+        b.item({ type: 'pin', at: A, side: 'below' });
+        b.item({ type: 'weight', at: M, G: 20 });
+        b.item({ type: 'weight', at: B, G: 10 });
+        const f = b.item({ type: 'force', at: B, F: 20, ref: 'right', rot: 'cw', alpha: 90 - a / 2, unknown: false });
+        const [s1, s2] = b.segsOf([A, M, B]);
+        b.s.search = search('α', 'deg', 5, 175, [
+          [s1, 'ang', 'α'],
+          [s2, 'ang', 'α'],
+          [f, 'alpha', '90 − α/2'],
+        ]);
+      }),
+    answer:
+      'Ответ задачника: α = 120°. AB = AD = 1 м, блок D — на одной горизонтали с A; стержень 20 н, гиря C 10 н в B, трос BD натянут гирей 20 н. В равнобедренном треугольнике ABD трос BD направлен под углом α/2 − 90° к оси x.',
+    check: { points: [120] },
+  },
+  {
+    id: '4.4 (116)',
+    page: 38,
+    title: 'Ломаный рычаг с двумя гирями на верёвках через блоки — угол BCF',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const [A, B, K, C] = b.body(
+          [
+            [-4, 0],
+            [0, 0],
+            [1.5 * R2, 0],
+            [0, 10],
+          ],
+          [
+            [0, 1],
+            [1, 2],
+            [1, 3],
+          ],
+        );
+        b.item({ type: 'pin', at: B, side: 'below' });
+        b.item({ type: 'weight', at: K, G: 8 });
+        b.item({ type: 'force', at: A, F: 31, ref: 'left', rot: 'ccw', alpha: 45, unknown: false });
+        const f = b.item({ type: 'force', at: C, F: 10, ref: 'down', rot: 'ccw', alpha: 45, unknown: false });
+        b.s.search = search('φ', 'deg', 1, 179, [[f, 'alpha', 'φ']]);
+      }),
+    answer:
+      'Ответ задачника: φ₁ = 45°; φ₂ = 135°. Размеры в дм: AB = 4, BC = 10, вес 8 кГ в 2,12 дм от вертикали BD (точка C приложения; 2,12 = 1,5√2 — так ответ получается точно). Угол BAE = 135° — верёвка AE под 225° к оси x; верёвка CF составляет угол φ с CB. Нужно 100 sin φ = 31·4·sin 135° − 8·2,12: два корня.',
+    check: { points: [45, 135] },
+  },
+  {
+    id: '4.24 (139)',
+    page: 44,
+    title: 'Плотина прямоугольного сечения: толщина при коэффициенте устойчивости 2',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const a = A_424;
+        const [W, A, M, B] = b.body([
+          [0, 5],
+          [0, 0],
+          [a / 2, 0],
+          [a, 0],
+        ]);
+        b.item({ type: 'roller', at: A, side: 'below', oneSided: true });
+        b.item({ type: 'pin', at: B, side: 'below' });
+        const g = b.item({ type: 'weight', at: M, G: 11 * a });
+        b.item({ type: 'dist', from: A, to: W, q1: 10, q2: 0, dir: 'right' });
+        const [, s2, s3] = b.segsOf([W, A, M, B]);
+        b.s.search = search('a', 'm', 0.5, 6, [
+          [s2, 'len', 'a/2'],
+          [s3, 'len', 'a/2'],
+          [g, 'G', '11a'],
+        ]);
+      }),
+    answer:
+      'Ответ задачника: a = 2,75 м; b = 3,37 м. Собран случай 1 — прямоугольное сечение: h = 5 м, вес 2,2·5·a = 11a т на метр длины. Коэффициент устойчивости 2 учтён удвоенным давлением воды: треугольная нагрузка от 2·5 = 10 т/м у дна до нуля у поверхности. Опрокидывание — вокруг ребра B (шарнир), пятка A — односторонний каток. Для треугольного сечения вес 5,5b приложен в b/3 от грани с водой: 5,5b·2b/3 = 2·125/6, b = 3,37 м.',
+    check: { points: [A_424], ranges: [[A_424, 6]] },
+  },
+  {
+    id: '4.65 (177)',
+    page: 55,
+    title: 'Лестница на шероховатых стене и полу — наибольший угол со стеной',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const a = 38;
+        const [B, C, A] = b.body([
+          [0, 0],
+          [2 * cos(90 + a), 2 * sin(90 + a)],
+          [3 * cos(90 + a), 3 * sin(90 + a)],
+        ]);
+        b.item({ type: 'rough', at: B, side: 'below', f: 0.5 });
+        b.item({ type: 'rough', at: A, side: 'left', f: 0.2 });
+        b.item({ type: 'weight', at: C, G: 1 });
+        const [s1, s2] = b.segsOf([B, C, A]);
+        b.s.search = search('α', 'deg', 1, 89, [
+          [s1, 'ang', '90 + α'],
+          [s2, 'ang', '90 + α'],
+        ]);
+      }),
+    answer:
+      'Ответ задачника: tg α = (m + n)f₂/(m − nf₁f₂); N_A = pf₂/(1 + f₁f₂); N_B = p/(1 + f₁f₂). Взяты f₁ = 0,2 (стена), f₂ = 0,5 (пол), p = 1, AC = na = 1, CB = ma = 2 (m = 2, n = 1): tg α = 1,5/1,9, α ≤ 38,29°; на границе N_A = 0,455, N_B = 0,909. В приложении B — нижний конец (пол), C — верхний (стена), B — точка веса.',
+    check: { points: [PHI_465], ranges: [[1, PHI_465]] },
+  },
+  {
+    id: '4.66 (178)',
+    page: 56,
+    title: 'Лестница у гладкой стены на шероховатом полу — угол, чтобы подняться доверху',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const a = 60;
+        const [B, M, A] = b.body([
+          [0, 0],
+          [0.5 * cos(180 - a), 0.5 * sin(180 - a)],
+          [cos(180 - a), sin(180 - a)],
+        ]);
+        b.item({ type: 'rough', at: B, side: 'below', f: 0.5 });
+        b.item({ type: 'roller', at: A, side: 'left' });
+        b.item({ type: 'weight', at: M, G: 1 });
+        b.item({ type: 'weight', at: A, G: 2 });
+        const [s1, s2] = b.segsOf([B, M, A]);
+        b.s.search = search('α', 'deg', 1, 89, [
+          [s1, 'ang', '180 − α'],
+          [s2, 'ang', '180 − α'],
+        ]);
+      }),
+    answer: 'Ответ задачника: tg α ≥ (P + 2p)/(2f(P + p)). Взяты P = 1, p = 2 (человек наверху, в точке A стены), f = 0,5: tg α ≥ 5/3, α ≥ 59,04°.',
+    check: { points: [PHI_466], ranges: [[PHI_466, 89]] },
+  },
+  {
+    id: '4.67 (179)',
+    page: 56,
+    title: 'Невесомая лестница на шероховатых стене и полу — где может стоять груз',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const t = Math.tan(rad(15));
+        const [B, K, A] = b.body([
+          [0, 0],
+          [0.5 * cos(120), 0.5 * sin(120)],
+          [cos(120), sin(120)],
+        ]);
+        b.item({ type: 'rough', at: B, side: 'below', f: t });
+        b.item({ type: 'rough', at: A, side: 'left', f: t });
+        b.item({ type: 'weight', at: K, G: 1 });
+        const [s1, s2] = b.segsOf([B, K, A]);
+        b.s.search = search('s', 'm', 0, 1, [
+          [s1, 'len', 's'],
+          [s2, 'len', '1 − s'],
+        ]);
+      }),
+    answer:
+      'Ответ задачника: BP = AB/2. Лестница AB = 1 под 60° к полу, угол трения 15° у стены и пола (f = tg 15°); параметр s — расстояние BP груза от нижнего конца. Равновесие — при 0 ≤ s ≤ 0,5.',
+    check: { points: [0, 0.5], ranges: [[0, 0.5]] },
+  },
+  {
+    id: '4.68 (180)',
+    page: 56,
+    title: 'Стержень на двух опорах с трением — какой длины, чтобы лежал',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const l = 2;
+        const [A, C, D, M] = b.body([
+          [0, 0],
+          [0.5 * cos(30), 0.5 * sin(30)],
+          [1.5 * cos(30), 1.5 * sin(30)],
+          [l * cos(30), l * sin(30)],
+        ]);
+        b.item({ type: 'rough', at: C, side: 'tilt', angle: 300, f: 0.5 });
+        b.item({ type: 'rough', at: D, side: 'tilt', angle: 120, f: 0.5 });
+        b.item({ type: 'weight', at: M, G: 1 });
+        const s3 = b.segsOf([A, C, D, M])[2];
+        b.s.search = search('l', 'm', 1.51, 4, [[s3, 'len', 'l − 1,5']]);
+      }),
+    answer:
+      'Ответ задачника: 2l ≥ 2b + a + (a/f) tg α, l > a + b. Взяты a = CD = 1, b = AC = 0,5, f = 0,5, α = 30°: l ≥ 1,577 (половина длины; второе условие l > 1,5 слабее). Центр тяжести — за опорой D: стержень прижимается к C сверху, к D снизу. Параметр l — расстояние центра тяжести от конца A.',
+    check: { points: [L_468], ranges: [[L_468, 4]] },
+  },
+  {
+    id: '4.69 (181)',
+    page: 56,
+    title: 'Брус на шероховатом полу, верёвка в B — при каком угле начнёт скользить',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const [A, M, B] = b.body([
+          [0, 0],
+          [0.5 * cos(45), 0.5 * sin(45)],
+          [cos(45), sin(45)],
+        ]);
+        b.item({ type: 'rough', at: A, side: 'below', f: 0.5 });
+        b.item({ type: 'weight', at: M, G: 1 });
+        const r = b.item({ type: 'rod', at: B, angle: 80 });
+        b.s.search = search('φ', 'deg', 46, 134, [[r, 'angle', 'φ']]);
+      }),
+    answer:
+      'Ответ задачника: tg φ = 2 + 1/f. Взят f = 0,5: tg φ = 4, φ = 75,96°. Брус под 45° к полу, верёвка в B под углом φ к горизонту; при меньших φ брус скользит.',
+    check: { points: [PHI_469], ranges: [[PHI_469, 134]] },
+  },
+  {
+    id: '4.78 (190)',
+    page: 60,
+    title: 'Ролик равномерно катится по наклонной плоскости — трение качения',
+    build: (ids) =>
+      scheme(ids, (b) => {
+        const [O, K] = b.body([
+          [0, 0],
+          [0, -50],
+        ]);
+        const r = b.item({ type: 'rough', at: K, side: 'tilt', angle: 90, f: 1, k: 0.05 });
+        b.item({ type: 'weight', at: O, G: 1 });
+        const [s1] = b.segsOf([O, K]);
+        b.s.search = search('α', 'deg', 0, 0.5, [
+          [s1, 'ang', '270 + α'],
+          [r, 'angle', '90 + α'],
+        ]);
+      }),
+    answer:
+      'Ответ задачника: α = 3′26″. r = 50 мм, k = 0,05 мм (размеры — в мм): ролик — отрезок от центра O до точки касания; на границе tg α = k/r = 0,001, α = 0,0573° = 3′26″.',
+    check: { points: [A_478], ranges: [[0, A_478]] },
+  },
+];
+
+export const TASKS32: ContactProblem[] = [...T2, ...T3, ...T4];
+export const POSITIONS32: PositionProblem[] = [...P2, ...P3, ...P4];

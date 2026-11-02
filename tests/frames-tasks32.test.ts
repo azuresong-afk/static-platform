@@ -17,8 +17,11 @@ describe('пункт 32: задачи с ответом', () => {
     it(`${p.id} — ${p.title}`, () => {
       const a = analyze(p.build(), { explain: true });
       const sol = a.solution;
-      const vals = sol.friction ? sol.friction.sample! : sol.vals;
+      const vals = sol.friction ? (sol.friction.sample ?? {}) : sol.vals;
       if (!sol.friction) expect(sol.status, p.id).toBe('ok');
+      const c = p.check;
+      if (c.min !== undefined) expect(Math.abs(sol.friction!.min!.value - c.min), `${p.id} min`).toBeLessThanOrEqual(tolOf(c.min, p.relTol));
+      if (c.max !== undefined) expect(Math.abs(sol.friction!.max!.value - c.max), `${p.id} max`).toBeLessThanOrEqual(tolOf(c.max, p.relTol));
       for (const [k, book] of Object.entries(p.check.vals ?? {})) {
         const v = k.includes(',') ? Math.hypot(...k.split(',').map((x) => vals[x])) : vals[k];
         expect(v, `${p.id}: ${k} — нет в решении`).toBeDefined();

@@ -3,6 +3,7 @@
  * Единицы книги (т) сохранены числами: расчёт линеен, приложение подписывает кН.
  */
 import type { Truss } from './model/truss';
+import { TRUSS_PRESETS32 } from './presets32';
 
 const R3 = Math.sqrt(3);
 
@@ -154,6 +155,7 @@ export const TRUSS_PRESETS = {
     book: { reactions: { X_A: 5.4, Y_A: 6, R_B: -5.4 }, bars: [-5.4, -3.6, -1.8, 2.06, 2.06, 4.1, -6, 3.5, -3, 2.7, -2] },
     note: 'Узел B прижат к стене катком: реакция горизонтальна (X_B книги = R_B).',
   },
+  ...TRUSS_PRESETS32,
 } satisfies Record<string, TrussPreset>;
 
 export type TrussPresetKey = keyof typeof TRUSS_PRESETS;
