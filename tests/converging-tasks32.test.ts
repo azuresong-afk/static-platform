@@ -5,9 +5,16 @@ import { CONV_PRESETS32 } from '../src/modules/converging/presets32';
 import type { ConvPreset } from '../src/modules/converging/presets';
 
 const tolOf = (book: number, relTol = 0) => {
+  if (book === 0) return 1e-9;
   const s = String(Math.abs(book));
   const d = s.includes('.') ? s.split('.')[1].length : 0;
   return Math.max(d > 6 ? 1e-9 : 2 * Math.pow(10, -d), relTol * Math.abs(book));
+};
+/** Встреча центральной оси с плоскостью Oxz (y = 0) — ответ книги в 7.4, 7.11. */
+const xzPoint = (P: number[] | null, R: number[]) => {
+  if (!P || Math.abs(R[1]) < 1e-12) return { x0: NaN, z0: NaN };
+  const t = -P[1] / R[1];
+  return { x0: P[0] + t * R[0], z0: P[2] + t * R[2] };
 };
 const deg = (r: number) => (r * 180) / Math.PI;
 
@@ -30,6 +37,7 @@ describe('пункт 32: приведение системы сил — отве
         Mstar: Math.abs(r.Mstar),
         x: r.xyPoint?.[0] ?? NaN,
         y: r.xyPoint?.[1] ?? NaN,
+        ...xzPoint(r.axisPoint, r.R),
       };
       for (const [k, book] of Object.entries(p.book ?? {}))
         expect(Math.abs(got[k] - book), `${key} ${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(tolOf(book, p.relTol) + 1e-9);
