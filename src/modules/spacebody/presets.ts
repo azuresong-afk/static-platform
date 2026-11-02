@@ -10,6 +10,8 @@ export interface BodyPreset {
   body: Body;
   /** Ответ книги в правиле знаков приложения. */
   book?: Record<string, number>;
+  /** Допуск сверки с книгой (доля), если ответ книги округлён грубее последней цифры. */
+  relTol?: number;
   note?: string;
 }
 

@@ -34,7 +34,7 @@ describe('Мещерский §8', () => {
       const b = p.body as Body;
       const sol = solveBody(buildModel(b));
       expect(sol.status, key).toBe('ok');
-      for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) expect(Math.abs(sol.vals[k] - book), `${k}: ${sol.vals[k]} против ${book}`).toBeLessThanOrEqual(printedUnit(book) + 1e-9);
+      for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) expect(Math.abs(sol.vals[k] - book), `${k}: ${sol.vals[k]} против ${book}`).toBeLessThanOrEqual(Math.max(printedUnit(book), ((p as { relTol?: number }).relTol ?? 0) * Math.abs(book)) + 1e-9);
       const w = wrench(b, sol.vals);
       [...w.F, ...w.M].forEach((v) => expect(Math.abs(v)).toBeLessThan(1e-8));
     });
