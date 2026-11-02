@@ -21,6 +21,7 @@ describe('Мещерский §21: уравнения и траектория', 
           expect(Math.abs(p.bookF(q[0], q[1], q[2])), `${key} t=${t}`).toBeLessThan(2e-3 * Math.max(1, scale) * Math.max(1, scale));
         }
       }
+      if (p.bookV != null) expect(Math.abs(r.kin.v - p.bookV), `v: ${r.kin.v} против ${p.bookV}`).toBeLessThanOrEqual((p.relTol ?? 1e-3) * p.bookV);
       if (p.bookK != null) {
         expect(r.polar).not.toBeNull();
         expect(r.polar!.k).toBeCloseTo(p.bookK, 10);

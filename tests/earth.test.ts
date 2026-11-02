@@ -23,6 +23,9 @@ function pickKin(r: EarthKinResult, k: string): number {
     acH: r.acH,
     acHk: r.acHk,
     rcNmod: Math.abs(r.ar[1] + r.ac[1]),
+    vx: r.v[0],
+    vy: r.v[1],
+    vz: r.v[2],
   };
   return m[k];
 }
