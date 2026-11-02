@@ -11,6 +11,7 @@ import { TEXTBOOK, TEXTBOOK_COMPOSITE, TEXTBOOK_FRICTION, TEXTBOOK_INCLINED, typ
 import type { Structure } from './model/types';
 import { CONTACT_PROBLEMS } from './model/contacts';
 import { POSITION_PROBLEMS } from './model/positions';
+import { POSITIONS32, TASKS32 } from './model/tasks32';
 
 export interface BookTask extends TaskEntry {
   build: (ids?: IdGen) => Structure;
@@ -103,7 +104,7 @@ export const YAB_FRAMES: (BookTask & { answerVals: Record<string, number> })[] =
 ];
 
 /** Контакт тел (Мещерский §2–4, Яблонский С.5, С.9): несколько тел, касания, нити, блоки. */
-export const CONTACT_BOOK: BookTask[] = CONTACT_PROBLEMS.map((p) => ({
+export const CONTACT_BOOK: BookTask[] = [...CONTACT_PROBLEMS, ...TASKS32].map((p) => ({
   key: (p.book === 'mesh' ? 'tb:' : 'yb:') + numOf(p.id),
   title: p.book === 'mesh' ? `Мещерский ${numOf(p.id)}: ${lc(p.title)}` : `Яблонский, ${p.id}: ${lc(p.title)}`,
   build: (ids?: IdGen) => p.build(ids),
@@ -111,7 +112,7 @@ export const CONTACT_BOOK: BookTask[] = CONTACT_PROBLEMS.map((p) => ({
 }));
 
 /** Поиск положения равновесия и трение в шарнирах (Мещерский §2, §4). */
-export const POSITION_BOOK: BookTask[] = POSITION_PROBLEMS.map((p) => ({
+export const POSITION_BOOK: BookTask[] = [...POSITION_PROBLEMS, ...POSITIONS32].map((p) => ({
   key: 'tb:' + numOf(p.id),
   title: `Мещерский ${numOf(p.id)}: ${lc(p.title)}`,
   build: (ids?: IdGen) => p.build(ids),

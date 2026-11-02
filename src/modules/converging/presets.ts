@@ -1,5 +1,6 @@
 /** Готовые задачи: Мещерский §2, §6 (узел) и §7 (приведение). Ответы — в правиле знаков приложения. */
 import type { NodeForce, NodeProblem, ReduceProblem } from './model/forces';
+import { CONV_PRESETS32 } from './presets32';
 
 export type ConvProblem = { mode: 'node'; node: NodeProblem } | { mode: 'reduce'; reduce: ReduceProblem };
 
@@ -9,6 +10,8 @@ export interface ConvPreset {
   /** Узел: модули неизвестных по имени. Приведение: R, M*, точка оси в плоскости Oxy. */
   book?: Record<string, number>;
   note?: string;
+  /** Относительный допуск сравнения с книгой (по умолчанию — две единицы последнего знака ответа). */
+  relTol?: number;
 }
 
 const known = (name: string, F: number, ang: number): NodeForce => ({ name, kind: 'known', F, dirMode: 'ang', v: [0, 0, 0], ang });
@@ -129,6 +132,7 @@ export const CONV_PRESETS = {
       },
     },
   },
+  ...CONV_PRESETS32,
 } satisfies Record<string, ConvPreset>;
 
 export type ConvPresetKey = keyof typeof CONV_PRESETS;
