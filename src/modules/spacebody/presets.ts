@@ -3,6 +3,7 @@
  * Единицы книги (н, кГ, см) сохранены числами: расчёт линеен; в приложении силы подписаны кН, длины — м.
  */
 import type { Body } from './model/body';
+import { BODY_PRESETS32 } from './presets32';
 
 export interface BodyPreset {
   title: string;
@@ -137,6 +138,7 @@ export const BODY_PRESETS = {
     },
     note: 'Натяжения ветвей ремня связаны: T = 2t. Момент натяжений (T − t)·0,2 уравновешивается моментом P·0,1: P = 2.',
   },
+  ...BODY_PRESETS32,
 } satisfies Record<string, BodyPreset>;
 
 export type BodyPresetKey = keyof typeof BODY_PRESETS;
