@@ -28,14 +28,19 @@ describe('Мещерский §10–12', () => {
         for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) expect(Math.abs(got[k] - book), `${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(tol(book, rel));
         return;
       }
-      const r = solveKin(pr);
+      const checkAt = (prob: KinProblem, bookObj: Record<string, number> | undefined, withTraj: boolean) => {
+      const r = solveKin(prob);
       expect(r.ok, key + r.errors.join()).toBe(true);
       const traj = (p as { traj?: string[] }).traj;
-      if (traj) expect(trajEquation(pr, r)!.rels.map((x) => x.text)).toEqual(traj);
+      if (traj && withTraj) expect(trajEquation(prob, r)!.rels.map((x) => x.text)).toEqual(traj);
       const c = r.curv;
       const got: Record<string, number> = {
         v: r.v,
         a: r.a,
+        x: r.pos[0],
+        y: r.pos[1],
+        vx: r.vel[0],
+        vy: r.vel[1],
         at: r.at,
         an: r.an,
         rho: r.rho ?? Infinity,
@@ -54,11 +59,15 @@ describe('Мещерский §10–12', () => {
         h_vphi: r.hodo?.vphi ?? NaN,
         h_vz: r.hodo?.vz ?? NaN,
       };
-      for (const [k, book] of Object.entries((p as { book?: Record<string, number> }).book ?? {})) {
+      for (const [k, book] of Object.entries(bookObj ?? {})) {
         // Угол направления скорости — по модулю полного оборота.
         const g = k === 'h_phi' ? got[k] + 2 * Math.PI * Math.round((book - got[k]) / (2 * Math.PI)) : got[k];
         expect(Math.abs(g - book), `${k}: ${g} против ${book}`).toBeLessThanOrEqual(tol(book, rel));
       }
+      };
+      checkAt(pr, (p as { book?: Record<string, number> }).book, true);
+      // Ответы книги в другие моменты времени.
+      for (const x of (p as { also?: { t: number; book: Record<string, number> }[] }).also ?? []) checkAt({ ...pr, t: x.t }, x.book, false);
     });
   it('12.29: ρ₀ = ∞', () => expect(solveKin(KIN_PRESETS.k1229.problem as KinProblem).rho).toBeNull());
   it('12.32: радиус кривизны кардиоиды при t = 0 равен 4a/3', () => {

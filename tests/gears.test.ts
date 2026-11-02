@@ -11,7 +11,8 @@ import { ellDoc, frDoc, uniDoc } from '../src/modules/gears/text/extra';
 import { renderEll, renderFr, renderUni } from '../src/modules/gears/draw/extra';
 import { GearStore, parseGears } from '../src/modules/gears/ui/store';
 
-const tol = (v: number) => {
+const tol = (v: number, rel?: number) => {
+  if (rel) return rel * Math.abs(v) + 1e-12;
   const s = String(Math.abs(v));
   const d = s.includes('.') ? s.split('.')[1].length : 0;
   return d > 6 ? 1e-9 * Math.max(1, Math.abs(v)) : 2 * Math.pow(10, -d);
@@ -40,7 +41,7 @@ describe('Мещерский §13–14', () => {
         const W = r.wheels[pr.k];
         got = { omega: Math.abs(W.omega), eps: W.eps, n: W.n, phi: r.phi1, turns: Math.abs(W.turns), i: Math.abs(r.i1k), v: r.point?.v ?? NaN, at: r.point?.at ?? NaN, an: r.point?.an ?? NaN, a: r.point?.a ?? NaN, t: r.found ?? NaN, size: r.size?.value ?? NaN };
       }
-      for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) expect(Math.abs(got[k] - book), `${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(tol(book));
+      for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) expect(Math.abs(got[k] - book), `${k}: ${got[k]} против ${book}`).toBeLessThanOrEqual(tol(book, (p as { relTol?: number }).relTol));
     });
   it('13.20: в среднем положении w = 8,1 см/с²', () => {
     const r = solveGears({ ...(GEAR_PRESETS.g1320.problem as GearProblem), t: 0 });
