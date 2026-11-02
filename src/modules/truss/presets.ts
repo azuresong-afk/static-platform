@@ -15,6 +15,8 @@ export interface TrussPreset {
   /** Ответ книги: реакции и усилия по номерам стержней (растяжение «+»). */
   book?: { reactions: Record<string, number>; bars: number[] };
   note?: string;
+  /** Расхождения с книгой по номерам стержней (с 1), подтверждённые пересчётом. */
+  discrepancy?: Record<number, { computed: number; why: string }>;
 }
 
 const down = (node: number, F: number) => ({ node, F, angle: 270 });
