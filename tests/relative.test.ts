@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { norm, solveRel, type RelProblem, type RelResult } from '../src/modules/relative/model/rel';
 import { REL_PRESETS } from '../src/modules/relative/presets';
 
-const tol = (v: number) => {
+const tol = (v: number, rel?: number) => {
+  if (rel) return rel * Math.abs(v) + 1e-12;
   const s = String(Math.abs(v));
   const d = s.includes('.') ? s.split('.')[1].length : 0;
   return d > 6 ? 1e-9 * Math.max(1, Math.abs(v)) : 2 * Math.pow(10, -d);
@@ -24,7 +25,7 @@ describe('Мещерский §23', () => {
       expect(r.ok, key + r.errors.join()).toBe(true);
       for (const [k, book] of Object.entries((p as { book: Record<string, number> }).book)) {
         const got = pick(r, k);
-        expect(Math.abs(got - book), `${k}: ${got} против ${book}`).toBeLessThanOrEqual(k === 'angMO' ? 0.5 : tol(book));
+        expect(Math.abs(got - book), `${k}: ${got} против ${book}`).toBeLessThanOrEqual(k === 'angMO' ? 0.5 : tol(book, (p as { relTol?: number }).relTol));
       }
     });
   it('23.29 при t = 2: 0,4456aπ² (в книге 0,44 — третий знак отброшен); 23.11 в крайнем положении w_c = 0', () => {
