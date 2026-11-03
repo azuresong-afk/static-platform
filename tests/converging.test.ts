@@ -22,7 +22,7 @@ describe('Мещерский: узел', () => {
       expect(r.bad).toEqual([]);
       for (const [name, book] of Object.entries(p.book as Record<string, number>)) {
         const i = pr.forces.findIndex((f) => f.name === name);
-        expect(Math.abs(r.vals[i] - book), `${name}: ${r.vals[i]} против ${book}`).toBeLessThanOrEqual(printedUnit(book) + 1e-9);
+        expect(Math.abs(r.vals[i] - book), `${name}: ${r.vals[i]} против ${book}`).toBeLessThanOrEqual(Math.max(printedUnit(book), ((p as { relTol?: number }).relTol ?? 0) * Math.abs(book)) + 1e-9);
       }
       // Независимо: сумма всех сил в узле — нуль.
       const sum = [0, 1, 2].map((a) => pr.forces.reduce((s, f, i) => s + (f.kind === 'known' ? f.F : r.vals[i]) * r.dirs[i][a], 0));

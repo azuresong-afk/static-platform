@@ -1,6 +1,7 @@
 /** Готовые задачи пункта 26 для «Сходящихся сил»: Мещерский §2–4, 8. Где в книге ответ в буквах — числа по формуле книги. */
 import { extraProblem, findAsk, type ExtraProblem } from '../../shared/extra';
 import { CONV_ASKS } from './model/extra';
+import { CONV_EXTRA_PRESETS32 } from './extraPresets32';
 
 export interface ConvExtraPreset {
   title: string;
@@ -227,5 +228,6 @@ export const CONV_EXTRA_PRESETS = {
     relTol: 1e-9,
     note: 'Ответ книги — M = Pr² sin α/√(l² − 4r² sin²(α/2)), T = lP/(2√(l² − 4r² sin²(α/2))); числа — для примера.',
   },
+  ...CONV_EXTRA_PRESETS32,
 } satisfies Record<string, ConvExtraPreset>;
 export type ConvExtraKey = keyof typeof CONV_EXTRA_PRESETS;

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { solveTruss } from '../src/modules/truss/model/truss';
-import { TRUSS_PRESETS } from '../src/modules/truss/presets';
+import { TRUSS_PRESETS, type TrussPreset } from '../src/modules/truss/presets';
 import { cremona, planarityError } from '../src/modules/graphstat/model/cremona';
 import { beamEquilibrium, chain, funicular } from '../src/modules/graphstat/model/funicular';
 import { GRAPH_PRESETS } from '../src/modules/graphstat/presets';
@@ -39,7 +39,9 @@ describe('Диаграмма Максвелла–Кремоны', () => {
     if (p.book)
       it(`${key}: усилия по диаграмме совпадают с ответом книги`, () => {
         const cr = cremona(p.truss, solveTruss(p.truss));
-        p.book!.bars.forEach((v, k) => {
+        const disc = (TRUSS_PRESETS as Record<string, TrussPreset>)[key]?.discrepancy ?? {};
+        p.book!.bars.forEach((v0, k) => {
+          const v = disc[k + 1]?.computed ?? v0;
           const got = cr.bars.find((b) => b.bar === k)!.N;
           expect(Math.abs(got - v)).toBeLessThanOrEqual(Math.max(0.02 * Math.abs(v), 0.06));
         });

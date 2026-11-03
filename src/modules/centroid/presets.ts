@@ -3,6 +3,7 @@
  * координату вдоль особой оси (9.6 — по диагонали), это сказано в note и проверяется в тестах.
  */
 import type { CPart, CProblem } from './model/centroid';
+import { CENTROID_PRESETS32 } from './presets32';
 
 export interface CentroidPreset {
   title: string;
@@ -149,6 +150,7 @@ export const CENTROID_PRESETS = {
     },
     note: 'y_C = (πr·2r/π)/(πr + 2r) = 2r/(π + 2).',
   },
+  ...CENTROID_PRESETS32,
 } satisfies Record<string, CentroidPreset>;
 
 export type CentroidPresetKey = keyof typeof CENTROID_PRESETS;

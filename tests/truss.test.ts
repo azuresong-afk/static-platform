@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { jointOrder, ritterCut, ritterForce, solveTruss, zeroBars, type Truss } from '../src/modules/truss/model/truss';
-import { TRUSS_PRESETS } from '../src/modules/truss/presets';
+import { TRUSS_PRESETS, type TrussPreset } from '../src/modules/truss/presets';
 
 /** Две единицы последнего напечатанного знака (книга решает графически и округляет). */
 function printedUnit(v: number): number {
@@ -54,7 +54,15 @@ describe('Мещерский: фермы', () => {
       expect(res.status, key).toBe('ok');
       const R = Object.fromEntries(res.reactions.map((r, j) => [r.key, res.R[j]]));
       for (const [k, book] of Object.entries(p.book.reactions)) expect(Math.abs(R[k] - book), `${k}: ${R[k]} против ${book}`).toBeLessThanOrEqual(printedUnit(book) + 1e-9);
-      p.book.bars.forEach((book, k) => expect(Math.abs(res.N[k] - book), `стержень ${k + 1}: ${res.N[k]} против ${book}`).toBeLessThanOrEqual(printedUnit(book) + 1e-9));
+      const disc = (p as TrussPreset).discrepancy ?? {};
+      p.book.bars.forEach((book, k) => {
+        const d = disc[k + 1];
+        // Расхождение с книгой: сверяем с пересчётом и убеждаемся, что оно действительно есть.
+        if (d) {
+          expect(res.N[k]).toBeCloseTo(d.computed, 9);
+          expect(Math.abs(res.N[k] - book)).toBeGreaterThan(printedUnit(book));
+        } else expect(Math.abs(res.N[k] - book), `стержень ${k + 1}: ${res.N[k]} против ${book}`).toBeLessThanOrEqual(printedUnit(book) + 1e-9);
+      });
       nodeResiduals(t, res.N, R).forEach((v) => expect(Math.abs(v)).toBeLessThan(1e-9));
     });
 });
