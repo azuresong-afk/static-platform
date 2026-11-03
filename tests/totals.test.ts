@@ -22,49 +22,71 @@ interface Part {
   ok: number;
   half: number;
   no: number;
+  /** Номера задач, у которых есть готовая задача в «Задачнике». */
+  ready?: number;
 }
 
 const num = (s: string) => (s.trim() === '' ? 0 : +s.trim());
 const pct = (x: number, n: number) => (x ? `${x} (${Math.round((100 * x) / n)} %)` : '0');
+/** Форма слова для числа: 1 задача, 2 задачи, 5 задач. */
+const plural = (x: number, one: string, few: string, many: string) =>
+  x % 10 === 1 && x % 100 !== 11 ? one : x % 10 >= 2 && x % 10 <= 4 && (x % 100 < 12 || x % 100 > 14) ? few : many;
+
+/** Номера задач Мещерского в названиях готовых задач: «12.37–12.39», «50.1, 50.4, 50.11», «10.1 (2)». */
+function readyNumbers(nums: string[]): Map<number, Set<number>> {
+  const ready = new Map<number, Set<number>>();
+  for (const s of nums)
+    for (const r of s.matchAll(/(\d+)\.(\d+)(?:\s*[–-]\s*(?:\d+\.)?(\d+))?/g)) {
+      const par = +r[1];
+      const set = ready.get(par) ?? new Set<number>();
+      for (let k = +r[2]; k <= (r[3] ? +r[3] : +r[2]); k++) set.add(k);
+      ready.set(par, set);
+    }
+  return ready;
+}
 
 /** Части Мещерского по заголовкам «### …» раздела «По параграфам» и суммы по строкам параграфов. */
-function meshParts(md: string): Part[] {
+function meshParts(md: string, ready = new Map<number, Set<number>>()): Part[] {
   const parts: Part[] = [];
   const body = md.slice(md.indexOf('## По параграфам'));
   for (const line of body.split('\n')) {
     const h = /^### (.+)$/.exec(line);
-    if (h) parts.push({ title: h[1], n: 0, ok: 0, half: 0, no: 0 });
+    if (h) parts.push({ title: h[1], n: 0, ok: 0, half: 0, no: 0, ready: 0 });
     const c = line.split('|');
-    if (parts.length && /^\| \d+\. /.test(line)) {
+    const row = /^\| (\d+)\. /.exec(line);
+    if (parts.length && row) {
       const part = parts[parts.length - 1];
       part.n += num(c[2]);
       part.ok += num(c[3]);
       part.half += num(c[4]);
       part.no += num(c[5]);
+      part.ready! += [...(ready.get(+row[1]) ?? [])].filter((k) => k <= num(c[2])).length;
     }
   }
   return parts;
 }
 
 function sum(parts: Part[]): Part {
-  return parts.reduce((s, p) => ({ ...s, n: s.n + p.n, ok: s.ok + p.ok, half: s.half + p.half, no: s.no + p.no }), {
+  return parts.reduce((s, p) => ({ ...s, n: s.n + p.n, ok: s.ok + p.ok, half: s.half + p.half, no: s.no + p.no, ready: s.ready! + (p.ready ?? 0) }), {
     title: 'Всего',
     n: 0,
     ok: 0,
     half: 0,
     no: 0,
+    ready: 0,
   });
 }
 
 function meshTable(parts: Part[]): string {
   const t = sum(parts);
-  const row = (p: Part) => `| ${p.title} | ${p.n} | ${pct(p.ok, p.n)} | ${pct(p.half, p.n)} | ${pct(p.no, p.n)} | ${p.n - p.ok - p.half - p.no} |`;
+  const row = (p: Part) =>
+    `| ${p.title} | ${p.n} | ${pct(p.ok, p.n)} | ${pct(p.half, p.n)} | ${pct(p.no, p.n)} | ${p.n - p.ok - p.half - p.no} | ${pct(p.ready ?? 0, p.n)} |`;
   const b = (s: string | number) => `**${s}**`;
   return [
-    '| Часть | Задач | Собирается | Частично | Нет | Вне формата |',
-    '|---|--:|--:|--:|--:|--:|',
+    '| Часть | Задач | Собирается | Частично | Нет | Вне формата | Готовые задачи |',
+    '|---|--:|--:|--:|--:|--:|--:|',
     ...parts.map(row),
-    `| ${b('Всего')} | ${b(t.n)} | ${b(pct(t.ok, t.n))} | ${b(pct(t.half, t.n))} | ${b(pct(t.no, t.n))} | ${b(t.n - t.ok - t.half - t.no)} |`,
+    `| ${b('Всего')} | ${b(t.n)} | ${b(pct(t.ok, t.n))} | ${b(pct(t.half, t.n))} | ${b(pct(t.no, t.n))} | ${b(t.n - t.ok - t.half - t.no)} | ${b(pct(t.ready ?? 0, t.n))} |`,
   ].join('\n');
 }
 
@@ -127,7 +149,11 @@ function totals(): Record<string, string> {
 
   const files: Record<string, string> = {};
   const mesh = readFileSync(path('docs/coverage-meshchersky.md'), 'utf8');
-  const parts = meshParts(mesh);
+  const meshNums = tasks
+    .map((t) => taskInfo(t.title))
+    .filter((i) => i.book === 'mesh')
+    .map((i) => i.num);
+  const parts = meshParts(mesh, readyNumbers(meshNums));
   files['docs/coverage-meshchersky.md'] = replaceTable(mesh, '| Часть | Задач |', meshTable(parts));
 
   const yab = readFileSync(path('docs/coverage-yablonsky.md'), 'utf8');
@@ -147,6 +173,11 @@ function totals(): Record<string, string> {
     cov,
     /\d+ заданий: \d+ собираются, \d+ частично, без конструктора — (ни одного|\d+)/,
     `${y.n} заданий: ${y.ok} собираются, ${y.half} частично, без конструктора — ${y.no || 'ни одного'}`,
+  );
+  cov = replaceOnce(
+    cov,
+    /готовой задачей с ответом книги есть (?:около )?\d+ задач[аи]? Мещерского из \d+/,
+    `готовой задачей с ответом книги есть ${m.ready} ${plural(m.ready!, 'задача', 'задачи', 'задач')} Мещерского из ${m.n}`,
   );
   files['docs/coverage.md'] = cov;
 
